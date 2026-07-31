@@ -42,8 +42,9 @@ export default async function HomePage() {
 
       {!ok && (
         <div className="card border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          Chưa kết nối được cơ sở dữ liệu Neon. Kiểm tra biến <code>DATABASE_URL</code> trong file
-          <code> .env.local</code> và chạy <code>db/init.sql</code>.
+          Chưa truy vấn được cơ sở dữ liệu Neon. Kiểm tra biến <code>DATABASE_URL</code> (trong
+          <code> .env.local</code> nếu chạy máy cá nhân, hoặc Environment Variables trên Vercel) và
+          đảm bảo đã chạy <code>db/init.sql</code> để tạo bảng.
         </div>
       )}
 
