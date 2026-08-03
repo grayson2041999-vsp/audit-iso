@@ -44,8 +44,7 @@ export default async function HomePage() {
       </div>
 
       <p className="text-center text-xs text-slate-400">
-        Đang phát triển từng phần — cổng đánh giá viên sẽ có ở bản cập nhật tiếp theo.{' '}
-        <Link href="/findings" className="hover:underline">Xem finding đã lưu (bản cũ)</Link>
+        Bảng tổng hợp toàn đợt và xuất Excel sẽ có ở bản cập nhật tiếp theo.
       </p>
     </div>
   );

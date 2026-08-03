@@ -4,20 +4,15 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 /**
- * Thanh điều hướng đổi theo trạng thái đăng nhập.
- * Các mục Tổng quan / Danh sách finding / Ghi nhận mới là màn hình cũ,
- * sẽ được thay bằng luồng theo đợt đánh giá ở đợt phát triển 3.
+ * Thanh điều hướng của trưởng đoàn.
+ * Đánh giá viên không dùng thanh này — họ đi theo đường link đợt và có
+ * thanh ngữ cảnh riêng (MemberBar).
  */
 export function TopNav({ leaderName }: { leaderName: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const links = leaderName
-    ? [
-        { href: '/quan-ly', label: 'Đợt đánh giá' },
-        { href: '/findings', label: 'Finding (bản cũ)' },
-      ]
-    : [{ href: '/findings', label: 'Finding (bản cũ)' }];
+  const links = leaderName ? [{ href: '/quan-ly', label: 'Đợt đánh giá' }] : [];
 
   async function logout() {
     await fetch('/api/auth/dang-xuat', { method: 'POST' });

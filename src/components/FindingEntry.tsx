@@ -10,17 +10,28 @@ import { suggestDueDate, DUE_DAYS_BY_SEVERITY, type StandardizedFinding } from '
 
 const STANDARDS = Object.keys(STANDARD_LABELS) as StandardCode[];
 
+type Props = {
+  auditId: string;
+  unitId: string;
+  unitName: string;
+  memberName: string;
+  /** Tiêu chuẩn đã khai báo cho đợt — điền sẵn, đánh giá viên chỉnh được. */
+  defaultStandards: StandardCode[];
+};
+
 const EXAMPLE = `Kho vật tư tầng 1: kiểm tra 8 bình chữa cháy, thấy 3 bình (BCC-04, BCC-07, BCC-11) tem kiểm định hết hạn từ 02/2026. Hỏi thủ kho thì không xuất trình được sổ theo dõi kiểm tra hàng tháng 6 tháng gần đây. Thủ tục QT-PCCC-01 mục 5.3 yêu cầu kiểm tra hàng tháng và ghi sổ.`;
 
-export function FindingWorkbench() {
+export function FindingEntry({
+  auditId, unitId, unitName, memberName, defaultStandards,
+}: Props) {
   const router = useRouter();
 
   const [rawText, setRawText] = useState('');
-  const [standards, setStandards] = useState<StandardCode[]>(['ISO9001']);
+  const [standards, setStandards] = useState<StandardCode[]>(
+    defaultStandards.length ? defaultStandards : ['ISO9001'],
+  );
   const [area, setArea] = useState('');
   const [process, setProcess] = useState('');
-  const [auditee, setAuditee] = useState('');
-  const [auditorName, setAuditorName] = useState('');
   const [images, setImages] = useState<UploadedImage[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -50,7 +61,9 @@ export function FindingWorkbench() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rawText, standards, area, process, auditee, auditorName,
+          rawText, standards, area, process,
+          auditee: unitName,
+          auditorName: memberName,
           imageKeys: images.map((i) => i.key),
         }),
       });
@@ -71,11 +84,12 @@ export function FindingWorkbench() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/findings', {
+      const res = await fetch(`/api/dot/${auditId}/findings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rawText, standards, area, process, auditee, auditorName,
+          unitId,
+          rawText, standards, area, process,
           dueDate: dueDate || null,
           ai: result,
           images: images.map((i) => ({
@@ -85,7 +99,7 @@ export function FindingWorkbench() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Lưu thất bại.');
-      router.push(`/findings/${data.finding.id}`);
+      router.push(`/dot/${auditId}/finding/${data.finding.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lỗi khi lưu.');
       setSaving(false);
@@ -101,8 +115,14 @@ export function FindingWorkbench() {
       {/* ---------------- Cột trái: nhập liệu ---------------- */}
       <section className="card p-5">
         <h2 className="mb-1 text-lg font-semibold">1. Ghi nhận tại hiện trường</h2>
-        <p className="mb-5 text-sm text-slate-500">
+        <p className="mb-4 text-sm text-slate-500">
           Viết tự nhiên, gạch đầu dòng cũng được. AI sẽ chuẩn hoá theo cấu trúc R–N–E của ISO.
+        </p>
+        <p className="mb-5 rounded-lg bg-slate-50 px-3 py-2.5 text-sm">
+          Đơn vị được đánh giá: <strong>{unitName}</strong>
+          <span className="block text-xs text-slate-500">
+            Người ghi nhận: {memberName} — hệ thống tự điền, không cần nhập lại.
+          </span>
         </p>
 
         <div className="mb-4">
@@ -150,20 +170,22 @@ export function FindingWorkbench() {
 
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="label">Khu vực / bộ phận</label>
-            <input className="input" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Kho vật tư tầng 1" />
+            <label className="label">Nơi phát hiện</label>
+            <input
+              className="input"
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              placeholder="Kho vật tư tầng 1"
+            />
           </div>
           <div>
             <label className="label">Quá trình liên quan</label>
-            <input className="input" value={process} onChange={(e) => setProcess(e.target.value)} placeholder="Quản lý PCCC" />
-          </div>
-          <div>
-            <label className="label">Đơn vị được đánh giá</label>
-            <input className="input" value={auditee} onChange={(e) => setAuditee(e.target.value)} placeholder="Phòng Vật tư" />
-          </div>
-          <div>
-            <label className="label">Auditor</label>
-            <input className="input" value={auditorName} onChange={(e) => setAuditorName(e.target.value)} placeholder="Nguyễn Văn A" />
+            <input
+              className="input"
+              value={process}
+              onChange={(e) => setProcess(e.target.value)}
+              placeholder="Quản lý PCCC"
+            />
           </div>
         </div>
 
@@ -184,7 +206,7 @@ export function FindingWorkbench() {
       <section className="card p-5">
         <h2 className="mb-1 text-lg font-semibold">2. Finding đã chuẩn hoá</h2>
         <p className="mb-5 text-sm text-slate-500">
-          Auditor rà soát và chỉnh sửa trước khi lưu. AI là trợ lý, quyết định cuối cùng thuộc về auditor.
+          Rà soát và chỉnh sửa trước khi lưu. AI là trợ lý, quyết định cuối cùng thuộc về bạn.
         </p>
 
         {loading && <AnalysisProgress hasImages={images.length > 0} />}

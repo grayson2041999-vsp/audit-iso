@@ -15,12 +15,22 @@ export const severityEnum = pgEnum('severity', [
   'CONF',  // Phù hợp
 ]);
 
+/**
+ * Vòng đời finding:
+ *   DRAFT     — đánh giá viên đang soạn, tự sửa và xoá được
+ *   SUBMITTED — đã nộp, đánh giá viên hết quyền sửa, chỉ trưởng đoàn sửa
+ *   REVIEWED  — trưởng đoàn đã rà soát
+ *   CLOSED    — đã đóng sau hành động khắc phục
+ * (AI_DRAFTED và ISSUED giữ trong enum vì Postgres không xoá được giá trị
+ *  enum, nhưng không còn dùng.)
+ */
 export const findingStatusEnum = pgEnum('finding_status', [
-  'DRAFT',      // Auditor mới nhập, chưa chuẩn hoá
-  'AI_DRAFTED', // AI đã chuẩn hoá, chờ auditor duyệt
-  'REVIEWED',   // Auditor đã duyệt/chỉnh
-  'ISSUED',     // Đã phát hành vào báo cáo
-  'CLOSED',     // Đã đóng sau hành động khắc phục
+  'DRAFT',
+  'AI_DRAFTED',
+  'REVIEWED',
+  'ISSUED',
+  'CLOSED',
+  'SUBMITTED',
 ]);
 
 /**
@@ -147,16 +157,26 @@ export const findings = pgTable(
   'findings',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    auditId: uuid('audit_id').references(() => audits.id, { onDelete: 'set null' }),
+    auditId: uuid('audit_id').references(() => audits.id, { onDelete: 'cascade' }),
+    /** Đơn vị được đánh giá — thay cho ô gõ tay trước đây. */
+    unitId: uuid('unit_id').references(() => auditUnits.id, { onDelete: 'set null' }),
+    /** Đánh giá viên ghi nhận. */
+    memberId: uuid('member_id').references(() => auditMembers.id, { onDelete: 'set null' }),
 
-    code: text('code'),                          // NC-001
+    code: text('code'),                          // F-01, F-02… trong phạm vi một đợt
     status: findingStatusEnum('status').default('DRAFT').notNull(),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
 
     /* --- Input thô của auditor --- */
     rawText: text('raw_text').notNull(),
-    rawArea: text('raw_area'),                   // Nơi phát hiện (khu vực / bộ phận)
+    rawArea: text('raw_area'),                   // Nơi phát hiện (vị trí cụ thể)
     rawProcess: text('raw_process'),             // Quá trình liên quan
-    auditee: text('auditee'),                    // Đơn vị được đánh giá
+    /**
+     * `auditee` và `auditorName` giữ lại làm BẢN CHỤP tên tại thời điểm ghi nhận.
+     * Nhờ vậy báo cáo cũ vẫn đọc được nguyên vẹn kể cả khi đơn vị bị đổi tên hoặc
+     * đánh giá viên bị xoá khỏi đợt.
+     */
+    auditee: text('auditee'),
     auditorName: text('auditor_name'),
     observedAt: timestamp('observed_at', { withTimezone: true }),
     dueDate: timestamp('due_date', { withTimezone: true }), // Thời hạn khắc phục
@@ -180,8 +200,11 @@ export const findings = pgTable(
   },
   (t) => ({
     auditIdx: index('findings_audit_idx').on(t.auditId),
+    unitIdx: index('findings_unit_idx').on(t.unitId),
+    memberIdx: index('findings_member_idx').on(t.memberId),
     statusIdx: index('findings_status_idx').on(t.status),
     createdIdx: index('findings_created_idx').on(t.createdAt),
+    codeIdx: uniqueIndex('findings_audit_code_idx').on(t.auditId, t.code),
   }),
 );
 
@@ -255,6 +278,8 @@ export const assignmentsRelations = relations(assignments, ({ one }) => ({
 
 export const findingsRelations = relations(findings, ({ one, many }) => ({
   audit: one(audits, { fields: [findings.auditId], references: [audits.id] }),
+  unit: one(auditUnits, { fields: [findings.unitId], references: [auditUnits.id] }),
+  member: one(auditMembers, { fields: [findings.memberId], references: [auditMembers.id] }),
   images: many(findingImages),
   revisions: many(findingRevisions),
 }));
