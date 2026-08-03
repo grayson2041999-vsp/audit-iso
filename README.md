@@ -162,6 +162,24 @@ Nhớ thêm domain production vào **CORS policy của R2 bucket**.
 
 ---
 
+## 6b. Migration đã áp dụng
+
+Cài mới thì chỉ cần chạy `db/init.sql` — đã bao gồm mọi thay đổi. Các file dưới đây
+dành cho database đã tồn tại từ trước:
+
+| File | Nội dung |
+|---|---|
+| `db/migration-001-auditee-duedate.sql` | Thêm `auditee` (đơn vị được đánh giá) và `due_date` (thời hạn khắc phục) |
+| `db/migration-002-drop-unused-columns.sql` | Xoá `requirement`, `nonconformity`, `risk_analysis`, `suggested_action`, `confidence` — các trường AI không còn sinh ra |
+
+**Thứ tự bắt buộc khi migration có xoá cột:** push code trước, đợi Vercel build xong,
+rồi mới chạy SQL. Làm ngược lại sẽ có một khoảng thời gian bản deploy cũ hỏi những cột
+đã bị xoá và mọi truy vấn `findings` sẽ lỗi.
+
+Thêm cột thì ngược lại — chạy SQL trước, push code sau — vì cột mới không làm phiền code cũ.
+
+---
+
 ## 7. Lưu ý khi vận hành
 
 - **AI là trợ lý, không phải người quyết định.** Auditor phải rà soát mọi phát biểu trước khi chuyển trạng thái `REVIEWED`. Trường `confidence` và `missingInfo` là tín hiệu để ưu tiên rà soát.
