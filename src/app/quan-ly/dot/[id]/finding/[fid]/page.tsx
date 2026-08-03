@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { findingImages, findingRevisions, findings } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
 import { getOwnedAudit } from '@/lib/audit-access';
-import { LeaderFindingEditor } from '@/components/LeaderFindingEditor';
+import { FindingEditor } from '@/components/FindingEditor';
 import { presignDownload, isR2Configured } from '@/lib/r2';
 import { formatDate } from '@/lib/utils';
 
@@ -65,9 +65,15 @@ export default async function Page({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <LeaderFindingEditor
-            auditId={id}
-            auditClosed={owned.audit.status === 'CLOSED'}
+          <FindingEditor
+            endpoint={`/api/audits/${id}/findings/${row.id}`}
+            backHref={`/quan-ly/dot/${id}/tong-hop`}
+            canEditStatus
+            disabledReason={
+              owned.audit.status === 'CLOSED'
+                ? 'Đợt đã khoá. Mở lại đợt ở trang tổng hợp nếu cần chỉnh sửa.'
+                : null
+            }
             finding={{
               id: row.id,
               code: row.code,

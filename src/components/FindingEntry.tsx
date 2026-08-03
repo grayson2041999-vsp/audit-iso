@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ImageUploader, type UploadedImage } from './ImageUploader';
 import { AnalysisProgress } from './AnalysisProgress';
@@ -36,6 +36,8 @@ export function FindingEntry({
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [restored, setRestored] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [result, setResult] = useState<StandardizedFinding | null>(null);
@@ -44,6 +46,63 @@ export function FindingEntry({
   // không tự tính lại nữa (dueDateTouched) để không ghi đè quyết định của họ.
   const [dueDate, setDueDate] = useState('');
   const [dueDateTouched, setDueDateTouched] = useState(false);
+
+  /**
+   * Tự lưu tạm nội dung đang gõ vào bộ nhớ trình duyệt.
+   * Auditor làm việc ngoài hiện trường, mạng chập chờn, hay bị chuyển app —
+   * mất 200 chữ vừa gõ là mất luôn niềm tin vào công cụ.
+   * Chỉ lưu phần chữ, không lưu ảnh (ảnh đã nằm trên R2 rồi).
+   */
+  const storageKey = `nhap:${auditId}:${unitId}`;
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        rawText?: string; area?: string; process?: string; standards?: StandardCode[];
+      };
+      if (saved.rawText?.trim()) {
+        setRawText(saved.rawText);
+        setArea(saved.area ?? '');
+        setProcess(saved.process ?? '');
+        if (saved.standards?.length) setStandards(saved.standards);
+        setRestored(true);
+      }
+    } catch {
+      /* bộ nhớ trình duyệt bị chặn — bỏ qua, không ảnh hưởng chức năng chính */
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const t = setTimeout(() => {
+      try {
+        if (rawText.trim() || area.trim() || process.trim()) {
+          window.localStorage.setItem(
+            storageKey,
+            JSON.stringify({ rawText, area, process, standards }),
+          );
+        } else {
+          window.localStorage.removeItem(storageKey);
+        }
+      } catch {
+        /* bỏ qua */
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [rawText, area, process, standards, storageKey]);
+
+  function clearDraftCache() {
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      /* bỏ qua */
+    }
+  }
 
   function toggleStandard(s: StandardCode) {
     setStandards((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
@@ -99,10 +158,39 @@ export function FindingEntry({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Lưu thất bại.');
+      clearDraftCache();
       router.push(`/dot/${auditId}/finding/${data.finding.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lỗi khi lưu.');
       setSaving(false);
+    }
+  }
+
+  /** Lưu ghi nhận thô, chưa qua AI. Chuẩn hoá sau ở trang chi tiết. */
+  async function handleSaveDraft() {
+    setError(null);
+    if (rawText.trim().length < 10) return setError('Nội dung ghi nhận cần tối thiểu 10 ký tự.');
+
+    setSavingDraft(true);
+    try {
+      const res = await fetch(`/api/dot/${auditId}/findings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unitId,
+          rawText, standards, area, process,
+          images: images.map((i) => ({
+            key: i.key, fileName: i.fileName, contentType: i.contentType, size: i.size,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Lưu nháp thất bại.');
+      clearDraftCache();
+      router.push(`/dot/${auditId}/finding/${data.finding.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lỗi khi lưu nháp.');
+      setSavingDraft(false);
     }
   }
 
@@ -118,6 +206,24 @@ export function FindingEntry({
         <p className="mb-4 text-sm text-slate-500">
           Viết tự nhiên, gạch đầu dòng cũng được. AI sẽ chuẩn hoá theo cấu trúc R–N–E của ISO.
         </p>
+        {restored && (
+          <p className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
+            <span className="flex-1">Đã khôi phục nội dung bạn gõ dở lần trước.</span>
+            <button
+              onClick={() => {
+                setRawText('');
+                setArea('');
+                setProcess('');
+                setRestored(false);
+                clearDraftCache();
+              }}
+              className="shrink-0 text-xs underline"
+            >
+              Bỏ đi, nhập mới
+            </button>
+          </p>
+        )}
+
         <p className="mb-5 rounded-lg bg-slate-50 px-3 py-2.5 text-sm">
           Đơn vị được đánh giá: <strong>{unitName}</strong>
           <span className="block text-xs text-slate-500">
@@ -193,9 +299,28 @@ export function FindingEntry({
           <ImageUploader images={images} onChange={setImages} />
         </div>
 
-        <button onClick={handleStandardize} disabled={loading} className="btn-primary w-full">
-          {loading ? 'AI đang phân tích…' : 'Chuẩn hoá bằng AI'}
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={handleStandardize}
+            disabled={loading || savingDraft}
+            className="btn-primary flex-1"
+          >
+            {loading ? 'AI đang phân tích…' : 'Chuẩn hoá bằng AI'}
+          </button>
+          <button
+            onClick={handleSaveDraft}
+            disabled={loading || savingDraft || rawText.trim().length < 10}
+            title="Lưu ghi nhận thô, chuẩn hoá sau"
+            className="btn-ghost"
+          >
+            {savingDraft ? 'Đang lưu…' : 'Lưu nháp'}
+          </button>
+        </div>
+
+        <p className="mt-2 text-xs text-slate-400">
+          Đang ngoài hiện trường thì bấm <strong>Lưu nháp</strong> để ghi nhanh, về bàn
+          chuẩn hoá sau. Nội dung đang gõ cũng được tự lưu tạm trên máy bạn.
+        </p>
 
         {error && (
           <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>

@@ -6,6 +6,8 @@ import { findingImages, findings } from '@/lib/schema';
 import { getMember } from '@/lib/member-auth';
 import { MemberBar } from '@/components/MemberBar';
 import { MemberFindingActions } from '@/components/MemberFindingActions';
+import { FindingEditor } from '@/components/FindingEditor';
+import { StandardizeLater } from '@/components/StandardizeLater';
 import { SeverityBadge } from '@/components/Badge';
 import { presignDownload, isR2Configured } from '@/lib/r2';
 import { formatDate, formatDateOnly, dueStatus } from '@/lib/utils';
@@ -39,6 +41,7 @@ export default async function Page({
   );
 
   const isDraft = row.status === 'DRAFT';
+  const standardized = Boolean(row.statement);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -60,7 +63,7 @@ export default async function Page({
             <SeverityBadge value={row.severity} />
             {isDraft ? (
               <span className="chip bg-amber-100 text-amber-800 ring-transparent">
-                Bản nháp — chưa nộp
+                {standardized ? 'Bản nháp — chưa nộp' : 'Bản nháp — chưa chuẩn hoá'}
               </span>
             ) : (
               <span className="chip bg-emerald-100 text-emerald-800 ring-transparent">
@@ -82,37 +85,69 @@ export default async function Page({
           unitId={row.unitId}
           status={row.status}
           statement={row.statement ?? ''}
+          canSubmit={standardized}
           auditClosed={audit.status === 'CLOSED'}
         />
       </div>
 
       {isDraft && (
         <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Finding này chưa nộp nên trưởng đoàn chưa thấy. Rà lại rồi bấm
-          <strong> Nộp cho trưởng đoàn</strong>.
+          Finding này chưa nộp nên trưởng đoàn chưa thấy. Sửa trực tiếp bên dưới, xong thì
+          bấm <strong>Nộp cho trưởng đoàn</strong>.
         </p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Section title="Phát biểu finding">
-            <p className="whitespace-pre-wrap leading-relaxed">{row.statement ?? '—'}</p>
-          </Section>
+          {isDraft && !standardized ? (
+            <StandardizeLater
+              auditId={id}
+              findingId={row.id}
+              hasImages={images.length > 0}
+            />
+          ) : isDraft ? (
+            <FindingEditor
+              endpoint={`/api/dot/${id}/findings/${row.id}`}
+              backHref={`/dot/${id}/don-vi/${row.unitId ?? ''}`}
+              canEditStatus={false}
+              disabledReason={
+                audit.status === 'CLOSED' ? 'Đợt đã khoá, không sửa được nữa.' : null
+              }
+              finding={{
+                id: row.id,
+                code: row.code,
+                status: row.status,
+                title: row.title,
+                severity: row.severity,
+                statement: row.statement,
+                evidence: row.evidence,
+                clauses: row.clauses,
+                rawArea: row.rawArea,
+                dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
+              }}
+            />
+          ) : (
+            <>
+              <Section title="Phát biểu finding">
+                <p className="whitespace-pre-wrap leading-relaxed">{row.statement ?? '—'}</p>
+              </Section>
 
-          <Section title="Bằng chứng khách quan">
-            <ul className="space-y-1.5 text-sm">
-              {row.evidence.length ? (
-                row.evidence.map((e, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-slate-400">{i + 1}.</span>
-                    {e}
-                  </li>
-                ))
-              ) : (
-                <li className="text-slate-400">—</li>
-              )}
-            </ul>
-          </Section>
+              <Section title="Bằng chứng khách quan">
+                <ul className="space-y-1.5 text-sm">
+                  {row.evidence.length ? (
+                    row.evidence.map((e, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-slate-400">{i + 1}.</span>
+                        {e}
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-slate-400">—</li>
+                  )}
+                </ul>
+              </Section>
+            </>
+          )}
 
           {images.length > 0 && (
             <Section title={`Hình ảnh hiện trường (${images.length})`}>

@@ -4,13 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export function MemberFindingActions({
-  auditId, findingId, unitId, status, statement, auditClosed,
+  auditId, findingId, unitId, status, statement, canSubmit, auditClosed,
 }: {
   auditId: string;
   findingId: string;
   unitId: string | null;
   status: string;
   statement: string;
+  /** Chưa chuẩn hoá thì chưa nộp được. */
+  canSubmit: boolean;
   auditClosed: boolean;
 }) {
   const router = useRouter();
@@ -73,7 +75,12 @@ export function MemberFindingActions({
             <button onClick={remove} disabled={busy} className="btn-ghost !text-red-600 hover:!bg-red-50">
               Xoá
             </button>
-            <button onClick={submit} disabled={busy} className="btn-primary">
+            <button
+              onClick={submit}
+              disabled={busy || !canSubmit}
+              title={canSubmit ? undefined : 'Cần chuẩn hoá bằng AI trước khi nộp'}
+              className="btn-primary"
+            >
               {busy ? 'Đang xử lý…' : 'Nộp cho trưởng đoàn'}
             </button>
           </>

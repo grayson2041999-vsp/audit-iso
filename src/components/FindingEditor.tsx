@@ -29,15 +29,26 @@ const STATUS_FLOW = [
 ];
 
 /**
- * Trưởng đoàn sửa finding của bất kỳ đánh giá viên nào.
- * Mọi thay đổi đều ghi một bản chụp vào lịch sử chỉnh sửa ở phía máy chủ.
+ * Bộ soạn thảo dùng chung cho cả hai vai trò.
+ *
+ *  · Trưởng đoàn : sửa finding của bất kỳ ai, đổi được cả trạng thái.
+ *  · Đánh giá viên: chỉ sửa finding của mình và chỉ khi còn là bản nháp;
+ *                   trạng thái do nút "Nộp" ở trên quyết định, không cho chọn tay.
+ *
+ * Quyền thực sự được kiểm tra ở phía máy chủ — props dưới đây chỉ quyết định
+ * hiển thị. Mọi lần lưu đều ghi một bản chụp vào lịch sử chỉnh sửa.
  */
-export function LeaderFindingEditor({
-  auditId, finding, auditClosed,
+export function FindingEditor({
+  endpoint, backHref, finding, canEditStatus, disabledReason,
 }: {
-  auditId: string;
+  /** Đường dẫn API để PATCH và DELETE finding này. */
+  endpoint: string;
+  /** Nơi quay về sau khi xoá. */
+  backHref: string;
   finding: Finding;
-  auditClosed: boolean;
+  canEditStatus: boolean;
+  /** Có giá trị thì khoá toàn bộ, hiện lý do. */
+  disabledReason?: string | null;
 }) {
   const router = useRouter();
 
@@ -62,13 +73,13 @@ export function LeaderFindingEditor({
     draft.evidence !== finding.evidence.join('\n') ||
     draft.rawArea !== (finding.rawArea ?? '') ||
     draft.dueDate !== (finding.dueDate ?? '') ||
-    draft.status !== finding.status;
+    (canEditStatus && draft.status !== finding.status);
 
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/audits/${auditId}/findings/${finding.id}`, {
+      const res = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -78,7 +89,7 @@ export function LeaderFindingEditor({
           evidence: draft.evidence.split('\n').filter(Boolean),
           rawArea: draft.rawArea,
           dueDate: draft.dueDate || null,
-          status: draft.status,
+          ...(canEditStatus ? { status: draft.status } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -96,20 +107,18 @@ export function LeaderFindingEditor({
   async function remove() {
     if (!confirm('Xoá finding này khỏi đợt? Không khôi phục lại được.')) return;
     setBusy(true);
-    const res = await fetch(`/api/audits/${auditId}/findings/${finding.id}`, { method: 'DELETE' });
+    const res = await fetch(endpoint, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setBusy(false);
       return setError(data.error ?? 'Không xoá được.');
     }
-    router.push(`/quan-ly/dot/${auditId}/tong-hop`);
+    router.push(backHref);
   }
 
-  if (auditClosed) {
+  if (disabledReason) {
     return (
-      <p className="rounded-lg bg-zinc-100 px-4 py-3 text-sm text-zinc-700">
-        Đợt đã khoá. Mở lại đợt ở trang tổng hợp nếu cần chỉnh sửa.
-      </p>
+      <p className="rounded-lg bg-zinc-100 px-4 py-3 text-sm text-zinc-700">{disabledReason}</p>
     );
   }
 
@@ -135,15 +144,17 @@ export function LeaderFindingEditor({
           ))}
         </select>
 
-        <select
-          value={draft.status}
-          onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
-          className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-xs"
-        >
-          {STATUS_FLOW.map((s) => (
-            <option key={s.id} value={s.id}>{s.label}</option>
-          ))}
-        </select>
+        {canEditStatus && (
+          <select
+            value={draft.status}
+            onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
+            className="ml-auto rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            {STATUS_FLOW.map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       <Field label="Tiêu đề">
