@@ -1,5 +1,8 @@
 # Concept mở rộng — Quản lý đợt đánh giá nội bộ
 
+> **Trạng thái: đã triển khai xong cả 4 đợt** (tài khoản trưởng đoàn · chuẩn bị đợt ·
+> cổng đánh giá viên · bảng tổng hợp và xuất Excel).
+
 Bản thiết kế để duyệt trước khi viết code. Mọi quyết định dưới đây bám theo lựa chọn
 đã chốt: mã 6 số là đủ, trưởng đoàn dùng tài khoản, đơn vị và đánh giá viên tạo mới
 theo từng đợt, xuất Excel, trưởng đoàn kiêm cả hai vai trò.

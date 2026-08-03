@@ -13,9 +13,12 @@ type Props = {
   /** Cặp "memberId:unitId" đã phân công. */
   links: string[];
   publicUrl: string;
+  leaderName: string;
 };
 
-export function AuditSetup({ auditId, status, units, members, links, publicUrl }: Props) {
+export function AuditSetup({
+  auditId, status, units, members, links, publicUrl, leaderName,
+}: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,15 +133,32 @@ export function AuditSetup({ auditId, status, units, members, links, publicUrl }
         </p>
 
         {!locked && (
-          <AddMemberRow
-            busy={busy}
-            onAdd={(fullName, homeUnit) =>
-              call(`/api/audits/${auditId}/members`, {
-                method: 'POST',
-                body: JSON.stringify({ fullName, homeUnit }),
-              })
-            }
-          />
+          <>
+            <AddMemberRow
+              busy={busy}
+              onAdd={(fullName, homeUnit) =>
+                call(`/api/audits/${auditId}/members`, {
+                  method: 'POST',
+                  body: JSON.stringify({ fullName, homeUnit }),
+                })
+              }
+            />
+
+            {!members.some((m) => m.fullName === leaderName) && (
+              <button
+                onClick={() =>
+                  call(`/api/audits/${auditId}/members`, {
+                    method: 'POST',
+                    body: JSON.stringify({ fullName: leaderName, isLeader: true }),
+                  })
+                }
+                disabled={busy}
+                className="mt-2 text-sm text-brand-600 hover:underline"
+              >
+                + Thêm tôi ({leaderName}) vào đoàn đánh giá
+              </button>
+            )}
+          </>
         )}
 
         {members.length === 0 ? (

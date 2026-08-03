@@ -2,7 +2,7 @@
   "name": "audit-iso-finding-standardizer",
   "version": "1.0.0",
   "private": true,
-  "description": "App hỗ trợ auditor nội bộ chuẩn hoá finding theo ISO 9001 / 14001 / 45001 bằng AI",
+  "description": "App h\u1ed7 tr\u1ee3 auditor n\u1ed9i b\u1ed9 chu\u1ea9n ho\u00e1 finding theo ISO 9001 / 14001 / 45001 b\u1eb1ng AI",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -21,6 +21,7 @@
     "@neondatabase/serverless": "^0.10.4",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.38.3",
+    "exceljs": "^4.4.0",
     "next": "15.1.11",
     "react": "19.0.0",
     "react-dom": "19.0.0",

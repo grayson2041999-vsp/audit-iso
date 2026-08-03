@@ -7,6 +7,7 @@ import { assignments, auditMembers, auditUnits } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
 import { getOwnedAudit, AUDIT_STATUS_LABELS, AUDIT_STATUS_STYLE } from '@/lib/audit-access';
 import { AuditSetup } from '@/components/AuditSetup';
+import { AuditTabs } from '@/components/AuditTabs';
 import { formatDateOnly } from '@/lib/utils';
 import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
 
@@ -57,6 +58,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         {audit.scope && <p className="mt-2 max-w-3xl text-sm text-slate-600">{audit.scope}</p>}
       </div>
 
+      <AuditTabs auditId={audit.id} />
+
       <AuditSetup
         auditId={audit.id}
         status={audit.status}
@@ -64,6 +67,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         members={members}
         links={links.map((l) => `${l.memberId}:${l.unitId}`)}
         publicUrl={publicUrl}
+        leaderName={owned.leader.fullName}
       />
     </div>
   );
