@@ -14,6 +14,16 @@ export function formatDate(d: Date | string | null | undefined) {
   }).format(date);
 }
 
+/**
+ * So tên đơn vị bỏ qua hoa thường và khoảng trắng thừa.
+ * Đặt ở utils vì cả máy chủ lẫn component trình duyệt đều dùng.
+ */
+export function sameUnitName(a?: string | null, b?: string | null) {
+  if (!a || !b) return false;
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  return norm(a) === norm(b);
+}
+
 /** Chỉ ngày/tháng/năm, dùng cho thời hạn khắc phục. */
 export function formatDateOnly(d: Date | string | null | undefined) {
   if (!d) return '—';

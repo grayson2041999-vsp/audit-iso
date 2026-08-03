@@ -65,7 +65,8 @@ export default async function Page() {
           {rows.map((a) => {
             const st = AUDIT_STATUS[a.status] ?? AUDIT_STATUS.PLANNED;
             return (
-              <li key={a.id} className="card p-5">
+              <li key={a.id} className="card p-5 transition hover:border-brand-300 hover:shadow">
+                <Link href={`/quan-ly/dot/${a.id}`} className="block">
                 <div className="mb-2 flex items-center gap-2">
                   <span className="font-mono text-xs text-slate-500">{a.code}</span>
                   <span className={`chip ring-transparent ${st.cls}`}>{st.label}</span>
@@ -82,6 +83,7 @@ export default async function Page() {
                     .map((s) => STANDARD_SHORT[s as StandardCode] ?? s)
                     .join(' · ')}
                 </p>
+                </Link>
               </li>
             );
           })}

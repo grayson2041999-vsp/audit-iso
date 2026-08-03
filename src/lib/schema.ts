@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, uuid, integer, jsonb, pgEnum, index,
+  pgTable, text, timestamp, uuid, integer, jsonb, pgEnum, index, uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -72,6 +72,72 @@ export const audits = pgTable('audits', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/* ------------------------------------------------------------------ */
+/* audit_units — đơn vị được đánh giá, khai báo riêng theo từng đợt     */
+/* ------------------------------------------------------------------ */
+
+export const auditUnits = pgTable(
+  'audit_units',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: text('name').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ auditIdx: index('audit_units_audit_idx').on(t.auditId) }),
+);
+
+/* ------------------------------------------------------------------ */
+/* audit_members — đánh giá viên của đợt                                */
+/* ------------------------------------------------------------------ */
+
+export const auditMembers = pgTable(
+  'audit_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    fullName: text('full_name').notNull(),
+    /** Đơn vị công tác — dùng để cảnh báo khi phân công vào chính đơn vị mình. */
+    homeUnit: text('home_unit'),
+    /** Mã 6 số, chỉ có sau khi trưởng đoàn bấm "Sinh mã & mở đợt". */
+    accessCode: text('access_code'),
+    /** Trưởng đoàn tự thêm mình vào đoàn để cũng đi đánh giá. */
+    isLeader: text('is_leader').default('0').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ auditIdx: index('audit_members_audit_idx').on(t.auditId) }),
+);
+
+/* ------------------------------------------------------------------ */
+/* assignments — phân công nhiều–nhiều giữa đánh giá viên và đơn vị     */
+/* ------------------------------------------------------------------ */
+
+export const assignments = pgTable(
+  'assignments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    memberId: uuid('member_id')
+      .references(() => auditMembers.id, { onDelete: 'cascade' })
+      .notNull(),
+    unitId: uuid('unit_id')
+      .references(() => auditUnits.id, { onDelete: 'cascade' })
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    auditIdx: index('assignments_audit_idx').on(t.auditId),
+    pairIdx: uniqueIndex('assignments_pair_idx').on(t.memberId, t.unitId),
+  }),
+);
 
 /* ------------------------------------------------------------------ */
 /* findings                                                            */
@@ -165,7 +231,26 @@ export const leadersRelations = relations(leaders, ({ many }) => ({
 
 export const auditsRelations = relations(audits, ({ one, many }) => ({
   leader: one(leaders, { fields: [audits.leaderId], references: [leaders.id] }),
+  units: many(auditUnits),
+  members: many(auditMembers),
+  assignments: many(assignments),
   findings: many(findings),
+}));
+
+export const auditUnitsRelations = relations(auditUnits, ({ one, many }) => ({
+  audit: one(audits, { fields: [auditUnits.auditId], references: [audits.id] }),
+  assignments: many(assignments),
+}));
+
+export const auditMembersRelations = relations(auditMembers, ({ one, many }) => ({
+  audit: one(audits, { fields: [auditMembers.auditId], references: [audits.id] }),
+  assignments: many(assignments),
+}));
+
+export const assignmentsRelations = relations(assignments, ({ one }) => ({
+  audit: one(audits, { fields: [assignments.auditId], references: [audits.id] }),
+  member: one(auditMembers, { fields: [assignments.memberId], references: [auditMembers.id] }),
+  unit: one(auditUnits, { fields: [assignments.unitId], references: [auditUnits.id] }),
 }));
 
 export const findingsRelations = relations(findings, ({ one, many }) => ({
@@ -184,5 +269,8 @@ export const findingRevisionsRelations = relations(findingRevisions, ({ one }) =
 
 export type Leader = typeof leaders.$inferSelect;
 export type Audit = typeof audits.$inferSelect;
+export type AuditUnit = typeof auditUnits.$inferSelect;
+export type AuditMember = typeof auditMembers.$inferSelect;
+export type Assignment = typeof assignments.$inferSelect;
 export type Finding = typeof findings.$inferSelect;
 export type FindingImage = typeof findingImages.$inferSelect;
