@@ -23,25 +23,52 @@ export const findingStatusEnum = pgEnum('finding_status', [
   'CLOSED',     // Đã đóng sau hành động khắc phục
 ]);
 
+/**
+ * Trạng thái đợt đánh giá — suy ra từ hành động, không có nút bật/tắt riêng:
+ *   PLANNED     "Đang chuẩn bị"   — chưa sinh mã cho đánh giá viên
+ *   IN_PROGRESS "Đang thực hiện"  — đã sinh mã, đánh giá viên vào nhập được
+ *   CLOSED      "Đã khoá"         — trưởng đoàn khoá, chỉ xem
+ * (REPORTING giữ trong enum vì Postgres không xoá được giá trị enum, nhưng không dùng.)
+ */
 export const auditStatusEnum = pgEnum('audit_status', [
   'PLANNED', 'IN_PROGRESS', 'REPORTING', 'CLOSED',
 ]);
 
 /* ------------------------------------------------------------------ */
-/* audits — mỗi cuộc đánh giá nội bộ                                   */
+/* leaders — tài khoản trưởng đoàn đánh giá                            */
+/* ------------------------------------------------------------------ */
+
+export const leaders = pgTable('leaders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  fullName: text('full_name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/* ------------------------------------------------------------------ */
+/* audits — mỗi đợt đánh giá nội bộ                                    */
 /* ------------------------------------------------------------------ */
 
 export const audits = pgTable('audits', {
   id: uuid('id').primaryKey().defaultRandom(),
+  leaderId: uuid('leader_id')
+    .references(() => leaders.id, { onDelete: 'cascade' })
+    .notNull(),
   code: text('code').notNull(),                  // VD: IA-2026-07
   title: text('title').notNull(),
   scope: text('scope'),                          // Phạm vi đánh giá
   standards: jsonb('standards').$type<string[]>().default([]).notNull(),
-  auditee: text('auditee'),                      // Đơn vị được đánh giá
-  leadAuditor: text('lead_auditor'),
+  leadAuditor: text('lead_auditor'),             // Tên trưởng đoàn ghi trên báo cáo
   startDate: timestamp('start_date', { withTimezone: true }),
   endDate: timestamp('end_date', { withTimezone: true }),
-  status: auditStatusEnum('status').default('IN_PROGRESS').notNull(),
+  status: auditStatusEnum('status').default('PLANNED').notNull(),
+  /**
+   * Bộ đếm sinh mã finding (F-01, F-02…). Mỗi lần lưu finding chạy
+   * `UPDATE audits SET finding_seq = finding_seq + 1 ... RETURNING finding_seq`
+   * — thao tác nguyên tử, hai người lưu cùng lúc không bao giờ nhận trùng số.
+   */
+  findingSeq: integer('finding_seq').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -132,7 +159,12 @@ export const findingRevisions = pgTable('finding_revisions', {
 /* Relations                                                           */
 /* ------------------------------------------------------------------ */
 
-export const auditsRelations = relations(audits, ({ many }) => ({
+export const leadersRelations = relations(leaders, ({ many }) => ({
+  audits: many(audits),
+}));
+
+export const auditsRelations = relations(audits, ({ one, many }) => ({
+  leader: one(leaders, { fields: [audits.leaderId], references: [leaders.id] }),
   findings: many(findings),
 }));
 
@@ -150,6 +182,7 @@ export const findingRevisionsRelations = relations(findingRevisions, ({ one }) =
   finding: one(findings, { fields: [findingRevisions.findingId], references: [findings.id] }),
 }));
 
+export type Leader = typeof leaders.$inferSelect;
 export type Audit = typeof audits.$inferSelect;
 export type Finding = typeof findings.$inferSelect;
 export type FindingImage = typeof findingImages.$inferSelect;

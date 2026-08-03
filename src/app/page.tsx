@@ -1,94 +1,52 @@
 import Link from 'next/link';
-import { desc, sql } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { findings } from '@/lib/schema';
-import { SeverityBadge, StatusBadge } from '@/components/Badge';
-import { formatDate } from '@/lib/utils';
+import { redirect } from 'next/navigation';
+import { getLeader } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-async function loadData() {
-  try {
-    const recent = await db.select().from(findings).orderBy(desc(findings.createdAt)).limit(8);
-    const counts = await db
-      .select({ severity: findings.severity, n: sql<number>`count(*)::int` })
-      .from(findings)
-      .groupBy(findings.severity);
-    return { recent, counts, ok: true as const };
-  } catch {
-    return { recent: [], counts: [], ok: false as const };
-  }
-}
-
-const CARDS = [
-  { key: 'MAJOR', label: 'Không phù hợp nặng', cls: 'text-red-600' },
-  { key: 'MINOR', label: 'Không phù hợp nhẹ', cls: 'text-amber-600' },
-  { key: 'OBS', label: 'Quan sát', cls: 'text-sky-600' },
-  { key: 'OFI', label: 'Cơ hội cải tiến', cls: 'text-emerald-600' },
-];
-
 export default async function HomePage() {
-  const { recent, counts, ok } = await loadData();
-  const get = (k: string) => counts.find((c) => c.severity === k)?.n ?? 0;
+  // Trưởng đoàn đã đăng nhập thì vào thẳng khu quản lý.
+  if (await getLeader()) redirect('/quan-ly');
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Tổng quan</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Chuẩn hoá phát hiện đánh giá nội bộ theo ISO 9001:2015 / ISO 14001:2015 / ISO 45001:2018.
+    <div className="mx-auto max-w-3xl space-y-8 py-8">
+      <div className="text-center">
+        <h1 className="text-3xl font-semibold">Đánh giá nội bộ ISO</h1>
+        <p className="mx-auto mt-2 max-w-xl text-slate-600">
+          Quản lý đợt đánh giá và chuẩn hoá phát hiện theo ISO 9001:2015, ISO 14001:2015,
+          ISO 45001:2018 với sự hỗ trợ của AI.
         </p>
       </div>
 
-      {!ok && (
-        <div className="card border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          Chưa truy vấn được cơ sở dữ liệu Neon. Kiểm tra biến <code>DATABASE_URL</code> (trong
-          <code> .env.local</code> nếu chạy máy cá nhân, hoặc Environment Variables trên Vercel) và
-          đảm bảo đã chạy <code>db/init.sql</code> để tạo bảng.
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {CARDS.map((c) => (
-          <div key={c.key} className="card p-5">
-            <p className="text-sm text-slate-500">{c.label}</p>
-            <p className={`mt-2 text-3xl font-semibold ${c.cls}`}>{get(c.key)}</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="card flex flex-col p-6">
+          <h2 className="font-semibold">Tôi là trưởng đoàn</h2>
+          <p className="mt-1 flex-1 text-sm text-slate-500">
+            Tạo đợt đánh giá, khai báo đơn vị và đánh giá viên, phân công, theo dõi bảng
+            tổng hợp finding của toàn đợt.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Link href="/dang-nhap" className="btn-primary flex-1">Đăng nhập</Link>
+            <Link href="/dang-ky" className="btn-ghost">Đăng ký</Link>
           </div>
-        ))}
-      </div>
-
-      <div className="card">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-          <h2 className="font-semibold">Finding gần đây</h2>
-          <Link href="/findings" className="text-sm text-brand-600 hover:underline">Xem tất cả →</Link>
         </div>
 
-        {recent.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-slate-500">
-            Chưa có finding nào.{' '}
-            <Link href="/findings/new" className="text-brand-600 hover:underline">Tạo finding đầu tiên</Link>
-          </div>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {recent.map((f) => (
-              <li key={f.id}>
-                <Link href={`/findings/${f.id}`} className="flex items-start gap-4 px-5 py-3.5 hover:bg-slate-50">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{f.title ?? f.rawText.slice(0, 90)}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {f.rawArea ?? '—'} · {formatDate(f.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <SeverityBadge value={f.severity} />
-                    <StatusBadge value={f.status} />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="card flex flex-col p-6">
+          <h2 className="font-semibold">Tôi là đánh giá viên</h2>
+          <p className="mt-1 flex-1 text-sm text-slate-500">
+            Bạn không cần tài khoản. Mở đường link đợt đánh giá do trưởng đoàn gửi, bấm
+            vào tên mình rồi nhập mã 6 số được cấp.
+          </p>
+          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-500">
+            Chưa có link? Liên hệ trưởng đoàn đánh giá của đợt.
+          </p>
+        </div>
       </div>
+
+      <p className="text-center text-xs text-slate-400">
+        Đang phát triển từng phần — cổng đánh giá viên sẽ có ở bản cập nhật tiếp theo.{' '}
+        <Link href="/findings" className="hover:underline">Xem finding đã lưu (bản cũ)</Link>
+      </p>
     </div>
   );
 }

@@ -4,19 +4,31 @@
 import 'dotenv/config';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
-import { audits, findings } from '../src/lib/schema';
+import { audits, findings, leaders } from '../src/lib/schema';
+
+import { hashPassword } from '../src/lib/auth';
 
 const db = drizzle(neon(process.env.DATABASE_URL!));
 
 async function main() {
+  // Tài khoản trưởng đoàn mẫu — mật khẩu: matkhau123
+  const [leader] = await db
+    .insert(leaders)
+    .values({
+      email: 'truongdoan@example.com',
+      fullName: 'Nguyễn Văn A',
+      passwordHash: hashPassword('matkhau123'),
+    })
+    .returning();
+
   const [audit] = await db
     .insert(audits)
     .values({
+      leaderId: leader.id,
       code: 'IA-2026-07',
       title: 'Đánh giá nội bộ định kỳ Quý III/2026',
       scope: 'Toàn bộ các quá trình thuộc phạm vi HTQL tích hợp',
       standards: ['ISO9001', 'ISO14001', 'ISO45001'],
-      auditee: 'Phòng Vật tư',
       leadAuditor: 'Nguyễn Văn A',
       status: 'IN_PROGRESS',
     })
@@ -25,7 +37,7 @@ async function main() {
   await db.insert(findings).values({
     auditId: audit.id,
     code: 'NC-001',
-    status: 'AI_DRAFTED',
+    status: 'REVIEWED',
     rawText:
       'Kho vật tư tầng 1: kiểm tra 8 bình chữa cháy, 3 bình (BCC-04, BCC-07, BCC-11) tem kiểm định hết hạn từ 02/2026. Thủ kho không xuất trình được sổ theo dõi kiểm tra hàng tháng 6 tháng gần đây.',
     rawArea: 'Kho vật tư tầng 1',
