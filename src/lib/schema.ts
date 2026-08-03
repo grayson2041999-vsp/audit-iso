@@ -72,18 +72,13 @@ export const findings = pgTable(
     /* --- Kết quả AI chuẩn hoá --- */
     title: text('title'),
     severity: severityEnum('severity'),
-    requirement: text('requirement'),            // Yêu cầu (R)
-    nonconformity: text('nonconformity'),        // Sự không phù hợp (N)
-    evidence: jsonb('evidence').$type<string[]>().default([]).notNull(), // Bằng chứng (E)
-    statement: text('statement'),                // Phát biểu finding hoàn chỉnh
+    evidence: jsonb('evidence').$type<string[]>().default([]).notNull(), // Bằng chứng khách quan
+    statement: text('statement'),                // Phát biểu finding hoàn chỉnh (đủ R–N–E)
     clauses: jsonb('clauses')
       .$type<{ standard: string; clause: string; clauseTitle: string }[]>()
       .default([])
       .notNull(),
-    riskAnalysis: text('risk_analysis'),
-    suggestedAction: text('suggested_action'),
     missingInfo: jsonb('missing_info').$type<string[]>().default([]).notNull(),
-    confidence: integer('confidence'),           // 0-100
     aiModel: text('ai_model'),
     aiRaw: jsonb('ai_raw'),                      // Toàn bộ JSON gốc từ AI
 

@@ -49,15 +49,10 @@ CREATE TABLE IF NOT EXISTS findings (
 
   title             text,
   severity          severity,
-  requirement       text,
-  nonconformity     text,
   evidence          jsonb NOT NULL DEFAULT '[]'::jsonb,
   statement         text,
   clauses           jsonb NOT NULL DEFAULT '[]'::jsonb,
-  risk_analysis     text,
-  suggested_action  text,
   missing_info      jsonb NOT NULL DEFAULT '[]'::jsonb,
-  confidence        integer,
   ai_model          text,
   ai_raw            jsonb,
 

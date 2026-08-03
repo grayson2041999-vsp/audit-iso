@@ -71,8 +71,6 @@ export async function POST(req: Request) {
           standard: c.standard, clause: c.clause, clauseTitle: c.clauseTitle,
         })) ?? [],
         missingInfo: ai?.missingInfo ?? [],
-        // requirement / nonconformity / riskAnalysis / suggestedAction / confidence:
-        // cột vẫn tồn tại trong DB nhưng AI không còn sinh ra (xem chú thích ở types.ts).
         aiModel: ai ? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5' : null,
         aiRaw: ai ?? null,
       })
