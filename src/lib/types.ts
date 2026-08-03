@@ -10,23 +10,32 @@ export const clauseRefSchema = z.object({
   reason: z.string().optional(),
 });
 
-/** Kết quả AI trả về sau khi chuẩn hoá finding. */
+/**
+ * Kết quả AI trả về sau khi chuẩn hoá finding — "Gói B".
+ *
+ * Các trường đã chủ động lược bỏ và lý do:
+ *  - process, area        : trùng với ô auditor tự nhập trong form, không được dùng ở đâu.
+ *  - requirement,
+ *    nonconformity        : nội dung đã nằm trong `statement`; yêu cầu R–N–E được siết
+ *                           trực tiếp trong mô tả của `statement` để không giảm chất lượng.
+ *  - riskAnalysis         : mức độ phân loại đã hàm ý mức nghiêm trọng.
+ *  - suggestedAction      : auditor không đề xuất giải pháp cho vấn đề mình phát hiện
+ *                           (nguyên tắc độc lập khi đánh giá lại hiệu lực khắc phục).
+ *  - confidence           : điểm mô hình tự chấm hiệu chỉnh kém, tạo cảm giác chính xác giả.
+ *                           `missingInfo` mới là cảnh báo có giá trị thực.
+ *
+ * Các cột tương ứng trong DB được giữ nguyên (để trống) để có thể khôi phục
+ * mà không cần chạy lại migration.
+ */
 export const standardizedFindingSchema = z.object({
   title: z.string(),
   severity: severitySchema,
   severityRationale: z.string(),
   clauses: z.array(clauseRefSchema),
-  requirement: z.string(),
-  nonconformity: z.string(),
   evidence: z.array(z.string()),
   statement: z.string(),
-  process: z.string().optional().default(''),
-  area: z.string().optional().default(''),
-  riskAnalysis: z.string(),
-  suggestedAction: z.string(),
   imageNotes: z.array(z.string()).optional().default([]),
   missingInfo: z.array(z.string()).optional().default([]),
-  confidence: z.number().min(0).max(100),
 });
 
 export type StandardizedFinding = z.infer<typeof standardizedFindingSchema>;
@@ -82,13 +91,20 @@ export const updateFindingSchema = z.object({
   note: z.string().optional(),
 });
 
-/** Số ngày khắc phục gợi ý theo mức độ. Sửa ở đây nếu đơn vị có quy định riêng. */
+/**
+ * Số ngày khắc phục gợi ý theo mức độ. Sửa ở đây nếu đơn vị có quy định riêng.
+ *
+ * Chỉ MAJOR và MINOR bắt buộc phải khắc phục và bị theo dõi tới khi đóng.
+ * OBS / OFI / CONF không bắt buộc nên để trống — đặt hạn cho chúng sẽ sinh ra
+ * hàng loạt cảnh báo "quá hạn" cho việc không ai có nghĩa vụ làm.
+ * Auditor vẫn tự điền ngày được nếu muốn.
+ */
 export const DUE_DAYS_BY_SEVERITY: Record<string, number | null> = {
   MAJOR: 30,
   MINOR: 60,
-  OBS: 90,
-  OFI: 90,
-  CONF: null, // Phù hợp thì không cần khắc phục
+  OBS: null,
+  OFI: null,
+  CONF: null,
 };
 
 /** Trả về "YYYY-MM-DD" của hạn khắc phục gợi ý, hoặc chuỗi rỗng nếu không áp dụng. */

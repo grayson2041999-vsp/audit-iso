@@ -221,7 +221,6 @@ export function FindingWorkbench() {
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
-              <span className="ml-auto text-xs text-slate-500">Độ tin cậy: {result.confidence}%</span>
             </div>
 
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs italic text-slate-600">
@@ -289,34 +288,14 @@ export function FindingWorkbench() {
               />
             </Field>
 
-            <div className="grid gap-3">
-              <Field label="Yêu cầu (Requirement)">
-                <textarea rows={3} className="input" value={result.requirement} onChange={(e) => patch('requirement', e.target.value)} />
-              </Field>
-              <Field label="Sự không phù hợp (Nonconformity)">
-                <textarea rows={3} className="input" value={result.nonconformity} onChange={(e) => patch('nonconformity', e.target.value)} />
-              </Field>
-              <Field label="Bằng chứng khách quan (Evidence)">
-                <textarea
-                  rows={4}
-                  className="input"
-                  value={result.evidence.join('\n')}
-                  onChange={(e) => patch('evidence', e.target.value.split('\n').filter(Boolean))}
-                />
-              </Field>
-            </div>
-
-            <details className="rounded-lg border border-slate-200 p-3">
-              <summary className="cursor-pointer text-sm font-medium">Phân tích rủi ro & định hướng khắc phục</summary>
-              <div className="mt-3 space-y-3">
-                <Field label="Rủi ro tiềm ẩn">
-                  <textarea rows={3} className="input" value={result.riskAnalysis} onChange={(e) => patch('riskAnalysis', e.target.value)} />
-                </Field>
-                <Field label="Định hướng hành động khắc phục">
-                  <textarea rows={3} className="input" value={result.suggestedAction} onChange={(e) => patch('suggestedAction', e.target.value)} />
-                </Field>
-              </div>
-            </details>
+            <Field label="Bằng chứng khách quan — mỗi dòng một mẩu">
+              <textarea
+                rows={4}
+                className="input"
+                value={result.evidence.join('\n')}
+                onChange={(e) => patch('evidence', e.target.value.split('\n').filter(Boolean))}
+              />
+            </Field>
 
             {result.missingInfo.length > 0 && (
               <div className="rounded-lg bg-amber-50 px-3 py-2.5">

@@ -65,17 +65,14 @@ export async function POST(req: Request) {
         standards: d.standards,
         title: ai?.title ?? null,
         severity: ai?.severity ?? null,
-        requirement: ai?.requirement ?? null,
-        nonconformity: ai?.nonconformity ?? null,
         evidence: ai?.evidence ?? [],
         statement: ai?.statement ?? null,
         clauses: ai?.clauses.map((c) => ({
           standard: c.standard, clause: c.clause, clauseTitle: c.clauseTitle,
         })) ?? [],
-        riskAnalysis: ai?.riskAnalysis ?? null,
-        suggestedAction: ai?.suggestedAction ?? null,
         missingInfo: ai?.missingInfo ?? [],
-        confidence: ai?.confidence ?? null,
+        // requirement / nonconformity / riskAnalysis / suggestedAction / confidence:
+        // cột vẫn tồn tại trong DB nhưng AI không còn sinh ra (xem chú thích ở types.ts).
         aiModel: ai ? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5' : null,
         aiRaw: ai ?? null,
       })

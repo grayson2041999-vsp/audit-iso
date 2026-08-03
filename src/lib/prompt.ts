@@ -38,23 +38,16 @@ Viết thành một đoạn văn liền mạch 3–6 câu theo trình tự: [B�
 
 Bạn PHẢI trả kết quả bằng cách gọi công cụ \`ghi_nhan_finding\`. Không viết văn xuôi, không giải thích ngoài công cụ. Ý nghĩa từng trường:
 
-{
-  "title": "Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề",
-  "severity": "MAJOR | MINOR | OBS | OFI | CONF",
-  "severityRationale": "1–2 câu giải thích vì sao xếp mức này, theo tiêu chí ở mục 5",
-  "clauses": [{"standard":"ISO 45001:2018","clause":"8.2","clauseTitle":"Chuẩn bị sẵn sàng và ứng phó tình huống khẩn cấp","reason":"vì sao viện dẫn điều khoản này"}],
-  "requirement": "Phát biểu yêu cầu bị vi phạm (2–4 câu)",
-  "nonconformity": "Phát biểu bản chất sự không phù hợp (2–4 câu)",
-  "evidence": ["Từng mẩu bằng chứng khách quan riêng biệt", "..."],
-  "statement": "Phát biểu finding hoàn chỉnh theo định dạng ở trên",
-  "process": "Quá trình liên quan",
-  "area": "Khu vực / bộ phận",
-  "riskAnalysis": "Rủi ro tiềm ẩn nếu không khắc phục (2–3 câu)",
-  "suggestedAction": "Định hướng hành động khắc phục cho bên được đánh giá — mô tả hướng xử lý, KHÔNG chỉ định giải pháp cụ thể",
-  "imageNotes": ["Ghi chú về từng ảnh nếu có"],
-  "missingInfo": ["Thông tin auditor cần bổ sung để finding đủ chặt chẽ"],
-  "confidence": 85
-}`;
+- **title** — Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề.
+- **severity** — MAJOR | MINOR | OBS | OFI | CONF, theo tiêu chí ở mục 5.
+- **severityRationale** — 1–2 câu giải thích vì sao xếp mức đó.
+- **clauses** — Điều khoản viện dẫn, mã lấy từ danh mục được cung cấp, điều khoản phù hợp nhất đặt đầu tiên.
+- **evidence** — Danh sách từng mẩu bằng chứng khách quan riêng biệt.
+- **statement** — Phát biểu finding hoàn chỉnh theo đúng định dạng R–N–E ở mục trên.
+- **imageNotes** — Chỉ điền khi có ảnh đính kèm.
+- **missingInfo** — Dữ kiện bạn cần nhưng không có trong ghi nhận.
+
+Bạn KHÔNG cần nêu nguyên nhân gốc, KHÔNG đề xuất giải pháp khắc phục, KHÔNG tự chấm điểm độ tin cậy — đó không phải việc của đánh giá viên trong bước này.`;
 
 export function buildUserPrompt(input: {
   rawText: string;

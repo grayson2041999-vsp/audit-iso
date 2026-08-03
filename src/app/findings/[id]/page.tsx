@@ -63,16 +63,7 @@ export default async function FindingDetailPage({
             <p className="whitespace-pre-wrap leading-relaxed">{row.statement ?? '—'}</p>
           </Section>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <Section title="Yêu cầu (Requirement)">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">{row.requirement ?? '—'}</p>
-            </Section>
-            <Section title="Sự không phù hợp (Nonconformity)">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">{row.nonconformity ?? '—'}</p>
-            </Section>
-          </div>
-
-          <Section title="Bằng chứng khách quan (Evidence)">
+          <Section title="Bằng chứng khách quan">
             <ul className="space-y-1.5 text-sm">
               {row.evidence.length ? row.evidence.map((e, i) => (
                 <li key={i} className="flex gap-2"><span className="text-slate-400">{i + 1}.</span>{e}</li>
@@ -165,14 +156,6 @@ export default async function FindingDetailPage({
             </dl>
           </Section>
 
-          <Section title="Phân tích rủi ro">
-            <p className="text-sm leading-relaxed">{row.riskAnalysis ?? '—'}</p>
-          </Section>
-
-          <Section title="Định hướng khắc phục">
-            <p className="text-sm leading-relaxed">{row.suggestedAction ?? '—'}</p>
-          </Section>
-
           {row.missingInfo.length > 0 && (
             <Section title="Cần bổ sung">
               <ul className="space-y-1 text-sm text-amber-800">
@@ -184,7 +167,6 @@ export default async function FindingDetailPage({
           <Section title="Thông tin AI">
             <dl className="space-y-1 text-sm text-slate-600">
               <div className="flex justify-between"><dt>Mô hình</dt><dd className="font-mono text-xs">{row.aiModel ?? '—'}</dd></div>
-              <div className="flex justify-between"><dt>Độ tin cậy</dt><dd>{row.confidence ?? '—'}%</dd></div>
               <div className="flex justify-between"><dt>Tiêu chuẩn</dt><dd>{row.standards.join(', ')}</dd></div>
             </dl>
           </Section>

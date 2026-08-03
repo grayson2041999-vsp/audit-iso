@@ -74,34 +74,38 @@ const FINDING_TOOL: Anthropic.Tool = {
           required: ['standard', 'clause', 'clauseTitle'],
         },
       },
-      requirement: { type: 'string', description: 'Phát biểu yêu cầu bị vi phạm (2–4 câu)' },
-      nonconformity: { type: 'string', description: 'Bản chất sự không phù hợp (2–4 câu)' },
       evidence: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Từng mẩu bằng chứng khách quan riêng biệt',
+        description:
+          'Từng mẩu bằng chứng khách quan riêng biệt, mỗi mẩu kiểm chứng được độc lập ' +
+          '(số hiệu tài liệu, mã thiết bị, số lượng mẫu kiểm tra và số sai lỗi, vị trí, ngày tháng)',
       },
-      statement: { type: 'string', description: 'Phát biểu finding hoàn chỉnh dùng trong báo cáo' },
-      process: { type: 'string', description: 'Quá trình liên quan' },
-      area: { type: 'string', description: 'Khu vực / bộ phận' },
-      riskAnalysis: { type: 'string', description: 'Rủi ro tiềm ẩn nếu không khắc phục (2–3 câu)' },
-      suggestedAction: { type: 'string', description: 'Định hướng hành động khắc phục' },
+      statement: {
+        type: 'string',
+        description:
+          'Phát biểu finding hoàn chỉnh dùng trực tiếp trong báo cáo, 3–6 câu, BẮT BUỘC đủ ba ' +
+          'thành phần theo đúng thứ tự: (1) bằng chứng khách quan quan sát ở đâu, khi nào; ' +
+          '(2) điều này không phù hợp với yêu cầu nào của tiêu chuẩn/thủ tục nào; ' +
+          '(3) bản chất sai lệch. Không nêu nguyên nhân gốc, không đề xuất giải pháp',
+      },
       imageNotes: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Ghi chú về từng ảnh hiện trường, nếu có',
+        description:
+          'Chỉ điền khi có ảnh đính kèm: những gì quan sát được trên ảnh, hoặc cảnh báo nếu ' +
+          'ảnh mâu thuẫn với mô tả văn bản. Không có ảnh thì để mảng rỗng',
       },
       missingInfo: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Thông tin auditor cần bổ sung để finding đủ chặt chẽ',
+        description:
+          'Dữ kiện auditor cần bổ sung để finding đủ chặt chẽ. Bất cứ thứ gì bạn muốn viết ' +
+          'nhưng không có trong ghi nhận (số hiệu tài liệu, ngày tháng, mã thiết bị, số mẫu) ' +
+          'thì đưa vào đây thay vì tự bịa',
       },
-      confidence: { type: 'number', description: 'Độ tin cậy 0–100' },
     },
-    required: [
-      'title', 'severity', 'severityRationale', 'clauses', 'requirement',
-      'nonconformity', 'evidence', 'statement', 'riskAnalysis', 'suggestedAction', 'confidence',
-    ],
+    required: ['title', 'severity', 'severityRationale', 'clauses', 'evidence', 'statement'],
   },
 };
 
