@@ -6,7 +6,7 @@ import { ImageUploader, type UploadedImage } from './ImageUploader';
 import { AnalysisProgress } from './AnalysisProgress';
 import { SeverityBadge } from './Badge';
 import { STANDARD_LABELS, SEVERITY_LABELS, type StandardCode } from '@/lib/iso';
-import type { StandardizedFinding } from '@/lib/types';
+import { suggestDueDate, DUE_DAYS_BY_SEVERITY, type StandardizedFinding } from '@/lib/types';
 
 const STANDARDS = Object.keys(STANDARD_LABELS) as StandardCode[];
 
@@ -28,6 +28,11 @@ export function FindingWorkbench() {
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [result, setResult] = useState<StandardizedFinding | null>(null);
+
+  // Thời hạn khắc phục: gợi ý theo mức độ, nhưng một khi auditor tự sửa thì
+  // không tự tính lại nữa (dueDateTouched) để không ghi đè quyết định của họ.
+  const [dueDate, setDueDate] = useState('');
+  const [dueDateTouched, setDueDateTouched] = useState(false);
 
   function toggleStandard(s: StandardCode) {
     setStandards((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
@@ -53,6 +58,7 @@ export function FindingWorkbench() {
       if (!res.ok) throw new Error(data.error ?? 'Chuẩn hoá thất bại.');
       setResult(data.result);
       setWarnings(data.warnings ?? []);
+      if (!dueDateTouched) setDueDate(suggestDueDate(data.result.severity));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lỗi không xác định.');
     } finally {
@@ -69,7 +75,8 @@ export function FindingWorkbench() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rawText, standards, area, process, auditorName,
+          rawText, standards, area, process, auditee, auditorName,
+          dueDate: dueDate || null,
           ai: result,
           images: images.map((i) => ({
             key: i.key, fileName: i.fileName, contentType: i.contentType, size: i.size,
@@ -202,7 +209,12 @@ export function FindingWorkbench() {
               <SeverityBadge value={result.severity} />
               <select
                 value={result.severity}
-                onChange={(e) => patch('severity', e.target.value as StandardizedFinding['severity'])}
+                onChange={(e) => {
+                  const sev = e.target.value as StandardizedFinding['severity'];
+                  patch('severity', sev);
+                  // Đổi mức độ thì hạn khắc phục tính lại — trừ khi auditor đã tự sửa.
+                  if (!dueDateTouched) setDueDate(suggestDueDate(sev));
+                }}
                 className="rounded-md border border-slate-300 px-2 py-1 text-xs"
               >
                 {Object.entries(SEVERITY_LABELS).map(([k, v]) => (
@@ -218,6 +230,38 @@ export function FindingWorkbench() {
 
             <Field label="Tiêu đề">
               <input className="input" value={result.title} onChange={(e) => patch('title', e.target.value)} />
+            </Field>
+
+            <Field label="Thời hạn khắc phục">
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  className="input"
+                  value={dueDate}
+                  onChange={(e) => {
+                    setDueDate(e.target.value);
+                    setDueDateTouched(true);
+                  }}
+                />
+                {dueDateTouched ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDueDateTouched(false);
+                      setDueDate(suggestDueDate(result.severity));
+                    }}
+                    className="shrink-0 whitespace-nowrap text-xs text-brand-600 hover:underline"
+                  >
+                    Về mặc định
+                  </button>
+                ) : (
+                  <span className="shrink-0 whitespace-nowrap text-xs text-slate-400">
+                    {DUE_DAYS_BY_SEVERITY[result.severity] != null
+                      ? `Gợi ý ${DUE_DAYS_BY_SEVERITY[result.severity]} ngày`
+                      : 'Không cần khắc phục'}
+                  </span>
+                )}
+              </div>
             </Field>
 
             <div>

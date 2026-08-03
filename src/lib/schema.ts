@@ -61,10 +61,12 @@ export const findings = pgTable(
 
     /* --- Input thô của auditor --- */
     rawText: text('raw_text').notNull(),
-    rawArea: text('raw_area'),                   // Khu vực / bộ phận
+    rawArea: text('raw_area'),                   // Nơi phát hiện (khu vực / bộ phận)
     rawProcess: text('raw_process'),             // Quá trình liên quan
+    auditee: text('auditee'),                    // Đơn vị được đánh giá
     auditorName: text('auditor_name'),
     observedAt: timestamp('observed_at', { withTimezone: true }),
+    dueDate: timestamp('due_date', { withTimezone: true }), // Thời hạn khắc phục
     standards: jsonb('standards').$type<string[]>().default([]).notNull(),
 
     /* --- Kết quả AI chuẩn hoá --- */

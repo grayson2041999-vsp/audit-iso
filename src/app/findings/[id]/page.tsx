@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { findings, findingImages } from '@/lib/schema';
 import { SeverityBadge, StatusBadge } from '@/components/Badge';
 import { presignDownload, isR2Configured } from '@/lib/r2';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateOnly, dueStatus } from '@/lib/utils';
 import { FindingActions } from '@/components/FindingActions';
 
 export const dynamic = 'force-dynamic';
@@ -50,8 +50,8 @@ export default async function FindingDetailPage({
           </div>
           <h1 className="max-w-3xl text-2xl font-semibold">{row.title ?? 'Finding chưa chuẩn hoá'}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {row.rawArea ?? '—'} · {row.rawProcess ?? '—'} · Auditor: {row.auditorName ?? '—'} ·{' '}
-            {formatDate(row.createdAt)}
+            {row.auditee ?? '—'} · {row.rawArea ?? '—'} · {row.rawProcess ?? '—'} · Auditor:{' '}
+            {row.auditorName ?? '—'} · {formatDate(row.createdAt)}
           </p>
         </div>
         <FindingActions id={row.id} status={row.status} statement={row.statement ?? ''} />
@@ -117,6 +117,52 @@ export default async function FindingDetailPage({
                 </li>
               )) : <li className="text-sm text-slate-400">—</li>}
             </ul>
+          </Section>
+
+          <Section title="Thông tin xử lý">
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Đơn vị được đánh giá</dt>
+                <dd className="text-right font-medium">{row.auditee ?? '—'}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Nơi phát hiện</dt>
+                <dd className="text-right font-medium">{row.rawArea ?? '—'}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">Thời hạn khắc phục</dt>
+                <dd className="text-right">
+                  {row.dueDate ? (
+                    <>
+                      <span className="font-medium">{formatDateOnly(row.dueDate)}</span>
+                      {row.status !== 'CLOSED' &&
+                        (() => {
+                          const { days, tone } = dueStatus(row.dueDate!);
+                          return (
+                            <p
+                              className={
+                                tone === 'overdue'
+                                  ? 'text-xs font-medium text-red-600'
+                                  : tone === 'soon'
+                                    ? 'text-xs font-medium text-amber-600'
+                                    : 'text-xs text-slate-500'
+                              }
+                            >
+                              {days < 0
+                                ? `Quá hạn ${-days} ngày`
+                                : days === 0
+                                  ? 'Đến hạn hôm nay'
+                                  : `Còn ${days} ngày`}
+                            </p>
+                          );
+                        })()}
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </dd>
+              </div>
+            </dl>
           </Section>
 
           <Section title="Phân tích rủi ro">

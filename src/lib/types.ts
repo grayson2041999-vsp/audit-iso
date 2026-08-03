@@ -46,6 +46,8 @@ export const createFindingSchema = standardizeRequestSchema.extend({
   auditId: z.string().uuid().optional().nullable(),
   code: z.string().optional(),
   observedAt: z.string().optional(),
+  /** Thời hạn khắc phục, dạng "YYYY-MM-DD" từ ô chọn ngày. */
+  dueDate: z.string().optional().nullable(),
   ai: standardizedFindingSchema.optional(),
   images: z
     .array(
@@ -74,6 +76,26 @@ export const updateFindingSchema = z.object({
   suggestedAction: z.string().optional(),
   rawArea: z.string().optional(),
   rawProcess: z.string().optional(),
+  auditee: z.string().optional(),
+  dueDate: z.string().optional().nullable(),
   editor: z.string().optional(),
   note: z.string().optional(),
 });
+
+/** Số ngày khắc phục gợi ý theo mức độ. Sửa ở đây nếu đơn vị có quy định riêng. */
+export const DUE_DAYS_BY_SEVERITY: Record<string, number | null> = {
+  MAJOR: 30,
+  MINOR: 60,
+  OBS: 90,
+  OFI: 90,
+  CONF: null, // Phù hợp thì không cần khắc phục
+};
+
+/** Trả về "YYYY-MM-DD" của hạn khắc phục gợi ý, hoặc chuỗi rỗng nếu không áp dụng. */
+export function suggestDueDate(severity: string, from = new Date()): string {
+  const days = DUE_DAYS_BY_SEVERITY[severity];
+  if (days == null) return '';
+  const d = new Date(from);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}

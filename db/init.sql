@@ -41,8 +41,10 @@ CREATE TABLE IF NOT EXISTS findings (
   raw_text          text NOT NULL,
   raw_area          text,
   raw_process       text,
+  auditee           text,
   auditor_name      text,
   observed_at       timestamptz,
+  due_date          timestamptz,
   standards         jsonb NOT NULL DEFAULT '[]'::jsonb,
 
   title             text,
@@ -65,7 +67,8 @@ CREATE TABLE IF NOT EXISTS findings (
 
 CREATE INDEX IF NOT EXISTS findings_audit_idx   ON findings(audit_id);
 CREATE INDEX IF NOT EXISTS findings_status_idx  ON findings(status);
-CREATE INDEX IF NOT EXISTS findings_created_idx ON findings(created_at DESC);
+CREATE INDEX IF NOT EXISTS findings_created_idx  ON findings(created_at DESC);
+CREATE INDEX IF NOT EXISTS findings_due_date_idx ON findings(due_date);
 
 CREATE TABLE IF NOT EXISTS finding_images (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),

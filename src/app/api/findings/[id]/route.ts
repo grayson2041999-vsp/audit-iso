@@ -37,7 +37,13 @@ export async function PATCH(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: 'Dữ liệu không hợp lệ', issues: parsed.error.issues }, { status: 400 });
   }
 
-  const { editor, note, ...patch } = parsed.data;
+  const { editor, note, dueDate, ...rest } = parsed.data;
+
+  // dueDate tới dưới dạng chuỗi "YYYY-MM-DD", cột trong DB là timestamptz.
+  const patch = {
+    ...rest,
+    ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+  };
 
   try {
     const [before] = await db.select().from(findings).where(eq(findings.id, id));

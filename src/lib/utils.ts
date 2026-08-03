@@ -14,6 +14,27 @@ export function formatDate(d: Date | string | null | undefined) {
   }).format(date);
 }
 
+/** Chỉ ngày/tháng/năm, dùng cho thời hạn khắc phục. */
+export function formatDateOnly(d: Date | string | null | undefined) {
+  if (!d) return '—';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  }).format(date);
+}
+
+/**
+ * Số ngày còn lại tới hạn khắc phục (âm là đã quá hạn) và mức cảnh báo.
+ * So sánh theo ngày lịch, không tính giờ, để "đến hạn hôm nay" là đúng nghĩa.
+ */
+export function dueStatus(due: Date | string) {
+  const d = typeof due === 'string' ? new Date(due) : due;
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOfDay(d) - startOfDay(new Date())) / 86_400_000);
+  const tone: 'overdue' | 'soon' | 'ok' = days < 0 ? 'overdue' : days <= 7 ? 'soon' : 'ok';
+  return { days, tone };
+}
+
 export const SEVERITY_STYLE: Record<string, string> = {
   MAJOR: 'bg-red-100 text-red-800 ring-red-600/20',
   MINOR: 'bg-amber-100 text-amber-800 ring-amber-600/20',
