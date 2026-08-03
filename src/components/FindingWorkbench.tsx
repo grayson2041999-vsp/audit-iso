@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ImageUploader, type UploadedImage } from './ImageUploader';
+import { AnalysisProgress } from './AnalysisProgress';
 import { SeverityBadge } from './Badge';
 import { STANDARD_LABELS, SEVERITY_LABELS, type StandardCode } from '@/lib/iso';
 import type { StandardizedFinding } from '@/lib/types';
@@ -179,13 +180,15 @@ export function FindingWorkbench() {
           Auditor rà soát và chỉnh sửa trước khi lưu. AI là trợ lý, quyết định cuối cùng thuộc về auditor.
         </p>
 
-        {!result && (
+        {loading && <AnalysisProgress hasImages={images.length > 0} />}
+
+        {!loading && !result && (
           <div className="grid h-64 place-items-center rounded-lg border border-dashed border-slate-300 text-sm text-slate-400">
             Kết quả sẽ hiển thị tại đây
           </div>
         )}
 
-        {result && (
+        {!loading && result && (
           <div className="space-y-4">
             {warnings.length > 0 && (
               <ul className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
