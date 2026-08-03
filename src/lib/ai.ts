@@ -41,15 +41,69 @@ async function loadImageBlocks(keys: string[]): Promise<ImageBlock[]> {
   return blocks.filter((b): b is ImageBlock => b !== null);
 }
 
-/** Bóc JSON ra khỏi phản hồi (phòng trường hợp model bọc trong ```json). */
-function extractJson(text: string): unknown {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = (fenced ? fenced[1] : text).trim();
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('Phản hồi AI không chứa JSON hợp lệ.');
-  return JSON.parse(candidate.slice(start, end + 1));
-}
+/**
+ * Định nghĩa "công cụ" mà model bắt buộc phải gọi.
+ * Nhờ cơ chế tool use, Anthropic tự đảm bảo đầu ra là JSON hợp lệ đúng schema —
+ * không còn khâu model tự gõ JSON bằng tay (dễ sai dấu ngoặc kép chưa escape).
+ */
+const FINDING_TOOL: Anthropic.Tool = {
+  name: 'ghi_nhan_finding',
+  description:
+    'Ghi nhận finding đã được chuẩn hoá theo cấu trúc Yêu cầu – Sự không phù hợp – Bằng chứng khách quan của ISO.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề' },
+      severity: {
+        type: 'string',
+        enum: ['MAJOR', 'MINOR', 'OBS', 'OFI', 'CONF'],
+        description: 'Mức độ phân loại finding',
+      },
+      severityRationale: { type: 'string', description: '1–2 câu giải thích vì sao xếp mức này' },
+      clauses: {
+        type: 'array',
+        description: 'Điều khoản viện dẫn, đặt điều khoản phù hợp nhất ở đầu',
+        items: {
+          type: 'object',
+          properties: {
+            standard: { type: 'string', description: 'VD: ISO 45001:2018' },
+            clause: { type: 'string', description: 'Mã điều khoản, VD: 8.2' },
+            clauseTitle: { type: 'string', description: 'Tên điều khoản' },
+            reason: { type: 'string', description: 'Vì sao viện dẫn điều khoản này' },
+          },
+          required: ['standard', 'clause', 'clauseTitle'],
+        },
+      },
+      requirement: { type: 'string', description: 'Phát biểu yêu cầu bị vi phạm (2–4 câu)' },
+      nonconformity: { type: 'string', description: 'Bản chất sự không phù hợp (2–4 câu)' },
+      evidence: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Từng mẩu bằng chứng khách quan riêng biệt',
+      },
+      statement: { type: 'string', description: 'Phát biểu finding hoàn chỉnh dùng trong báo cáo' },
+      process: { type: 'string', description: 'Quá trình liên quan' },
+      area: { type: 'string', description: 'Khu vực / bộ phận' },
+      riskAnalysis: { type: 'string', description: 'Rủi ro tiềm ẩn nếu không khắc phục (2–3 câu)' },
+      suggestedAction: { type: 'string', description: 'Định hướng hành động khắc phục' },
+      imageNotes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Ghi chú về từng ảnh hiện trường, nếu có',
+      },
+      missingInfo: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Thông tin auditor cần bổ sung để finding đủ chặt chẽ',
+      },
+      confidence: { type: 'number', description: 'Độ tin cậy 0–100' },
+    },
+    required: [
+      'title', 'severity', 'severityRationale', 'clauses', 'requirement',
+      'nonconformity', 'evidence', 'statement', 'riskAnalysis', 'suggestedAction', 'confidence',
+    ],
+  },
+};
 
 export async function standardizeFinding(input: {
   rawText: string;
@@ -71,25 +125,36 @@ export async function standardizeFinding(input: {
 
   const message = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: SYSTEM_PROMPT,
-    // Model mới không hỗ trợ assistant prefill — hội thoại phải kết thúc bằng
-    // tin nhắn người dùng. Việc ép JSON thuần được xử lý ở prompt + extractJson().
     messages: [
       {
         role: 'user',
         content: [...images, { type: 'text', text: userPrompt }],
       },
     ],
+    tools: [FINDING_TOOL],
+    // Ép model bắt buộc gọi công cụ — không được trả lời bằng văn xuôi.
+    tool_choice: { type: 'tool', name: FINDING_TOOL.name },
   });
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
+  const toolUse = message.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === FINDING_TOOL.name,
+  );
 
-  const parsedJson = extractJson(raw);
-  const parsed = standardizedFindingSchema.safeParse(parsedJson);
+  if (!toolUse) {
+    const fallbackText = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join(' ')
+      .slice(0, 300);
+    throw new Error(
+      'AI không trả về dữ liệu có cấu trúc. Vui lòng thử lại.' +
+        (fallbackText ? ` (phản hồi nhận được: ${fallbackText})` : ''),
+    );
+  }
+
+  const parsed = standardizedFindingSchema.safeParse(toolUse.input);
 
   if (!parsed.success) {
     throw new Error(

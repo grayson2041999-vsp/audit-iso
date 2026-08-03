@@ -36,7 +36,7 @@ Viết thành một đoạn văn liền mạch 3–6 câu theo trình tự: [B�
 
 ## ĐẦU RA
 
-Trả về DUY NHẤT một JSON hợp lệ (không kèm markdown, không kèm giải thích) theo schema:
+Bạn PHẢI trả kết quả bằng cách gọi công cụ \`ghi_nhan_finding\`. Không viết văn xuôi, không giải thích ngoài công cụ. Ý nghĩa từng trường:
 
 {
   "title": "Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề",
@@ -89,7 +89,5 @@ ${meta}
 ${input.rawText.trim()}
 """
 
-${input.imageCount > 0 ? 'Các hình ảnh hiện trường được đính kèm ngay trước phần này — hãy đọc và sử dụng làm bằng chứng khách quan.\n' : ''}Hãy chuẩn hoá ghi nhận trên thành finding đạt chuẩn ISO.
-
-QUAN TRỌNG: Chỉ trả về đúng một đối tượng JSON theo schema đã quy định. Ký tự đầu tiên trong câu trả lời phải là "{" và ký tự cuối cùng phải là "}". Không viết lời dẫn, không giải thích, không bọc trong khối markdown.`;
+${input.imageCount > 0 ? 'Các hình ảnh hiện trường được đính kèm ngay trước phần này — hãy đọc và sử dụng làm bằng chứng khách quan.\n' : ''}Hãy chuẩn hoá ghi nhận trên thành finding đạt chuẩn ISO và gọi công cụ \`ghi_nhan_finding\` để trả kết quả.`;
 }
