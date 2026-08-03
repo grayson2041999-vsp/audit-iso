@@ -89,5 +89,7 @@ ${meta}
 ${input.rawText.trim()}
 """
 
-${input.imageCount > 0 ? 'Các hình ảnh hiện trường được đính kèm ngay trước phần này — hãy đọc và sử dụng làm bằng chứng khách quan.\n' : ''}Hãy chuẩn hoá ghi nhận trên thành finding đạt chuẩn ISO và trả về JSON theo schema đã quy định.`;
+${input.imageCount > 0 ? 'Các hình ảnh hiện trường được đính kèm ngay trước phần này — hãy đọc và sử dụng làm bằng chứng khách quan.\n' : ''}Hãy chuẩn hoá ghi nhận trên thành finding đạt chuẩn ISO.
+
+QUAN TRỌNG: Chỉ trả về đúng một đối tượng JSON theo schema đã quy định. Ký tự đầu tiên trong câu trả lời phải là "{" và ký tự cuối cùng phải là "}". Không viết lời dẫn, không giải thích, không bọc trong khối markdown.`;
 }

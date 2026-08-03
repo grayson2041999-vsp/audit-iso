@@ -73,13 +73,13 @@ export async function standardizeFinding(input: {
     model: MODEL,
     max_tokens: 4096,
     system: SYSTEM_PROMPT,
+    // Model mới không hỗ trợ assistant prefill — hội thoại phải kết thúc bằng
+    // tin nhắn người dùng. Việc ép JSON thuần được xử lý ở prompt + extractJson().
     messages: [
       {
         role: 'user',
         content: [...images, { type: 'text', text: userPrompt }],
       },
-      // Prefill để ép model trả JSON thuần.
-      { role: 'assistant', content: '{' },
     ],
   });
 
@@ -88,7 +88,7 @@ export async function standardizeFinding(input: {
     .map((b) => b.text)
     .join('');
 
-  const parsedJson = extractJson('{' + raw);
+  const parsedJson = extractJson(raw);
   const parsed = standardizedFindingSchema.safeParse(parsedJson);
 
   if (!parsed.success) {
