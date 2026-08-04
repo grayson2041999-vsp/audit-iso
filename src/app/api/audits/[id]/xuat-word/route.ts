@@ -232,14 +232,20 @@ export async function GET(_req: Request, { params }: Ctx) {
         }),
         ...inDay.map((x) => {
           const unit = x.unitId ? unitById.get(x.unitId) : null;
-          // Phiên đơn vị: người được phân công. Phiên họp: cả đoàn.
+          /**
+           * Phiên đơn vị ghi đích danh người được phân công — đó là thông tin
+           * đơn vị cần biết để bố trí người tiếp.
+           *
+           * Phiên họp thì cả đoàn dự, chép lại danh sách vừa dài vừa thừa: mục
+           * 5 phía trên đã liệt kê đầy đủ đoàn đánh giá rồi.
+           */
           const names =
             x.kind === 'UNIT'
               ? (x.unitId ? unitMembers.get(x.unitId) ?? [] : [])
                   .map((m) => memberById.get(m)?.fullName)
                   .filter(Boolean)
                   .join('\n')
-              : members.map((m) => m.fullName).join('\n');
+              : 'Đoàn đánh giá';
 
           return new TableRow({
             children: [

@@ -186,6 +186,23 @@ export function AuditPlan({
   const unscheduled = units.filter((u) => !allocated.has(u.id));
 
   /**
+   * Các ô bắt buộc của chương trình đánh giá.
+   *
+   * Cả năm đều xuất thẳng ra file Word: thiếu mục tiêu và chuẩn mực thì văn bản
+   * không còn là chương trình đánh giá theo ISO 19011, thiếu chức danh và họ tên
+   * người phê duyệt thì khối ký trống không ai duyệt được.
+   */
+  const REQUIRED: { key: keyof PlanInfo; label: string }[] = [
+    { key: 'objectives', label: 'Mục tiêu đánh giá' },
+    { key: 'criteria', label: 'Chuẩn mực đánh giá' },
+    { key: 'location', label: 'Địa điểm đánh giá' },
+    { key: 'approverTitle', label: 'Chức danh người phê duyệt' },
+    { key: 'approverName', label: 'Họ tên người phê duyệt' },
+  ];
+
+  const missingFields = REQUIRED.filter((f) => !String(info[f.key] ?? '').trim());
+
+  /**
    * Phiên nào không nằm trọn trong khung giờ làm việc.
    *
    * Dùng cho cả hai việc: hiện danh sách dưới lưới, và chặn lưu. Nhận `list` và
@@ -376,12 +393,17 @@ export function AuditPlan({
     const list = sessions;
 
     /**
-     * Hai điều kiện chặn, đặt ở đây chứ không ở từng nút để không có đường vòng.
+     * Các điều kiện chặn, đặt ở đây chứ không ở từng nút để không có đường vòng.
      *
      * Phiên nằm ngoài giờ làm việc thì không cần chặn nữa — đổi khung giờ đã tự
-     * nắn lịch. Còn lại đúng cái không suy ra được: chương trình đánh giá mà bỏ
-     * sót đơn vị thì bản thân nó sai, xuất Word ra là thiếu.
+     * nắn lịch. Còn lại là những thứ máy không suy ra hộ được: ô bắt buộc bỏ
+     * trống, và chương trình bỏ sót đơn vị — cả hai đều khiến file Word xuất ra
+     * bị khuyết.
      */
+    if (missingFields.length > 0) {
+      setError(`Còn thiếu: ${missingFields.map((f) => f.label).join(', ')}.`);
+      return;
+    }
     if (hoursBroken) {
       setError('Khung giờ không hợp lệ: giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.');
       return;
@@ -438,7 +460,7 @@ export function AuditPlan({
       <section className="card space-y-4 p-5">
         <h2 className="font-semibold">Thông tin chương trình</h2>
 
-        <Field label="Mục tiêu đánh giá">
+        <Field label="Mục tiêu đánh giá" required missing={!info.objectives.trim()}>
           <textarea
             rows={4}
             className="input"
@@ -448,7 +470,7 @@ export function AuditPlan({
           />
         </Field>
 
-        <Field label="Chuẩn mực đánh giá">
+        <Field label="Chuẩn mực đánh giá" required missing={!info.criteria.trim()}>
           <textarea
             rows={4}
             className="input"
@@ -458,7 +480,7 @@ export function AuditPlan({
           />
         </Field>
 
-        <Field label="Địa điểm đánh giá">
+        <Field label="Địa điểm đánh giá" required missing={!info.location.trim()}>
           <input
             className="input"
             disabled={locked}
@@ -468,7 +490,7 @@ export function AuditPlan({
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Chức danh người phê duyệt">
+          <Field label="Chức danh người phê duyệt" required missing={!info.approverTitle.trim()}>
             <input
               // Tự in hoa để file Word luôn đều một dạng, không phụ thuộc người nhập.
               className="input uppercase"
@@ -480,7 +502,7 @@ export function AuditPlan({
               }
             />
           </Field>
-          <Field label="Họ tên người phê duyệt">
+          <Field label="Họ tên người phê duyệt" required missing={!info.approverName.trim()}>
             <input
               className="input"
               disabled={locked}
@@ -692,7 +714,13 @@ export function AuditPlan({
           <a href={`/api/audits/${auditId}/xuat-word`} className="btn-ghost">
             Xuất file Word
           </a>
-          <span className="text-xs text-slate-400">Lưu trước khi xuất file để lấy bản mới nhất</span>
+          {missingFields.length > 0 ? (
+            <span className="text-xs text-red-600">
+              Còn thiếu: {missingFields.map((f) => f.label).join(', ')}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">Lưu trước khi xuất file để lấy bản mới nhất</span>
+          )}
         </div>
       )}
     </div>
@@ -767,10 +795,21 @@ function TimeInput({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label, children, required, missing,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+  /** Bắt buộc mà đang để trống — viền đỏ để tìm ra ngay giữa một trang dài. */
+  missing?: boolean;
+}) {
   return (
-    <div>
-      <label className="label">{label}</label>
+    <div className={missing ? '[&_.input]:border-red-400' : undefined}>
+      <label className="label">
+        {label}
+        {required && <span className="ml-0.5 text-red-600">*</span>}
+      </label>
       {children}
     </div>
   );
