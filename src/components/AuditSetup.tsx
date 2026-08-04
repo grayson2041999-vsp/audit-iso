@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AuditMember, AuditUnit } from '@/lib/schema';
 import { buildShortNames, sameUnitName } from '@/lib/utils';
+import { computeCapacity, durationLabel, listDays, toHHMM } from '@/lib/plan';
 
 type Props = {
   auditId: string;
@@ -14,10 +15,17 @@ type Props = {
   links: string[];
   publicUrl: string;
   leaderName: string;
+  /** Dùng để tính trước quỹ thời gian ngay tại bước phân công. */
+  startDate: string | null;
+  endDate: string | null;
+  hours: {
+    amStart: string; amEnd: string; pmStart: string; pmEnd: string;
+    openingMinutes: number; closingMinutes: number;
+  };
 };
 
 export function AuditSetup({
-  auditId, status, units, members, links, publicUrl, leaderName,
+  auditId, status, units, members, links, publicUrl, leaderName, startDate, endDate, hours,
 }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -96,6 +104,25 @@ export function AuditSetup({
   const unitsWithoutMember = units.filter(
     (u) => !members.some((m) => linkSet.has(`${m.id}:${u.id}`)),
   );
+  /**
+   * Quỹ thời gian tính ngay tại đây, cập nhật theo từng ô tick.
+   * Trưởng đoàn thấy được hệ quả của việc phân công và của số ngày đã chọn
+   * trước khi sang bước lập chương trình.
+   */
+  const capacity = useMemo(() => {
+    const unitMembers = new Map<string, string[]>();
+    for (const key of linkSet) {
+      const [memberId, unitId] = key.split(':');
+      unitMembers.set(unitId, [...(unitMembers.get(unitId) ?? []), memberId]);
+    }
+    return computeCapacity({
+      days: listDays(startDate, endDate),
+      hours,
+      units: units.map((u) => ({ id: u.id })),
+      unitMembers,
+    });
+  }, [linkSet, startDate, endDate, hours, units]);
+
   const canOpen =
     units.length > 0 &&
     members.length > 0 &&
@@ -297,6 +324,26 @@ export function AuditSetup({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {units.length > 0 && capacity.dayCount > 0 && (
+          <div
+            className={`mt-4 rounded-lg px-3 py-2.5 text-sm ${
+              capacity.atFloor ? 'bg-amber-50 text-amber-900' : 'bg-slate-50 text-slate-700'
+            }`}
+          >
+            <strong>{capacity.unitCount} đơn vị</strong> · {capacity.dayCount} ngày · quỹ{' '}
+            {capacity.availableMinutes} phút →{' '}
+            <strong>
+              mỗi đơn vị {durationLabel('00:00', toHHMM(capacity.perUnitMinutes))}
+            </strong>
+            <span className="block text-xs">
+              {capacity.mode === 'SEQUENTIAL'
+                ? 'Chưa phân công ai — cả đoàn đi cùng nhau, quỹ chia cho số đơn vị. Tick phân công để các đánh giá viên làm song song, mỗi đơn vị sẽ được nhiều thời gian hơn.'
+                : `Đã phân công — quỹ chia cho ${capacity.divisor} vòng của đánh giá viên bận nhất.`}
+              {capacity.atFloor && ' Không đủ thời gian: cân nhắc thêm ngày hoặc thêm đánh giá viên.'}
+            </span>
           </div>
         )}
 

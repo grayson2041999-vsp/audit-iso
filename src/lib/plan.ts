@@ -176,148 +176,253 @@ export function checkWorkingHours(
 }
 
 /* ------------------------------------------------------------------ */
-/* Sinh lịch tự động                                                   */
+/* Quỹ thời gian                                                       */
 /* ------------------------------------------------------------------ */
+
+export type Hours = {
+  amStart: string; amEnd: string; pmStart: string; pmEnd: string;
+  openingMinutes: number; closingMinutes: number;
+};
 
 type Window = { day: string; start: number; end: number };
 
+/**
+ * Các khung giờ còn trống để xếp đơn vị, sau khi đã trừ họp khai mạc (đầu ngày
+ * đầu) và họp kết thúc (cuối ngày cuối).
+ */
+export function buildWindows(days: string[], h: Hours): Window[] {
+  if (days.length === 0) return [];
+
+  const am = { s: toMinutes(h.amStart), e: toMinutes(h.amEnd) };
+  const pm = { s: toMinutes(h.pmStart), e: toMinutes(h.pmEnd) };
+  if (am.e <= am.s || pm.e <= pm.s) return [];
+
+  const lastDay = days[days.length - 1];
+  const openEnd = ceilStep(am.s + h.openingMinutes);
+  const closeStart = floorStep(pm.e - h.closingMinutes);
+
+  const windows: Window[] = [];
+  for (const day of days) {
+    const mStart = day === days[0] ? openEnd : am.s;
+    if (am.e > mStart) windows.push({ day, start: mStart, end: am.e });
+
+    const aEnd = day === lastDay ? closeStart : pm.e;
+    if (aEnd > pm.s) windows.push({ day, start: pm.s, end: aEnd });
+  }
+  return windows;
+}
+
+export type Capacity = {
+  /** Tổng phút ĐỒNG HỒ còn lại để đánh giá đơn vị. */
+  availableMinutes: number;
+  /**
+   * SEQUENTIAL — chưa phân công ai, cả đoàn đi cùng nhau, chia cho số đơn vị.
+   * PARALLEL   — đã phân công, chia cho số vòng của người bận nhất.
+   */
+  mode: 'SEQUENTIAL' | 'PARALLEL';
+  /** Số lần chia: số đơn vị, hoặc số vòng của người bận nhất. */
+  divisor: number;
+  /** Thời lượng trung bình mỗi đơn vị, phút. */
+  perUnitMinutes: number;
+  /** Dưới sàn MIN_SESSION — quỹ thời gian không đủ. */
+  atFloor: boolean;
+  unitCount: number;
+  dayCount: number;
+};
+
+/**
+ * Tính quỹ thời gian và thời lượng trung bình mỗi đơn vị.
+ *
+ * Chia theo thời gian ĐỒNG HỒ, không phải công sức: một buổi làm việc với đơn
+ * vị mất bấy nhiêu thời gian bất kể có 1 hay 4 đánh giá viên ngồi trong phòng.
+ *
+ * Chỗ khác nhau giữa hai chế độ nằm ở số chia:
+ *  - Chưa phân công: cả đoàn đi cùng nhau nên mỗi đơn vị chiếm trọn một khoảng
+ *    thời gian → chia cho SỐ ĐƠN VỊ.
+ *  - Đã phân công: nhiều đơn vị chạy song song, nhưng người ôm K đơn vị thì K
+ *    phiên đó buộc nối tiếp → chia cho K, tức SỐ VÒNG CỦA NGƯỜI BẬN NHẤT.
+ *    Con số ra lớn hơn hẳn — đó chính là lợi ích của việc phân công.
+ */
+export function computeCapacity(input: {
+  days: string[];
+  hours: Hours;
+  units: { id: string }[];
+  unitMembers: Map<string, string[]>;
+}): Capacity {
+  const { days, hours, units, unitMembers } = input;
+
+  const windows = buildWindows(days, hours);
+  const availableMinutes = windows.reduce((sum, w) => sum + (w.end - w.start), 0);
+
+  const load = new Map<string, number>();
+  for (const u of units) {
+    for (const m of unitMembers.get(u.id) ?? []) load.set(m, (load.get(m) ?? 0) + 1);
+  }
+
+  const mode: Capacity['mode'] = load.size === 0 ? 'SEQUENTIAL' : 'PARALLEL';
+  const divisor =
+    units.length === 0 ? 0 : mode === 'SEQUENTIAL' ? units.length : Math.max(...load.values());
+
+  const raw = divisor > 0 ? floorStep(availableMinutes / divisor) : 0;
+
+  return {
+    availableMinutes,
+    mode,
+    divisor,
+    perUnitMinutes: Math.max(0, raw),
+    atFloor: divisor > 0 && raw < MIN_SESSION,
+    unitCount: units.length,
+    dayCount: days.length,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Sinh lịch tự động                                                   */
+/* ------------------------------------------------------------------ */
+
 export type GenerateResult = {
   sessions: Omit<PlanSession, 'id'>[];
-  /** Thời lượng mỗi phiên đánh giá đơn vị, tính bằng phút. */
-  perMinutes: number;
-  /** Đã chạm sàn MIN_SESSION — quỹ thời gian không đủ cho khối lượng phân công. */
-  atFloor: boolean;
+  capacity: Capacity;
   /** Đơn vị không xếp được vào đâu. */
   unplacedUnitIds: string[];
 };
 
-/**
- * Chia đều thời gian cho các đơn vị.
- *
- * Ý chính: thời lượng mỗi phiên KHÔNG phụ thuộc số đơn vị mà phụ thuộc người
- * bận nhất. Nhiều đơn vị chạy song song được, nhưng một người ôm K đơn vị thì
- * K phiên đó buộc phải nối tiếp — người đó là đường găng của cả lịch.
- *
- *   1. Quỹ thời gian = tổng giờ làm việc − họp khai mạc − họp kết thúc
- *   2. K = số đơn vị lớn nhất mà một đánh giá viên phải phụ trách
- *   3. Thời lượng mỗi phiên = quỹ ÷ K, làm tròn XUỐNG bội số 15 phút
- *      (làm tròn xuống để chắc chắn không tràn khỏi giờ làm việc)
- *   4. Xếp chỗ: đơn vị nhiều người phụ trách xếp trước, mỗi đơn vị nhận mốc
- *      15 phút sớm nhất mà mọi người phụ trách đều rảnh và phiên nằm TRỌN
- *      trong một buổi — không cắt ngang nghỉ trưa, không tràn sang ngày sau
- *   5. Khai mạc đặt đầu ngày đầu, kết thúc đặt sát giờ tan ca ngày cuối,
- *      cả đoàn dự nên hai khung này chặn lịch của mọi người
- */
+/** Chia N phần vào các khung theo tỉ lệ độ dài, dùng phương pháp phần dư lớn nhất. */
+function shareOut(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (sum === 0 || total === 0) return weights.map(() => 0);
+
+  const exact = weights.map((w) => (total * w) / sum);
+  const base = exact.map(Math.floor);
+  let left = total - base.reduce((a, b) => a + b, 0);
+
+  // Phần dư rơi vào các khung có phần thập phân lớn nhất.
+  const order = exact
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+
+  for (const { i } of order) {
+    if (left <= 0) break;
+    base[i] += 1;
+    left -= 1;
+  }
+  return base;
+}
+
 export function generateTimedPlan(input: {
   days: string[];
-  amStart: string;
-  amEnd: string;
-  pmStart: string;
-  pmEnd: string;
-  openingMinutes: number;
-  closingMinutes: number;
+  hours: Hours;
   units: { id: string }[];
   unitMembers: Map<string, string[]>;
   allMemberIds: string[];
 }): GenerateResult {
-  const {
-    days, amStart, amEnd, pmStart, pmEnd, openingMinutes, closingMinutes,
-    units, unitMembers, allMemberIds,
-  } = input;
+  const { days, hours, units, unitMembers, allMemberIds } = input;
 
-  const empty: GenerateResult = {
-    sessions: [], perMinutes: 0, atFloor: false, unplacedUnitIds: units.map((u) => u.id),
-  };
-  if (days.length === 0 || units.length === 0) return empty;
+  const capacity = computeCapacity({ days, hours, units, unitMembers });
+  const windows = buildWindows(days, hours);
 
-  const am = { s: toMinutes(amStart), e: toMinutes(amEnd) };
-  const pm = { s: toMinutes(pmStart), e: toMinutes(pmEnd) };
-  if (am.e <= am.s || pm.e <= pm.s) return empty;
+  if (days.length === 0 || windows.length === 0) {
+    return { sessions: [], capacity, unplacedUnitIds: units.map((u) => u.id) };
+  }
 
+  const am = { s: toMinutes(hours.amStart) };
+  const pm = { e: toMinutes(hours.pmEnd) };
   const lastDay = days[days.length - 1];
-  const out: Omit<PlanSession, 'id'>[] = [];
 
-  /* --- Hai cuộc họp cố định --- */
-  const openEnd = ceilStep(am.s + openingMinutes);
-  out.push({
-    day: days[0], startTime: toHHMM(am.s), endTime: toHHMM(openEnd),
-    kind: 'OPENING', unitId: null, note: null,
-  });
-
-  const closeStart = floorStep(pm.e - closingMinutes);
-  out.push({
-    day: lastDay, startTime: toHHMM(closeStart), endTime: toHHMM(pm.e),
-    kind: 'CLOSING', unitId: null, note: null,
-  });
-
-  /* --- Các khung giờ còn trống để xếp đơn vị --- */
-  const windows: Window[] = [];
-  for (const day of days) {
-    const morningStart = day === days[0] ? openEnd : am.s;
-    if (am.e > morningStart) windows.push({ day, start: morningStart, end: am.e });
-
-    const afternoonEnd = day === lastDay ? closeStart : pm.e;
-    if (afternoonEnd > pm.s) windows.push({ day, start: pm.s, end: afternoonEnd });
-  }
-
-  const available = windows.reduce((sum, w) => sum + (w.end - w.start), 0);
-
-  /* --- Người bận nhất quyết định thời lượng --- */
-  const loadByMember = new Map<string, number>();
-  for (const u of units) {
-    for (const m of unitMembers.get(u.id) ?? []) {
-      loadByMember.set(m, (loadByMember.get(m) ?? 0) + 1);
-    }
-  }
-  const K = Math.max(1, ...loadByMember.values());
-
-  const raw = floorStep(available / K);
-  const atFloor = raw < MIN_SESSION;
-  const perMinutes = Math.max(MIN_SESSION, raw);
-
-  /* --- Xếp chỗ: đơn vị nhiều người phụ trách trước --- */
-  const placed: { day: string; start: number; end: number; members: string[] }[] = [
-    { day: days[0], start: am.s, end: openEnd, members: allMemberIds },
-    { day: lastDay, start: closeStart, end: pm.e, members: allMemberIds },
+  const out: Omit<PlanSession, 'id'>[] = [
+    {
+      day: days[0],
+      startTime: toHHMM(am.s),
+      endTime: toHHMM(ceilStep(am.s + hours.openingMinutes)),
+      kind: 'OPENING', unitId: null, note: null,
+    },
+    {
+      day: lastDay,
+      startTime: toHHMM(floorStep(pm.e - hours.closingMinutes)),
+      endTime: toHHMM(pm.e),
+      kind: 'CLOSING', unitId: null, note: null,
+    },
   ];
-
-  const free = (day: string, start: number, end: number, ms: string[]) =>
-    !placed.some(
-      (p) =>
-        p.day === day && start < p.end && p.start < end && p.members.some((x) => ms.includes(x)),
-    );
-
-  const sorted = [...units].sort(
-    (a, b) => (unitMembers.get(b.id)?.length ?? 0) - (unitMembers.get(a.id)?.length ?? 0),
-  );
 
   const unplacedUnitIds: string[] = [];
 
-  for (const unit of sorted) {
-    const ms = unitMembers.get(unit.id) ?? [];
-    if (ms.length === 0) {
-      unplacedUnitIds.push(unit.id);
-      continue;
-    }
+  if (capacity.mode === 'SEQUENTIAL') {
+    /* --------- Cả đoàn đi cùng nhau: lấp kín từng buổi theo thứ tự --------- */
+    const counts = shareOut(units.length, windows.map((w) => w.end - w.start));
+    let idx = 0;
 
-    let done = false;
-    for (const w of windows) {
-      // Chỉ thử các mốc 15 phút nằm trọn trong khung này.
-      for (let t = ceilStep(w.start); t + perMinutes <= w.end; t += STEP) {
-        if (!free(w.day, t, t + perMinutes, ms)) continue;
-        placed.push({ day: w.day, start: t, end: t + perMinutes, members: ms });
+    windows.forEach((w, wi) => {
+      const n = counts[wi];
+      if (n <= 0) return;
+
+      const span = w.end - w.start;
+      const base = floorStep(span / n);
+      // Phần dư chia thành các khối 15 phút, cộng vào những đơn vị đầu buổi.
+      const extras = Math.floor((span - base * n) / STEP);
+
+      let t = w.start;
+      for (let k = 0; k < n && idx < units.length; k++, idx++) {
+        const dur = base + (k < extras ? STEP : 0);
+        if (dur <= 0) {
+          unplacedUnitIds.push(units[idx].id);
+          continue;
+        }
         out.push({
-          day: w.day, startTime: toHHMM(t), endTime: toHHMM(t + perMinutes),
-          kind: 'UNIT', unitId: unit.id, note: null,
+          day: w.day,
+          startTime: toHHMM(t),
+          endTime: toHHMM(Math.min(t + dur, w.end)),
+          kind: 'UNIT', unitId: units[idx].id, note: null,
         });
-        done = true;
-        break;
+        t += dur;
       }
-      if (done) break;
-    }
+    });
 
-    // Không tìm được chỗ nào — vẫn báo ra để trưởng đoàn tự sắp, không giấu đi.
-    if (!done) unplacedUnitIds.push(unit.id);
+    for (; idx < units.length; idx++) unplacedUnitIds.push(units[idx].id);
+  } else {
+    /* --------- Đã phân công: xếp song song, tránh trùng người --------- */
+    const per = Math.max(MIN_SESSION, capacity.perUnitMinutes);
+
+    const placed: { day: string; start: number; end: number; members: string[] }[] = [
+      { day: days[0], start: am.s, end: ceilStep(am.s + hours.openingMinutes), members: allMemberIds },
+      { day: lastDay, start: floorStep(pm.e - hours.closingMinutes), end: pm.e, members: allMemberIds },
+    ];
+
+    const free = (day: string, a: number, b: number, ms: string[]) =>
+      !placed.some(
+        (x) => x.day === day && a < x.end && x.start < b && x.members.some((y) => ms.includes(y)),
+      );
+
+    // Đơn vị nhiều người phụ trách xếp trước — càng dễ đụng lịch người khác thì
+    // càng phải chọn chỗ khi còn nhiều ô trống. Thứ tự khai báo giữ làm tiêu chí phụ.
+    const order = units
+      .map((u, i) => ({ u, i }))
+      .sort(
+        (a, b) =>
+          (unitMembers.get(b.u.id)?.length ?? 0) - (unitMembers.get(a.u.id)?.length ?? 0) ||
+          a.i - b.i,
+      );
+
+    for (const { u } of order) {
+      // Đơn vị chưa phân công ai vẫn phải có chỗ trong lịch — trước đây bị bỏ qua
+      // im lặng khiến trưởng đoàn mở tab ra thấy lịch trống trơn.
+      const ms = unitMembers.get(u.id) ?? [];
+
+      let done = false;
+      for (const w of windows) {
+        for (let t = ceilStep(w.start); t + per <= w.end; t += STEP) {
+          if (ms.length > 0 && !free(w.day, t, t + per, ms)) continue;
+          placed.push({ day: w.day, start: t, end: t + per, members: ms });
+          out.push({
+            day: w.day, startTime: toHHMM(t), endTime: toHHMM(t + per),
+            kind: 'UNIT', unitId: u.id, note: null,
+          });
+          done = true;
+          break;
+        }
+        if (done) break;
+      }
+      if (!done) unplacedUnitIds.push(u.id);
+    }
   }
 
   const dayIndex = new Map(days.map((d, i) => [d, i]));
@@ -327,7 +432,7 @@ export function generateTimedPlan(input: {
       toMinutes(a.startTime) - toMinutes(b.startTime),
   );
 
-  return { sessions: out, perMinutes, atFloor, unplacedUnitIds };
+  return { sessions: out, capacity, unplacedUnitIds };
 }
 
 /* ------------------------------------------------------------------ */

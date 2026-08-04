@@ -4,9 +4,9 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
 import {
-  KIND_LABELS, MIN_SESSION, checkWorkingHours, durationLabel, findTimeConflicts,
-  formatDayLong, generateTimedPlan, sessionMembers, toMinutes,
-  type PlanSession, type SessionKind,
+  KIND_LABELS, checkWorkingHours, durationLabel, findTimeConflicts,
+  formatDayLong, generateTimedPlan, sessionMembers, toHHMM, toMinutes,
+  type Hours, type PlanSession, type SessionKind,
 } from '@/lib/plan';
 
 type Unit = { id: string; name: string };
@@ -51,7 +51,6 @@ export function AuditPlan({
   const router = useRouter();
 
   const [info, setInfo] = useState<PlanInfo>(initialInfo);
-  const [sessions, setSessions] = useState<PlanSession[]>(initialSessions);
   const [genNote, setGenNote] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
@@ -69,6 +68,44 @@ export function AuditPlan({
     }
     return map;
   }, [assignments]);
+
+  const build = (hours: Hours) =>
+    generateTimedPlan({ days, hours, units, unitMembers, allMemberIds });
+
+  /**
+   * Chưa lưu lịch bao giờ thì tính sẵn ngay khi mở tab — không bắt bấm nút để
+   * tạo ra thứ mà hệ thống đã tự suy ra được từ ngày, đơn vị và phân công.
+   * Bản tính sẵn này CHƯA vào database, chỉ ghi khi bấm Lưu chương trình.
+   */
+  const [sessions, setSessions] = useState<PlanSession[]>(() => {
+    if (initialSessions.length > 0) return initialSessions;
+    return build(initialInfo).sessions.map((x, i) => ({
+      ...x,
+      id: `tam-${i}-${Math.random().toString(36).slice(2, 7)}`,
+    }));
+  });
+
+  const neverSaved = initialSessions.length === 0;
+
+  /**
+   * Lịch đã lưu có còn khớp dữ liệu gốc không. Thêm đơn vị sau khi lưu lịch mà
+   * app im lặng thì tới lúc xuất Word mới phát hiện thiếu.
+   */
+  const drift = useMemo(() => {
+    if (neverSaved) return null;
+    const inPlan = new Set(
+      initialSessions.filter((x) => x.kind === 'UNIT' && x.unitId).map((x) => x.unitId!),
+    );
+    const added = units.filter((u) => !inPlan.has(u.id));
+    const known = new Set(units.map((u) => u.id));
+    const removed = [...inPlan].filter((id) => !known.has(id));
+
+    if (added.length === 0 && removed.length === 0) return null;
+    const parts: string[] = [];
+    if (added.length) parts.push(`đã thêm ${added.length} đơn vị (${added.map((u) => u.name).join(', ')})`);
+    if (removed.length) parts.push(`${removed.length} đơn vị trong lịch đã bị xoá`);
+    return `Sau khi lưu lịch, ${parts.join(' và ')}. Bấm Tính lại lịch để cập nhật.`;
+  }, [neverSaved, initialSessions, units]);
 
   const conflicts = useMemo(
     () => findTimeConflicts(sessions, unitMembers, members),
@@ -119,30 +156,24 @@ export function AuditPlan({
   }
 
   function autoGenerate() {
-    if (sessions.length > 0 && !confirm('Sinh lại lịch sẽ thay thế toàn bộ lịch hiện tại. Tiếp tục?')) {
+    if (
+      sessions.length > 0 &&
+      !confirm('Tính lại lịch sẽ thay thế toàn bộ lịch hiện tại, kể cả những chỗ bạn đã sửa tay. Tiếp tục?')
+    ) {
       return;
     }
-    const res = generateTimedPlan({
-      days,
-      amStart: info.amStart,
-      amEnd: info.amEnd,
-      pmStart: info.pmStart,
-      pmEnd: info.pmEnd,
-      openingMinutes: info.openingMinutes,
-      closingMinutes: info.closingMinutes,
-      units,
-      unitMembers,
-      allMemberIds,
-    });
-
+    const res = build(info);
     setSessions(
-      res.sessions.map((s, i) => ({ ...s, id: `tam-${i}-${Math.random().toString(36).slice(2, 7)}` })),
+      res.sessions.map((x, i) => ({ ...x, id: `tam-${i}-${Math.random().toString(36).slice(2, 7)}` })),
     );
 
+    const { capacity: c } = res;
     setGenNote(
-      res.atFloor
-        ? `Quỹ thời gian không đủ cho khối lượng đã phân công. Mỗi phiên bị ép về mức tối thiểu ${MIN_SESSION} phút — cần thêm ngày đánh giá hoặc thêm đánh giá viên.`
-        : `Đã chia mỗi đơn vị ${durationLabel('00:00', `${String(Math.floor(res.perMinutes / 60)).padStart(2, '0')}:${String(res.perMinutes % 60).padStart(2, '0')}`)} (${res.perMinutes} phút).`,
+      c.atFloor
+        ? `Quỹ thời gian không đủ: ${c.unitCount} đơn vị trong ${c.dayCount} ngày. Cần thêm ngày đánh giá hoặc thêm đánh giá viên.`
+        : c.mode === 'SEQUENTIAL'
+          ? `Cả đoàn đi cùng nhau, mỗi đơn vị khoảng ${durationLabel('00:00', toHHMM(c.perUnitMinutes))}. Tick phân công ở bước Chuẩn bị để các đánh giá viên làm song song.`
+          : `Xếp song song theo phân công, mỗi đơn vị khoảng ${durationLabel('00:00', toHHMM(c.perUnitMinutes))}.`,
     );
   }
 
@@ -291,10 +322,19 @@ export function AuditPlan({
           <h2 className="font-semibold">Lịch đánh giá</h2>
           {!locked && (
             <button onClick={autoGenerate} className="btn-ghost !py-1.5 text-sm">
-              Sinh lịch tự động
+              Tính lại lịch
             </button>
           )}
+          {neverSaved && (
+            <span className="chip bg-slate-100 text-slate-600 ring-transparent">
+              Bản tính sẵn — chưa lưu
+            </span>
+          )}
         </div>
+
+        {drift && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">{drift}</p>
+        )}
 
         {genNote && (
           <p
