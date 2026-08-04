@@ -9,9 +9,18 @@ import { getOwnedAudit } from '@/lib/audit-access';
 import { AuditSetup } from '@/components/AuditSetup';
 import { AuditTabs } from '@/components/AuditTabs';
 import { AuditHeader } from '@/components/AuditHeader';
+import { AuditEdit } from '@/components/AuditEdit';
 import { DeleteAuditBox } from '@/components/DeleteAuditBox';
+import type { StandardCode } from '@/lib/iso';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Date → "YYYY-MM-DD" cho ô <input type="date">.
+ * Dùng ISO chứ không dùng giờ máy: ngày đợt luôn được ghi vào lúc nửa đêm UTC,
+ * đọc lại theo giờ máy sẽ lùi mất một ngày ở các múi giờ âm.
+ */
+const ymd = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '');
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,6 +63,21 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       </Link>
 
       <AuditHeader audit={audit} />
+
+      {audit.status !== 'CLOSED' && (
+        <AuditEdit
+          auditId={audit.id}
+          initial={{
+            organization: audit.organization,
+            title: audit.title,
+            scope: audit.scope ?? '',
+            standards: audit.standards as StandardCode[],
+            leadAuditor: audit.leadAuditor ?? '',
+            startDate: ymd(audit.startDate),
+            endDate: ymd(audit.endDate),
+          }}
+        />
+      )}
 
       <AuditTabs auditId={audit.id} />
 
