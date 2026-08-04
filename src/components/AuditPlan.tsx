@@ -3,9 +3,11 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
+import { PlanCalculator } from './PlanCalculator';
+import { ScheduleGrid } from './ScheduleGrid';
 import {
   KIND_LABELS, checkWorkingHours, durationLabel, findTimeConflicts,
-  formatDayLong, generateTimedPlan, sessionMembers, toHHMM, toMinutes,
+  generateTimedPlan, toHHMM, toMinutes,
   type Hours, type PlanSession, type SessionKind,
 } from '@/lib/plan';
 
@@ -112,11 +114,36 @@ export function AuditPlan({
     [sessions, unitMembers, members],
   );
 
+  /** Số đơn vị mà đánh giá viên bận nhất đang giữ, theo phân công thực tế. */
+  const busiestRounds = useMemo(() => {
+    const load = new Map<string, number>();
+    for (const ms of unitMembers.values()) {
+      for (const m of ms) load.set(m, (load.get(m) ?? 0) + 1);
+    }
+    return load.size === 0 ? 0 : Math.max(...load.values());
+  }, [unitMembers]);
+
+  const minutesPerDay =
+    toMinutes(info.amEnd) - toMinutes(info.amStart) + (toMinutes(info.pmEnd) - toMinutes(info.pmStart));
+
   const scheduledUnitIds = useMemo(
     () => new Set(sessions.filter((s) => s.kind === 'UNIT' && s.unitId).map((s) => s.unitId!)),
     [sessions],
   );
   const unscheduled = units.filter((u) => !scheduledUnitIds.has(u.id));
+
+  /** Lưới không đủ chỗ hiện chữ, nên gom lỗi giờ giấc thành danh sách bên dưới. */
+  const hoursIssues = useMemo(() => {
+    const out: string[] = [];
+    for (const s of sessions) {
+      const issue = checkWorkingHours(s, info);
+      if (!issue) continue;
+      const unit = units.find((u) => u.id === s.unitId);
+      const what = s.kind === 'UNIT' ? unit?.name ?? 'Phiên' : KIND_LABELS[s.kind];
+      out.push(`${what} ${s.startTime}–${s.endTime}: ${issue}`);
+    }
+    return out;
+  }, [sessions, info, units]);
 
   const unitById = new Map(units.map((u) => [u.id, u]));
   const shortById = new Map(members.map((m, i) => [m.id, shortNames[i]]));
@@ -316,6 +343,16 @@ export function AuditPlan({
         </div>
       </section>
 
+      <PlanCalculator
+        unitCount={units.length}
+        actualDays={days.length}
+        actualMembers={members.length}
+        minutesPerDay={minutesPerDay}
+        openingMinutes={info.openingMinutes}
+        closingMinutes={info.closingMinutes}
+        busiestRounds={busiestRounds}
+      />
+
       {/* ============ Lịch đánh giá ============ */}
       <section className="card p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -363,104 +400,35 @@ export function AuditPlan({
           </p>
         )}
 
-        <div className="space-y-4">
-          {days.map((day, dayIndex) => {
-            const inDay = sessions
-              .filter((s) => s.day === day)
-              .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+        <ScheduleGrid
+          days={days}
+          hours={info}
+          sessions={sessions}
+          units={units}
+          members={members.map((m, i) => ({ ...m, short: shortNames[i] }))}
+          unitMembers={unitMembers}
+          conflictIds={conflicts.ids}
+          locked={locked}
+          onPatch={patchSession}
+          onRemove={removeSession}
+        />
 
-            return (
-              <div key={day} className="rounded-lg border border-slate-200">
-                <p className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium">
-                  Ngày {dayIndex + 1} — {formatDayLong(day)}
-                </p>
+        {!locked && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <AddSessionRow days={days} units={units} onAdd={addSession} />
+          </div>
+        )}
 
-                <ul className="divide-y divide-slate-100">
-                  {inDay.map((s) => {
-                    const ms = sessionMembers(s, unitMembers, allMemberIds);
-                    const bad = conflicts.ids.has(s.id);
-                    const hoursIssue = checkWorkingHours(s, info);
-
-                    return (
-                      <li
-                        key={s.id}
-                        className={`flex flex-wrap items-start gap-3 px-3 py-3 text-sm ${
-                          bad ? 'bg-red-50' : hoursIssue ? 'bg-amber-50' : ''
-                        }`}
-                      >
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <TimeInput
-                            value={s.startTime}
-                            disabled={locked}
-                            onChange={(v) => patchSession(s.id, { startTime: v })}
-                          />
-                          <span className="text-slate-400">–</span>
-                          <TimeInput
-                            value={s.endTime}
-                            disabled={locked}
-                            onChange={(v) => patchSession(s.id, { endTime: v })}
-                          />
-                          <span className="w-16 text-xs text-slate-500">
-                            {durationLabel(s.startTime, s.endTime)}
-                          </span>
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          {s.kind === 'UNIT' ? (
-                            <select
-                              value={s.unitId ?? ''}
-                              disabled={locked}
-                              onChange={(e) => patchSession(s.id, { unitId: e.target.value })}
-                              className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                            >
-                              {units.map((u) => (
-                                <option key={u.id} value={u.id}>{u.name}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className="font-medium">{KIND_LABELS[s.kind]}</span>
-                          )}
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            {ms.length === 0
-                              ? 'Chưa phân công đánh giá viên'
-                              : ms.map((m) => shortById.get(m) ?? '?').join(' · ')}
-                          </p>
-
-                          {hoursIssue && (
-                            <p className="mt-1 text-xs font-medium text-amber-700">{hoursIssue}</p>
-                          )}
-                        </div>
-
-                        {!locked && (
-                          <button
-                            onClick={() => removeSession(s.id)}
-                            className="shrink-0 text-xs text-red-600 hover:underline"
-                          >
-                            Bỏ
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-
-                  {inDay.length === 0 && (
-                    <li className="px-3 py-3 text-xs text-slate-400">Chưa có phiên nào</li>
-                  )}
-                </ul>
-
-                {!locked && (
-                  <div className="border-t border-slate-100 px-3 py-2">
-                    <AddSession
-                      units={units}
-                      onAdd={(kind, unitId) => addSession(day, kind, unitId)}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {hoursIssues.length > 0 && (
+          <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+            <p className="font-medium">Phiên nằm ngoài giờ làm việc:</p>
+            <ul className="mt-1 space-y-0.5">
+              {hoursIssues.map((m, i) => (
+                <li key={i}>• {m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {!locked && (
@@ -480,27 +448,40 @@ export function AuditPlan({
 
 /* ------------------------------------------------------------------ */
 
-function AddSession({
-  units, onAdd,
+function AddSessionRow({
+  days, units, onAdd,
 }: {
+  days: string[];
   units: Unit[];
-  onAdd: (kind: SessionKind, unitId: string | null) => void;
+  onAdd: (day: string, kind: SessionKind, unitId: string | null) => void;
 }) {
   const [value, setValue] = useState('');
+  const [day, setDay] = useState(days[0] ?? '');
 
   return (
+    <div className="flex flex-wrap items-center gap-2">
+      <select
+        value={day}
+        onChange={(e) => setDay(e.target.value)}
+        className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+      >
+        {days.map((d, i) => (
+          <option key={d} value={d}>Ngày {i + 1}</option>
+        ))}
+      </select>
+
     <select
       value={value}
       onChange={(e) => {
         const v = e.target.value;
-        if (!v) return;
-        if (v.startsWith('unit:')) onAdd('UNIT', v.slice(5));
-        else onAdd(v as SessionKind, null);
+        if (!v || !day) return;
+        if (v.startsWith('unit:')) onAdd(day, 'UNIT', v.slice(5));
+        else onAdd(day, v as SessionKind, null);
         setValue('');
       }}
-      className="w-full rounded border border-dashed border-slate-300 px-2 py-1.5 text-xs text-slate-500"
+      className="flex-1 rounded-lg border border-dashed border-slate-300 px-2 py-1.5 text-sm text-slate-500"
     >
-      <option value="">+ Thêm phiên vào ngày này…</option>
+      <option value="">+ Thêm phiên…</option>
       <optgroup label="Đơn vị">
         {units.map((u) => (
           <option key={u.id} value={`unit:${u.id}`}>{u.name}</option>
@@ -512,6 +493,7 @@ function AddSession({
         <option value="CLOSING">{KIND_LABELS.CLOSING}</option>
       </optgroup>
     </select>
+    </div>
   );
 }
 
