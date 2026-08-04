@@ -86,10 +86,6 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
           placeholder="Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị"
           required
         />
-        <p className="mt-1 text-xs text-slate-400">
-          Tên doanh nghiệp / xí nghiệp sở hữu hệ thống quản lý được đánh giá. Các phòng, ban,
-          xưởng bên trong sẽ khai báo riêng ở bước sau dưới tên <strong>đơn vị được đánh giá</strong>.
-        </p>
       </div>
 
       <div>
@@ -98,7 +94,7 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
           className="input"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Đánh giá nội bộ định kỳ Quý III/2026"
+          placeholder="Đánh giá nội bộ lần ... năm ..."
           required
         />
       </div>
@@ -152,9 +148,6 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
           onChange={(e) => setLeadAuditor(e.target.value)}
           required
         />
-        <p className="mt-1 text-xs text-slate-400">
-          Tự điền theo tài khoản. Sửa được nếu người ký báo cáo là người khác.
-        </p>
       </div>
 
       <div>
@@ -179,9 +172,6 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
             </label>
           ))}
         </div>
-        <p className="mt-1 text-xs text-slate-400">
-          Đánh giá viên sẽ được điền sẵn các tiêu chuẩn này khi ghi nhận finding.
-        </p>
       </div>
 
       <div>
@@ -205,11 +195,6 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
           Huỷ
         </button>
       </div>
-
-      <p className="border-t border-slate-100 pt-4 text-xs text-slate-400">
-        Tạo xong, đợt ở trạng thái <strong>Đang chuẩn bị</strong>. Bước tiếp theo là khai báo
-        đơn vị được đánh giá và đánh giá viên, rồi phân công và sinh mã cho cả đoàn.
-      </p>
     </form>
   );
 }
