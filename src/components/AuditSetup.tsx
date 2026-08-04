@@ -362,8 +362,7 @@ export function AuditSetup({
         ) : (
           <>
             <p className="mb-4 mt-1 text-sm text-slate-500">
-              Gửi đường link dưới đây cho cả đoàn, kèm mã riêng của từng người. Mã luôn xem
-              lại được ở trang này nếu ai đó quên.
+              Gửi đường link dưới đây cho cả đoàn, kèm mã riêng của từng người.
             </p>
 
             <CopyLink url={publicUrl} />
@@ -372,9 +371,11 @@ export function AuditSetup({
               {members.map((m) => (
                 <li key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
                   <span className="flex-1 font-medium">{m.fullName}</span>
-                  <span className="rounded bg-brand-50 px-2.5 py-1 font-mono text-brand-700">
-                    {m.accessCode ?? '—'}
-                  </span>
+                  {m.accessCode ? (
+                    <CopyCode code={m.accessCode} memberName={m.fullName} />
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -457,6 +458,51 @@ function AddMemberRow({
         Thêm
       </button>
     </form>
+  );
+}
+
+/**
+ * Mã truy cập kèm nút chép nhanh.
+ *
+ * Trưởng đoàn phải gửi mã riêng cho từng người qua Zalo — bôi đen 6 chữ số rồi
+ * copy tay, làm 10 lần liên tiếp rất dễ chép nhầm dòng. Nút này chép đúng mã của
+ * đúng dòng đó.
+ */
+function CopyCode({ code, memberName }: { code: string; memberName: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      title={`Chép mã của ${memberName}`}
+      aria-label={`Chép mã của ${memberName}`}
+      className={`inline-flex items-center gap-2 rounded px-2.5 py-1 font-mono transition ${
+        copied
+          ? 'bg-emerald-50 text-emerald-700'
+          : 'bg-brand-50 text-brand-700 hover:bg-brand-100'
+      }`}
+    >
+      {copied ? (
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 shrink-0">
+          <path
+            fillRule="evenodd"
+            d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 shrink-0">
+          <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.4a2 2 0 0 0-.6-1.4l-1.4-1.4a2 2 0 0 0-1.4-.6H7Z" />
+          <path d="M4 6a1 1 0 0 0-1 1v8a2 2 0 0 0 2 2h6a1 1 0 1 0 0-2H5V7a1 1 0 0 0-1-1Z" />
+        </svg>
+      )}
+      {code}
+    </button>
   );
 }
 
