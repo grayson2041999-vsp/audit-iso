@@ -105,6 +105,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           openingMinutes: audit.openingMinutes,
           closingMinutes: audit.closingMinutes,
         }}
+        dayHours={audit.dayHours ?? []}
       />
 
       <DeleteAuditBox

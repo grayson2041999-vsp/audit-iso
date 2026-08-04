@@ -7,8 +7,9 @@ import { ScheduleGrid } from './ScheduleGrid';
 import { UnitPalette } from './UnitPalette';
 import {
   KIND_LABELS, MIN_MANUAL, blockedSpans, checkWorkingHours, computeCapacity, durationLabel,
+  formatDayLong,
   findTimeConflicts, freeSpans, generateTimedPlan, nearestStart, reflowToHours, toHHMM, toMinutes,
-  type Hours, type PlanSession, type SessionKind,
+  type DayHours, type Hours, type PlanSession, type SessionKind,
 } from '@/lib/plan';
 
 type Unit = { id: string; name: string };
@@ -20,6 +21,7 @@ type PlanInfo = {
   location: string;
   approverTitle: string;
   approverName: string;
+  /** Khung giờ mặc định của đợt — dùng cho ngày nào chưa khai riêng. */
   amStart: string;
   amEnd: string;
   pmStart: string;
@@ -38,7 +40,7 @@ type PlanInfo = {
  * Mọi thay đổi giữ ở trình duyệt cho tới khi bấm Lưu.
  */
 export function AuditPlan({
-  auditId, days, units, members, assignments, initialInfo, initialSessions, locked,
+  auditId, days, units, members, assignments, initialInfo, initialDayHours, initialSessions, locked,
 }: {
   auditId: string;
   days: string[];
@@ -47,12 +49,52 @@ export function AuditPlan({
   /** Cặp "memberId:unitId" đã phân công. */
   assignments: string[];
   initialInfo: PlanInfo;
+  /** Khung giờ đã lưu cho từng ngày, theo thứ tự ngày trong đợt. */
+  initialDayHours: DayHours[];
   initialSessions: PlanSession[];
   locked: boolean;
 }) {
   const router = useRouter();
 
   const [info, setInfo] = useState<PlanInfo>(initialInfo);
+  /**
+   * Khung giờ riêng của từng ngày, đánh chỉ số theo thứ tự ngày trong đợt.
+   *
+   * Ngày nào chưa khai riêng thì thừa kế khung giờ mặc định của đợt, nên đợt
+   * cũ mở lên vẫn y như trước và đợt mới chỉ phải sửa đúng ngày nào khác.
+   */
+  const [dayHours, setDayHours] = useState<DayHours[]>(() =>
+    days.map(
+      (_, i) =>
+        initialDayHours[i] ?? {
+          amStart: initialInfo.amStart,
+          amEnd: initialInfo.amEnd,
+          pmStart: initialInfo.pmStart,
+          pmEnd: initialInfo.pmEnd,
+        },
+    ),
+  );
+
+  const dayIndex = useMemo(() => new Map(days.map((d, i) => [d, i])), [days]);
+
+  /**
+   * Nới hoặc cắt mảng khung giờ khi số ngày của đợt đổi.
+   *
+   * Ngày mới thêm thừa kế ngày cuối cùng đang có — nới đợt thêm một ngày thì
+   * ngày đó gần như chắc chắn giờ giấc giống ngày liền trước, không phải gõ lại.
+   */
+  useEffect(() => {
+    setDayHours((prev) => {
+      if (prev.length === days.length) return prev;
+      const seed = prev[prev.length - 1] ?? {
+        amStart: initialInfo.amStart,
+        amEnd: initialInfo.amEnd,
+        pmStart: initialInfo.pmStart,
+        pmEnd: initialInfo.pmEnd,
+      };
+      return days.map((_, i) => prev[i] ?? { ...seed });
+    });
+  }, [days.length, initialInfo]);
   /** Đơn vị đang được nhấc lên từ kho, để lưới làm sáng dòng đích. */
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
   /**
@@ -78,8 +120,8 @@ export function AuditPlan({
     return map;
   }, [assignments]);
 
-  const build = (hours: Hours) =>
-    generateTimedPlan({ days, hours, units, unitMembers, allMemberIds });
+  const build = (hoursOf: (day: string) => Hours) =>
+    generateTimedPlan({ days, hoursOf, units, unitMembers, allMemberIds });
 
   /**
    * Chưa lưu lịch bao giờ thì tính sẵn ngay khi mở tab — không bắt bấm nút để
@@ -88,7 +130,7 @@ export function AuditPlan({
    */
   const [sessions, setSessions] = useState<PlanSession[]>(() => {
     if (initialSessions.length > 0) return initialSessions;
-    return build(initialInfo).sessions.map((x, i) => ({
+    return build(() => initialInfo).sessions.map((x, i) => ({
       ...x,
       id: `tam-${i}-${Math.random().toString(36).slice(2, 7)}`,
     }));
@@ -137,20 +179,22 @@ export function AuditPlan({
     return s ? Math.max(0, toMinutes(s.endTime) - toMinutes(s.startTime)) : fallback;
   }
 
-  const hours: Hours = {
-    amStart: info.amStart,
-    amEnd: info.amEnd,
-    pmStart: info.pmStart,
-    pmEnd: info.pmEnd,
-    openingMinutes: meetingMinutes('OPENING', days[0], initialInfo.openingMinutes),
-    closingMinutes: meetingMinutes('CLOSING', days[days.length - 1], initialInfo.closingMinutes),
-  };
+  const openingMinutes = meetingMinutes('OPENING', days[0], initialInfo.openingMinutes);
+  const closingMinutes = meetingMinutes(
+    'CLOSING', days[days.length - 1], initialInfo.closingMinutes,
+  );
+
+  /** Khung giờ của một ngày. Thời lượng hai cuộc họp là của cả đợt nên gắn kèm. */
+  function hoursOf(day: string): Hours {
+    const i = dayIndex.get(day) ?? 0;
+    const d = dayHours[i] ?? dayHours[0] ?? info;
+    return { ...d, openingMinutes, closingMinutes };
+  }
 
   const capacity = useMemo(
-    () => computeCapacity({ days, hours, units, unitMembers }),
+    () => computeCapacity({ days, hoursOf, units, unitMembers }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [days, hours.amStart, hours.amEnd, hours.pmStart, hours.pmEnd,
-     hours.openingMinutes, hours.closingMinutes, units, unitMembers],
+    [days, dayHours, openingMinutes, closingMinutes, units, unitMembers],
   );
 
   /** Thời lượng nên dành cho mỗi đơn vị — hệ thống tính, trưởng đoàn đè lên được. */
@@ -196,10 +240,10 @@ export function AuditPlan({
    * `hours` làm tham số chứ không đọc thẳng state, vì lúc kiểm tra trước khi
    * lưu thì state chưa kịp cập nhật theo thay đổi vừa tính ra.
    */
-  function findHoursIssues(list: PlanSession[], hours: PlanInfo) {
+  function findHoursIssues(list: PlanSession[]) {
     const out: string[] = [];
     for (const s of list) {
-      const issue = checkWorkingHours(s, hours);
+      const issue = checkWorkingHours(s, hoursOf(s.day));
       if (!issue) continue;
       const unit = units.find((u) => u.id === s.unitId);
       const what = s.kind === 'UNIT' ? unit?.name ?? 'Phiên' : KIND_LABELS[s.kind];
@@ -210,16 +254,20 @@ export function AuditPlan({
 
   /** Lưới không đủ chỗ hiện chữ, nên gom lỗi giờ giấc thành danh sách bên dưới. */
   const hoursIssues = useMemo(
-    () => findHoursIssues(sessions, info),
+    () => findHoursIssues(sessions),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessions, info, units],
+    [sessions, dayHours, units],
   );
 
-  /** Khung giờ có tự mâu thuẫn không — sáng phải trước trưa, trưa phải trước chiều. */
-  const hoursBroken =
-    toMinutes(info.amEnd) <= toMinutes(info.amStart) ||
-    toMinutes(info.pmStart) < toMinutes(info.amEnd) ||
-    toMinutes(info.pmEnd) <= toMinutes(info.pmStart);
+  /** Khung giờ một ngày có tự mâu thuẫn không — sáng trước trưa, trưa trước chiều. */
+  const broken = (d: DayHours) =>
+    toMinutes(d.amEnd) <= toMinutes(d.amStart) ||
+    toMinutes(d.pmStart) < toMinutes(d.amEnd) ||
+    toMinutes(d.pmEnd) <= toMinutes(d.pmStart);
+
+  const brokenDays = dayHours.map((d, i) => ({ i, d })).filter(({ d }) => broken(d)).map(({ i }) => i + 1);
+
+  const hoursBroken = brokenDays.length > 0;
 
   const unitById = new Map(units.map((u) => [u.id, u]));
   const shortById = new Map(members.map((m, i) => [m.id, shortNames[i]]));
@@ -300,17 +348,47 @@ export function AuditPlan({
   /* ---------------- Khung giờ ---------------- */
 
   /**
-   * Khung giờ đã nắn lịch theo. Ô nhập cập nhật `info` ngay từng ký tự để trục
-   * thời gian chạy theo, nhưng việc nắn lịch chỉ chạy khi rời khỏi ô — gõ dở
-   * "08:3" mà máy đã đi cắt phiên thì lịch nát trước khi bạn gõ xong.
+   * Khung giờ mà lịch đã được nắn theo, giữ riêng cho từng ngày.
+   *
+   * Ô nhập cập nhật state ngay từng ký tự để trục thời gian chạy theo, nhưng
+   * việc nắn lịch chỉ chạy khi rời khỏi ô — gõ dở "08:3" mà máy đã đi cắt phiên
+   * thì lịch nát trước khi bạn gõ xong.
    */
-  const committedHours = useRef({ amStart: info.amStart, pmEnd: info.pmEnd });
+  const committedHours = useRef<DayHours[]>(dayHours.map((d) => ({ ...d })));
 
-  function commitHours() {
-    if (locked || hoursBroken) return;
+  function patchDay(i: number, patch: Partial<DayHours>) {
+    setDayHours((prev) => prev.map((d, k) => (k === i ? { ...d, ...patch } : d)));
+  }
 
-    const next = reflowToHours({ sessions, days, from: committedHours.current, to: hours });
-    committedHours.current = { amStart: info.amStart, pmEnd: info.pmEnd };
+  /** Chép khung giờ ngày 1 cho mọi ngày còn lại — đa số đợt giờ giấc giống nhau. */
+  function applyToAllDays() {
+    const first = dayHours[0];
+    if (!first) return;
+    const next = days.map(() => ({ ...first }));
+    setDayHours(next);
+    commitHours(next);
+  }
+
+  /**
+   * `target` để những thao tác đổi giờ bằng nút truyền thẳng mảng mới vào —
+   * state chưa kịp cập nhật trong cùng một lượt xử lý sự kiện.
+   */
+  function commitHours(target?: DayHours[]) {
+    if (locked) return;
+    const now = target ?? dayHours;
+    if (now.some((d) => broken(d))) return;
+
+    const before = committedHours.current;
+    const next = reflowToHours({
+      sessions,
+      days,
+      fromOf: (day) => before[dayIndex.get(day) ?? 0] ?? before[0] ?? info,
+      toOf: (day) => {
+        const d = now[dayIndex.get(day) ?? 0] ?? now[0] ?? info;
+        return { ...d, openingMinutes, closingMinutes };
+      },
+    });
+    committedHours.current = now.map((d) => ({ ...d }));
 
     const changed =
       next.length !== sessions.length ||
@@ -350,12 +428,13 @@ export function AuditPlan({
    * trống thật, theo cùng bộ luật với thao tác kéo.
    */
   function addMeeting(day: string, kind: SessionKind) {
+    const h = hoursOf(day);
     const self = { id: '__moi__', day, kind, unitId: null };
-    const free = freeSpans(blockedSpans({ self, sessions, hours, unitMembers }), hours);
+    const free = freeSpans(blockedSpans({ self, sessions, hours: h, unitMembers }), h);
 
     const widest = free.reduce((mx, f) => Math.max(mx, f.end - f.start), 0);
     const dur = Math.max(MIN_MANUAL, Math.min(60, widest));
-    const start = nearestStart(toMinutes(hours.amStart), dur, free);
+    const start = nearestStart(toMinutes(h.amStart), dur, free);
     if (start === null) {
       setError(`Ngày này không còn chỗ trống cho ${KIND_LABELS[kind].toLowerCase()}.`);
       return;
@@ -392,7 +471,10 @@ export function AuditPlan({
       return;
     }
     if (hoursBroken) {
-      setError('Khung giờ không hợp lệ: giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.');
+      setError(
+        `Khung giờ ngày ${brokenDays.join(', ')} không hợp lệ: ` +
+          'giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.',
+      );
       return;
     }
     if (unscheduled.length > 0) {
@@ -412,8 +494,11 @@ export function AuditPlan({
         body: JSON.stringify({
           ...info,
           // Ghi con số đọc từ lịch, để file Word và lần mở sau khớp với lưới.
-          openingMinutes: hours.openingMinutes,
-          closingMinutes: hours.closingMinutes,
+          openingMinutes,
+          closingMinutes,
+          dayHours,
+          // Ngày 1 làm khung giờ mặc định của đợt, dùng khi về sau thêm ngày mới.
+          ...(dayHours[0] ?? {}),
           sessions: list.map(({ day, startTime, endTime, kind, unitId, note }) => ({
             day, startTime, endTime, kind, unitId, note,
           })),
@@ -504,48 +589,61 @@ export function AuditPlan({
       <section className="card space-y-4 p-5">
         <h2 className="font-semibold">Khung giờ làm việc</h2>
 
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="w-14 text-slate-500">Sáng</span>
-          <TimeInput
-            value={info.amStart}
-            disabled={locked}
-            onChange={(v) => setInfo((s) => ({ ...s, amStart: v }))}
-            onCommit={commitHours}
-          />
-          <span className="text-slate-400">–</span>
-          <TimeInput
-            value={info.amEnd}
-            disabled={locked}
-            onChange={(v) => setInfo((s) => ({ ...s, amEnd: v }))}
-            onCommit={commitHours}
-          />
-        </div>
+        <div className="space-y-3">
+          {days.map((day, i) => (
+            <div key={day} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="w-40 shrink-0 text-slate-500">
+                <strong className="text-slate-700">Ngày {i + 1}</strong>
+                <span className="ml-1.5 text-xs">{formatDayLong(day).replace(/^.*?, /, '')}</span>
+              </span>
 
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="w-14 text-slate-500">Chiều</span>
-          <TimeInput
-            value={info.pmStart}
-            disabled={locked}
-            onChange={(v) => setInfo((s) => ({ ...s, pmStart: v }))}
-            onCommit={commitHours}
-          />
-          <span className="text-slate-400">–</span>
-          <TimeInput
-            value={info.pmEnd}
-            disabled={locked}
-            onChange={(v) => setInfo((s) => ({ ...s, pmEnd: v }))}
-            onCommit={commitHours}
-          />
+              <span className="text-xs text-slate-400">Sáng</span>
+              <TimeInput
+                value={dayHours[i]?.amStart ?? info.amStart}
+                disabled={locked}
+                onChange={(v) => patchDay(i, { amStart: v })}
+                onCommit={() => commitHours()}
+              />
+              <span className="text-slate-400">–</span>
+              <TimeInput
+                value={dayHours[i]?.amEnd ?? info.amEnd}
+                disabled={locked}
+                onChange={(v) => patchDay(i, { amEnd: v })}
+                onCommit={() => commitHours()}
+              />
+
+              <span className="ml-3 text-xs text-slate-400">Chiều</span>
+              <TimeInput
+                value={dayHours[i]?.pmStart ?? info.pmStart}
+                disabled={locked}
+                onChange={(v) => patchDay(i, { pmStart: v })}
+                onCommit={() => commitHours()}
+              />
+              <span className="text-slate-400">–</span>
+              <TimeInput
+                value={dayHours[i]?.pmEnd ?? info.pmEnd}
+                disabled={locked}
+                onChange={(v) => patchDay(i, { pmEnd: v })}
+                onCommit={() => commitHours()}
+              />
+
+              {!locked && i === 0 && days.length > 1 && (
+                <button onClick={applyToAllDays} className="ml-2 text-xs text-brand-600 hover:underline">
+                  Áp dụng cho mọi ngày
+                </button>
+              )}
+            </div>
+          ))}
         </div>
 
         {hoursBroken ? (
           <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
-            Giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.
+            Ngày {brokenDays.join(', ')}: giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.
           </p>
         ) : (
           <p className="border-t border-slate-100 pt-4 text-xs text-slate-500">
-            Họp khai mạc <strong>{durationLabel('00:00', toHHMM(hours.openingMinutes))}</strong> ·
-            họp kết thúc <strong>{durationLabel('00:00', toHHMM(hours.closingMinutes))}</strong> —
+            Họp khai mạc <strong>{durationLabel('00:00', toHHMM(openingMinutes))}</strong> ·
+            họp kết thúc <strong>{durationLabel('00:00', toHHMM(closingMinutes))}</strong> —
             đọc thẳng từ lịch bên dưới. Muốn đổi thì kéo mép khối họp trên lưới.
           </p>
         )}
@@ -651,7 +749,7 @@ export function AuditPlan({
 
         <ScheduleGrid
           days={days}
-          hours={hours}
+          hoursOf={hoursOf}
           sessions={sessions}
           units={units}
           members={members.map((m, i) => ({ ...m, short: shortNames[i] }))}

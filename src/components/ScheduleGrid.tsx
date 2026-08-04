@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   KIND_LABELS, MANUAL_STEP, MIN_MANUAL, STEP, blockedSpans, durationLabel, formatDayLong,
   freeSpans, nearestStart, resizeLimit, snapManual, toHHMM, toMinutes,
-  type Hours, type PlanSession, type Span,
+  type Hours, type HoursOf, type PlanSession, type Span,
 } from '@/lib/plan';
 
 type Unit = { id: string; name: string };
@@ -49,11 +49,12 @@ type Drag = {
  * Chuẩn bị. Muốn đổi người thì sửa phân công, lưới tự đúng theo.
  */
 export function ScheduleGrid({
-  days, hours, sessions, units, members, unitMembers, conflictIds, locked,
+  days, hoursOf, sessions, units, members, unitMembers, conflictIds, locked,
   draggingUnitId, defaultMinutes, onPatch, onRemove, onCreate, onSnapshot,
 }: {
   days: string[];
-  hours: Hours;
+  /** Khung giờ của từng ngày — mỗi ngày một trục thời gian riêng. */
+  hoursOf: HoursOf;
   sessions: PlanSession[];
   units: Unit[];
   members: { id: string; fullName: string; short: string }[];
@@ -83,15 +84,34 @@ export function ScheduleGrid({
    */
   const dragRef = useRef<Drag | null>(null);
 
-  const dayStart = toMinutes(hours.amStart);
-  const dayEnd = toMinutes(hours.pmEnd);
-  const span = Math.max(1, dayEnd - dayStart);
-
-  const lunchStart = toMinutes(hours.amEnd);
-  const lunchEnd = toMinutes(hours.pmStart);
-
-  const pct = (m: number) => ((m - dayStart) / span) * 100;
-  const width = (a: number, b: number) => ((b - a) / span) * 100;
+  /**
+   * Hình học của trục thời gian, tính riêng cho từng ngày.
+   *
+   * Mỗi ngày có khung giờ riêng nên trục cũng riêng: ngày vào lúc 09:00 thì
+   * trục ngày đó bắt đầu từ 09:00. Mỗi bảng ngày do đó tự căn theo giờ của
+   * chính nó, không dùng chung một thước.
+   */
+  function geometry(day: string) {
+    const h = hoursOf(day);
+    const start = toMinutes(h.amStart);
+    const end = toMinutes(h.pmEnd);
+    const span = Math.max(1, end - start);
+    return {
+      h,
+      start,
+      end,
+      span,
+      lunchStart: toMinutes(h.amEnd),
+      lunchEnd: toMinutes(h.pmStart),
+      pct: (m: number) => ((m - start) / span) * 100,
+      width: (a: number, b: number) => ((b - a) / span) * 100,
+      ticks: (() => {
+        const out: number[] = [];
+        for (let t = Math.ceil(start / 60) * 60; t <= end; t += 60) out.push(t);
+        return out;
+      })(),
+    };
+  }
 
   const colorOf = (unitId: string) =>
     UNIT_COLORS[Math.max(0, units.findIndex((u) => u.id === unitId)) % UNIT_COLORS.length];
@@ -103,10 +123,6 @@ export function ScheduleGrid({
     (s) => s.kind === 'UNIT' && s.unitId && (unitMembers.get(s.unitId) ?? []).length === 0,
   );
   if (hasOrphan) rows.push({ id: 'orphan', label: 'Chưa phân công', memberId: null });
-
-  /* --- Vạch giờ tròn trên trục --- */
-  const ticks: number[] = [];
-  for (let t = Math.ceil(dayStart / 60) * 60; t <= dayEnd; t += 60) ticks.push(t);
 
   /** Phiên nào thuộc dòng nào. */
   function sessionsForRow(day: string, row: Row) {
@@ -120,7 +136,8 @@ export function ScheduleGrid({
 
   /** Khoảng trống hợp lệ cho một phiên, tính lại mỗi lần chuột nhúc nhích. */
   function freeFor(self: Pick<PlanSession, 'id' | 'day' | 'kind' | 'unitId'>): Span[] {
-    return freeSpans(blockedSpans({ self, sessions, hours, unitMembers }), hours);
+    const h = hoursOf(self.day);
+    return freeSpans(blockedSpans({ self, sessions, hours: h, unitMembers }), h);
   }
 
   /* ---------------- Kéo thả ---------------- */
@@ -163,7 +180,7 @@ export function ScheduleGrid({
       setDrag({ ...d });
     }
 
-    const deltaMin = (dx / d.laneWidth) * span;
+    const deltaMin = (dx / d.laneWidth) * geometry(s.day).span;
     const free = freeFor(s);
 
     if (d.mode === 'move') {
@@ -255,11 +272,12 @@ export function ScheduleGrid({
     const unitId = e.dataTransfer.getData('text/plain');
     if (!unitId || !units.some((u) => u.id === unitId)) return;
 
+    const g = geometry(day);
     const box = e.currentTarget.getBoundingClientRect();
-    const wanted = dayStart + ((e.clientX - box.left) / box.width) * span;
+    const wanted = g.start + ((e.clientX - box.left) / box.width) * g.span;
 
     const self = { id: '__moi__', day, kind: 'UNIT' as const, unitId };
-    const free = freeSpans(blockedSpans({ self, sessions, hours, unitMembers }), hours);
+    const free = freeSpans(blockedSpans({ self, sessions, hours: g.h, unitMembers }), g.h);
 
     // Chỗ trống hẹp hơn thời lượng mặc định thì thu ngắn phiên lại, còn hơn im
     // lặng từ chối rồi để người dùng đoán xem vì sao thả không được.
@@ -281,7 +299,7 @@ export function ScheduleGrid({
 
   const dragged = drag?.moved ? sessions.find((s) => s.id === drag.id) ?? null : null;
   const draggedBlocked = dragged
-    ? blockedSpans({ self: dragged, sessions, hours, unitMembers })
+    ? blockedSpans({ self: dragged, sessions, hours: hoursOf(dragged.day), unitMembers })
     : [];
 
   /** Dòng nào sẽ nhận đơn vị đang được nhấc lên từ kho. */
@@ -291,10 +309,16 @@ export function ScheduleGrid({
 
   return (
     <div className="space-y-5">
-      {days.map((day, dayIndex) => (
+      {days.map((day, dayIndex) => {
+        const { h, span, lunchStart, lunchEnd, pct, width, ticks } = geometry(day);
+
+        return (
         <div key={day} className="rounded-lg border border-slate-200">
           <p className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium">
             Ngày {dayIndex + 1} — {formatDayLong(day)}
+            <span className="ml-2 font-normal text-slate-400">
+              {h.amStart}–{h.amEnd} · {h.pmStart}–{h.pmEnd}
+            </span>
           </p>
 
           <div className="overflow-x-auto">
@@ -447,7 +471,8 @@ export function ScheduleGrid({
             />
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

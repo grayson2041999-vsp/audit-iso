@@ -68,7 +68,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           openingMinutes: audit.openingMinutes,
           closingMinutes: audit.closingMinutes,
         }}
-        initialSessions={sessions.map(
+        initialDayHours={audit.dayHours ?? []}
+      initialSessions={sessions.map(
           (s): PlanSession => ({
             id: s.id,
             day: s.day,

@@ -97,6 +97,17 @@ export const audits = pgTable('audits', {
   /** Thời lượng hai cuộc họp cố định, dùng khi sinh lịch tự động. */
   openingMinutes: integer('opening_minutes').default(30).notNull(),
   closingMinutes: integer('closing_minutes').default(90).notNull(),
+  /**
+   * Khung giờ riêng của từng ngày, đánh chỉ số theo THỨ TỰ NGÀY trong đợt —
+   * phần tử 0 là ngày 1. Cùng cách đánh với việc dời ngày đợt, nên đổi khoảng
+   * ngày thì khung giờ đi theo mà không phải ánh xạ lại ngày dương lịch.
+   *
+   * Ngày nào không có phần tử tương ứng thì dùng bốn cột am_start… ở trên.
+   */
+  dayHours: jsonb('day_hours')
+    .$type<{ amStart: string; amEnd: string; pmStart: string; pmEnd: string }[]>()
+    .default([])
+    .notNull(),
 
   standards: jsonb('standards').$type<string[]>().default([]).notNull(),
   leadAuditor: text('lead_auditor'),             // Tên trưởng đoàn ghi trên báo cáo

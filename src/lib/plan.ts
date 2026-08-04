@@ -340,32 +340,40 @@ export function resizeLimit(
 export function reflowToHours(input: {
   sessions: PlanSession[];
   days: string[];
-  /** Khung giờ trước khi đổi — chỉ dùng để biết mốc nào vừa thay đổi. */
-  from: Pick<Hours, 'amStart' | 'pmEnd'>;
-  to: Hours;
+  /** Khung giờ trước khi đổi — chỉ dùng để biết ngày nào có mốc vừa thay đổi. */
+  fromOf: (day: string) => DayHours;
+  toOf: HoursOf;
 }): PlanSession[] {
-  const { sessions, days, from, to } = input;
+  const { sessions, days, fromOf, toOf } = input;
   if (days.length === 0) return sessions;
-
-  const amS = toMinutes(to.amStart);
-  const amE = toMinutes(to.amEnd);
-  const pmS = toMinutes(to.pmStart);
-  const pmE = toMinutes(to.pmEnd);
-  if (amE <= amS || pmE <= pmS) return sessions; // khung giờ đang gõ dở
 
   const first = days[0];
   const last = days[days.length - 1];
-  const startMoved = to.amStart !== from.amStart;
-  const endMoved = to.pmEnd !== from.pmEnd;
 
-  /* 1. Neo lại hai cuộc họp */
+  // Ngày nào khung giờ đang gõ dở thì để yên, đừng cắt gì của ngày đó.
+  const usable = (day: string) => {
+    const h = toOf(day);
+    return toMinutes(h.amEnd) > toMinutes(h.amStart) && toMinutes(h.pmEnd) > toMinutes(h.pmStart);
+  };
+
+  /* 1. Neo lại hai cuộc họp, mỗi cái theo khung giờ của đúng ngày nó nằm */
   const anchored = sessions.map((s) => {
+    if (!usable(s.day)) return s;
+    const h = toOf(s.day);
+    const old = fromOf(s.day);
     const len = toMinutes(s.endTime) - toMinutes(s.startTime);
-    if (s.kind === 'OPENING' && s.day === first && startMoved) {
-      return { ...s, startTime: toHHMM(amS), endTime: toHHMM(Math.min(amS + len, amE)) };
+
+    if (s.kind === 'OPENING' && s.day === first && h.amStart !== old.amStart) {
+      const amS = toMinutes(h.amStart);
+      return { ...s, startTime: toHHMM(amS), endTime: toHHMM(Math.min(amS + len, toMinutes(h.amEnd))) };
     }
-    if (s.kind === 'CLOSING' && s.day === last && endMoved) {
-      return { ...s, startTime: toHHMM(Math.max(pmE - len, pmS)), endTime: toHHMM(pmE) };
+    if (s.kind === 'CLOSING' && s.day === last && h.pmEnd !== old.pmEnd) {
+      const pmE = toMinutes(h.pmEnd);
+      return {
+        ...s,
+        startTime: toHHMM(Math.max(pmE - len, toMinutes(h.pmStart))),
+        endTime: toHHMM(pmE),
+      };
     }
     return s;
   });
@@ -378,13 +386,18 @@ export function reflowToHours(input: {
     meetingsByDay.set(s.day, [...(meetingsByDay.get(s.day) ?? []), span]);
   }
 
-  const lunch: Span[] = pmS > amE ? [{ start: amE, end: pmS }] : [];
-
   /* 2–3. Cắt vào vùng hợp lệ, bỏ hẳn nếu không còn gì */
   return anchored.flatMap<PlanSession>((s) => {
+    if (!usable(s.day)) return [s];
+    const h = toOf(s.day);
+
+    const amE = toMinutes(h.amEnd);
+    const pmS = toMinutes(h.pmStart);
+    const lunch: Span[] = pmS > amE ? [{ start: amE, end: pmS }] : [];
+
     const isMeetingAnchor = s.kind === 'OPENING' || s.kind === 'CLOSING';
     const obstacles = isMeetingAnchor ? [] : meetingsByDay.get(s.day) ?? [];
-    const free = freeSpans([...lunch, ...obstacles], to);
+    const free = freeSpans([...lunch, ...obstacles], h);
 
     const a = toMinutes(s.startTime);
     const b = toMinutes(s.endTime);
@@ -417,10 +430,26 @@ export function reflowToHours(input: {
 /* Quỹ thời gian                                                       */
 /* ------------------------------------------------------------------ */
 
-export type Hours = {
+/** Khung giờ làm việc của MỘT ngày. */
+export type DayHours = {
   amStart: string; amEnd: string; pmStart: string; pmEnd: string;
+};
+
+export type Hours = DayHours & {
   openingMinutes: number; closingMinutes: number;
 };
+
+/**
+ * Tra khung giờ của một ngày cụ thể.
+ *
+ * Mỗi ngày đánh giá có thể có giờ làm việc riêng — ngày đầu vào muộn vì đoàn
+ * phải di chuyển, ngày cuối về sớm. Vì vậy mọi thứ đụng tới giờ giấc đều nhận
+ * hàm tra cứu chứ không nhận một bộ giờ duy nhất.
+ *
+ * Riêng thời lượng hai cuộc họp vẫn là của cả đợt, nên hàm này trả về kèm
+ * chúng cho tiện dùng.
+ */
+export type HoursOf = (day: string) => Hours;
 
 type Window = { day: string; start: number; end: number };
 
@@ -428,23 +457,22 @@ type Window = { day: string; start: number; end: number };
  * Các khung giờ còn trống để xếp đơn vị, sau khi đã trừ họp khai mạc (đầu ngày
  * đầu) và họp kết thúc (cuối ngày cuối).
  */
-export function buildWindows(days: string[], h: Hours): Window[] {
+export function buildWindows(days: string[], hoursOf: HoursOf): Window[] {
   if (days.length === 0) return [];
 
-  const am = { s: toMinutes(h.amStart), e: toMinutes(h.amEnd) };
-  const pm = { s: toMinutes(h.pmStart), e: toMinutes(h.pmEnd) };
-  if (am.e <= am.s || pm.e <= pm.s) return [];
-
   const lastDay = days[days.length - 1];
-  const openEnd = ceilStep(am.s + h.openingMinutes);
-  const closeStart = floorStep(pm.e - h.closingMinutes);
-
   const windows: Window[] = [];
+
   for (const day of days) {
-    const mStart = day === days[0] ? openEnd : am.s;
+    const h = hoursOf(day);
+    const am = { s: toMinutes(h.amStart), e: toMinutes(h.amEnd) };
+    const pm = { s: toMinutes(h.pmStart), e: toMinutes(h.pmEnd) };
+    if (am.e <= am.s || pm.e <= pm.s) continue; // ngày này đang nhập dở
+
+    const mStart = day === days[0] ? ceilStep(am.s + h.openingMinutes) : am.s;
     if (am.e > mStart) windows.push({ day, start: mStart, end: am.e });
 
-    const aEnd = day === lastDay ? closeStart : pm.e;
+    const aEnd = day === lastDay ? floorStep(pm.e - h.closingMinutes) : pm.e;
     if (aEnd > pm.s) windows.push({ day, start: pm.s, end: aEnd });
   }
   return windows;
@@ -487,13 +515,13 @@ export type Capacity = {
  */
 export function computeCapacity(input: {
   days: string[];
-  hours: Hours;
+  hoursOf: HoursOf;
   units: { id: string }[];
   unitMembers: Map<string, string[]>;
 }): Capacity {
-  const { days, hours, units, unitMembers } = input;
+  const { days, hoursOf, units, unitMembers } = input;
 
-  const windows = buildWindows(days, hours);
+  const windows = buildWindows(days, hoursOf);
   const availableMinutes = windows.reduce((sum, w) => sum + (w.end - w.start), 0);
 
   const load = new Map<string, number>();
@@ -571,34 +599,37 @@ function shareOut(total: number, weights: number[]): number[] {
 
 export function generateTimedPlan(input: {
   days: string[];
-  hours: Hours;
+  hoursOf: HoursOf;
   units: { id: string }[];
   unitMembers: Map<string, string[]>;
   allMemberIds: string[];
 }): GenerateResult {
-  const { days, hours, units, unitMembers, allMemberIds } = input;
+  const { days, hoursOf, units, unitMembers, allMemberIds } = input;
 
-  const capacity = computeCapacity({ days, hours, units, unitMembers });
-  const windows = buildWindows(days, hours);
+  const capacity = computeCapacity({ days, hoursOf, units, unitMembers });
+  const windows = buildWindows(days, hoursOf);
 
   if (days.length === 0 || windows.length === 0) {
     return { sessions: [], capacity, unplacedUnitIds: units.map((u) => u.id) };
   }
 
-  const am = { s: toMinutes(hours.amStart) };
-  const pm = { e: toMinutes(hours.pmEnd) };
   const lastDay = days[days.length - 1];
+  // Họp khai mạc bám giờ vào của NGÀY ĐẦU, họp kết thúc bám giờ tan của NGÀY CUỐI.
+  const firstHours = hoursOf(days[0]);
+  const lastHours = hoursOf(lastDay);
+  const am = { s: toMinutes(firstHours.amStart) };
+  const pm = { e: toMinutes(lastHours.pmEnd) };
 
   const out: Omit<PlanSession, 'id'>[] = [
     {
       day: days[0],
       startTime: toHHMM(am.s),
-      endTime: toHHMM(ceilStep(am.s + hours.openingMinutes)),
+      endTime: toHHMM(ceilStep(am.s + firstHours.openingMinutes)),
       kind: 'OPENING', unitId: null, note: null,
     },
     {
       day: lastDay,
-      startTime: toHHMM(floorStep(pm.e - hours.closingMinutes)),
+      startTime: toHHMM(floorStep(pm.e - lastHours.closingMinutes)),
       endTime: toHHMM(pm.e),
       kind: 'CLOSING', unitId: null, note: null,
     },
@@ -643,8 +674,8 @@ export function generateTimedPlan(input: {
     const per = Math.max(MIN_SESSION, capacity.perUnitMinutes);
 
     const placed: { day: string; start: number; end: number; members: string[] }[] = [
-      { day: days[0], start: am.s, end: ceilStep(am.s + hours.openingMinutes), members: allMemberIds },
-      { day: lastDay, start: floorStep(pm.e - hours.closingMinutes), end: pm.e, members: allMemberIds },
+      { day: days[0], start: am.s, end: ceilStep(am.s + firstHours.openingMinutes), members: allMemberIds },
+      { day: lastDay, start: floorStep(pm.e - lastHours.closingMinutes), end: pm.e, members: allMemberIds },
     ];
 
     const free = (day: string, a: number, b: number, ms: string[]) =>

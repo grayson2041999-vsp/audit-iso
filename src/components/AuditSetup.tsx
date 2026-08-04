@@ -23,10 +23,13 @@ type Props = {
     amStart: string; amEnd: string; pmStart: string; pmEnd: string;
     openingMinutes: number; closingMinutes: number;
   };
+  /** Khung giờ riêng của từng ngày, theo thứ tự ngày trong đợt. */
+  dayHours: { amStart: string; amEnd: string; pmStart: string; pmEnd: string }[];
 };
 
 export function AuditSetup({
   auditId, status, units, members, links, publicUrl, leaderName, startDate, endDate, hours,
+  dayHours,
 }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -116,13 +119,19 @@ export function AuditSetup({
       const [memberId, unitId] = key.split(':');
       unitMembers.set(unitId, [...(unitMembers.get(unitId) ?? []), memberId]);
     }
+    const list = listDays(startDate, endDate);
     return computeCapacity({
-      days: listDays(startDate, endDate),
-      hours,
+      days: list,
+      // Ngày nào đã khai khung giờ riêng thì dùng của ngày đó.
+      hoursOf: (day) => ({
+        ...(dayHours[list.indexOf(day)] ?? hours),
+        openingMinutes: hours.openingMinutes,
+        closingMinutes: hours.closingMinutes,
+      }),
       units: units.map((u) => ({ id: u.id })),
       unitMembers,
     });
-  }, [linkSet, startDate, endDate, hours, units]);
+  }, [linkSet, startDate, endDate, hours, dayHours, units]);
 
   const canOpen =
     units.length > 0 &&

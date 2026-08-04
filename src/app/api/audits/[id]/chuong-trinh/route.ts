@@ -24,6 +24,18 @@ const schema = z.object({
   pmEnd: z.string().regex(timeRe, 'Giờ không hợp lệ').optional(),
   openingMinutes: z.number().int().min(15).max(480).optional(),
   closingMinutes: z.number().int().min(15).max(480).optional(),
+  /** Khung giờ riêng từng ngày, theo thứ tự ngày trong đợt. */
+  dayHours: z
+    .array(
+      z.object({
+        amStart: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+        amEnd: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+        pmStart: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+        pmEnd: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+      }),
+    )
+    .max(60)
+    .optional(),
 
   /* --- Toàn bộ lịch, ghi đè --- */
   sessions: z
@@ -80,6 +92,7 @@ export async function PUT(req: Request, { params }: Ctx) {
         ...(d.pmEnd ? { pmEnd: d.pmEnd } : {}),
         ...(d.openingMinutes ? { openingMinutes: d.openingMinutes } : {}),
         ...(d.closingMinutes ? { closingMinutes: d.closingMinutes } : {}),
+        ...(d.dayHours ? { dayHours: d.dayHours } : {}),
         updatedAt: new Date(),
       })
       .where(eq(audits.id, id));
