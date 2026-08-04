@@ -4,11 +4,12 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
 import {
-  HALF_LABELS, KIND_LABELS, findConflicts, formatDayLong, generateDraftPlan, listSlots,
-  type Half, type PlanSession, type SessionKind,
+  KIND_LABELS, MIN_SESSION, durationLabel, findTimeConflicts, formatDayLong,
+  generateTimedPlan, sessionMembers, toMinutes,
+  type PlanSession, type SessionKind,
 } from '@/lib/plan';
 
-type Unit = { id: string; name: string; contactPerson: string | null };
+type Unit = { id: string; name: string };
 type Member = { id: string; fullName: string };
 
 type PlanInfo = {
@@ -21,17 +22,18 @@ type PlanInfo = {
   amEnd: string;
   pmStart: string;
   pmEnd: string;
+  openingMinutes: number;
+  closingMinutes: number;
 };
 
 /**
  * Lập chương trình đánh giá.
  *
- * Một phiên = một buổi. Trong cùng buổi có thể có nhiều đơn vị song song, miễn
- * do các đánh giá viên khác nhau phụ trách. Danh sách người tham gia KHÔNG nhập
- * tay — suy ra từ ma trận phân công ở bước chuẩn bị, nên sửa phân công là lịch
- * tự đúng theo.
+ * Mỗi phiên có giờ bắt đầu – kết thúc riêng, nhiều phiên chạy song song được.
+ * Người tham gia KHÔNG nhập tay: phiên đơn vị lấy theo ma trận phân công ở bước
+ * chuẩn bị, phiên họp thì cả đoàn. Sửa phân công là lịch tự đúng theo.
  *
- * Mọi thay đổi giữ ở trình duyệt cho tới khi bấm Lưu, giống ma trận phân công.
+ * Mọi thay đổi giữ ở trình duyệt cho tới khi bấm Lưu.
  */
 export function AuditPlan({
   auditId, days, units, members, assignments, initialInfo, initialSessions, locked,
@@ -49,19 +51,16 @@ export function AuditPlan({
   const router = useRouter();
 
   const [info, setInfo] = useState<PlanInfo>(initialInfo);
-  const [contacts, setContacts] = useState<Record<string, string>>(
-    Object.fromEntries(units.map((u) => [u.id, u.contactPerson ?? ''])),
-  );
   const [sessions, setSessions] = useState<PlanSession[]>(initialSessions);
+  const [genNote, setGenNote] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const slots = useMemo(() => listSlots(days), [days]);
   const shortNames = useMemo(() => buildShortNames(members.map((m) => m.fullName)), [members]);
+  const allMemberIds = useMemo(() => members.map((m) => m.id), [members]);
 
-  /** Đơn vị → danh sách đánh giá viên phụ trách. */
   const unitMembers = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const pair of assignments) {
@@ -71,7 +70,10 @@ export function AuditPlan({
     return map;
   }, [assignments]);
 
-  const conflicts = useMemo(() => findConflicts(sessions, unitMembers), [sessions, unitMembers]);
+  const conflicts = useMemo(
+    () => findTimeConflicts(sessions, unitMembers, members),
+    [sessions, unitMembers, members],
+  );
 
   const scheduledUnitIds = useMemo(
     () => new Set(sessions.filter((s) => s.kind === 'UNIT' && s.unitId).map((s) => s.unitId!)),
@@ -79,33 +81,68 @@ export function AuditPlan({
   );
   const unscheduled = units.filter((u) => !scheduledUnitIds.has(u.id));
 
-  /* ---------------- Thao tác trên lịch ---------------- */
+  const unitById = new Map(units.map((u) => [u.id, u]));
+  const shortById = new Map(members.map((m, i) => [m.id, shortNames[i]]));
 
-  function moveSession(sessionId: string, day: string, half: Half) {
-    setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, day, half } : s)));
+  /* ---------------- Thao tác ---------------- */
+
+  function patchSession(id: string, patch: Partial<PlanSession>) {
+    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
-  function removeSession(sessionId: string) {
-    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+  function removeSession(id: string) {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
   }
 
-  function addSession(day: string, half: Half, kind: SessionKind, unitId: string | null) {
+  function addSession(day: string, kind: SessionKind, unitId: string | null) {
+    // Nối tiếp phiên cuối cùng trong ngày, mặc định 90 phút.
+    const sameDay = sessions.filter((s) => s.day === day);
+    const lastEnd = sameDay.length
+      ? sameDay.reduce((mx, s) => Math.max(mx, toMinutes(s.endTime)), 0)
+      : toMinutes(info.amStart);
+    const start = Math.min(lastEnd, toMinutes(info.pmEnd) - 90);
+    const hh = (m: number) =>
+      `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
     setSessions((prev) => [
       ...prev,
-      { id: `tam-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, day, half, kind, unitId, note: null },
+      {
+        id: `tam-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        day,
+        startTime: hh(Math.max(0, start)),
+        endTime: hh(Math.max(90, start + 90)),
+        kind,
+        unitId,
+        note: null,
+      },
     ]);
   }
 
   function autoGenerate() {
-    if (
-      sessions.length > 0 &&
-      !confirm('Sinh lại lịch nháp sẽ thay thế toàn bộ lịch hiện tại. Tiếp tục?')
-    ) {
+    if (sessions.length > 0 && !confirm('Sinh lại lịch sẽ thay thế toàn bộ lịch hiện tại. Tiếp tục?')) {
       return;
     }
-    const draft = generateDraftPlan({ days, units, unitMembers });
+    const res = generateTimedPlan({
+      days,
+      amStart: info.amStart,
+      amEnd: info.amEnd,
+      pmStart: info.pmStart,
+      pmEnd: info.pmEnd,
+      openingMinutes: info.openingMinutes,
+      closingMinutes: info.closingMinutes,
+      units,
+      unitMembers,
+      allMemberIds,
+    });
+
     setSessions(
-      draft.map((s, i) => ({ ...s, id: `tam-${i}-${Math.random().toString(36).slice(2, 7)}` })),
+      res.sessions.map((s, i) => ({ ...s, id: `tam-${i}-${Math.random().toString(36).slice(2, 7)}` })),
+    );
+
+    setGenNote(
+      res.atFloor
+        ? `Quỹ thời gian không đủ cho khối lượng đã phân công. Mỗi phiên bị ép về mức tối thiểu ${MIN_SESSION} phút — cần thêm ngày đánh giá hoặc thêm đánh giá viên.`
+        : `Đã chia mỗi đơn vị ${durationLabel('00:00', `${String(Math.floor(res.perMinutes / 60)).padStart(2, '0')}:${String(res.perMinutes % 60).padStart(2, '0')}`)} (${res.perMinutes} phút).`,
     );
   }
 
@@ -118,9 +155,8 @@ export function AuditPlan({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...info,
-          contacts: units.map((u) => ({ unitId: u.id, contactPerson: contacts[u.id] ?? '' })),
-          sessions: sessions.map(({ day, half, kind, unitId, note }) => ({
-            day, half, kind, unitId, note,
+          sessions: sessions.map(({ day, startTime, endTime, kind, unitId, note }) => ({
+            day, startTime, endTime, kind, unitId, note,
           })),
         }),
       });
@@ -135,8 +171,6 @@ export function AuditPlan({
       setBusy(false);
     }
   }
-
-  const unitById = new Map(units.map((u) => [u.id, u]));
 
   if (days.length === 0) {
     return (
@@ -183,46 +217,17 @@ export function AuditPlan({
           />
         </Field>
 
-        <div>
-          <label className="label">Giờ làm việc</label>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="w-14 text-slate-500">Sáng</span>
-            <TimeInput
-              value={info.amStart}
-              disabled={locked}
-              onChange={(v) => setInfo((s) => ({ ...s, amStart: v }))}
-            />
-            <span className="text-slate-400">–</span>
-            <TimeInput
-              value={info.amEnd}
-              disabled={locked}
-              onChange={(v) => setInfo((s) => ({ ...s, amEnd: v }))}
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <span className="w-14 text-slate-500">Chiều</span>
-            <TimeInput
-              value={info.pmStart}
-              disabled={locked}
-              onChange={(v) => setInfo((s) => ({ ...s, pmStart: v }))}
-            />
-            <span className="text-slate-400">–</span>
-            <TimeInput
-              value={info.pmEnd}
-              disabled={locked}
-              onChange={(v) => setInfo((s) => ({ ...s, pmEnd: v }))}
-            />
-          </div>
-        </div>
-
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Chức danh người phê duyệt">
             <input
-              className="input"
+              // Tự in hoa để file Word luôn đều một dạng, không phụ thuộc người nhập.
+              className="input uppercase"
               disabled={locked}
               placeholder="GIÁM ĐỐC XÍ NGHIỆP"
               value={info.approverTitle}
-              onChange={(e) => setInfo((v) => ({ ...v, approverTitle: e.target.value }))}
+              onChange={(e) =>
+                setInfo((v) => ({ ...v, approverTitle: e.target.value.toLocaleUpperCase('vi') }))
+              }
             />
           </Field>
           <Field label="Họ tên người phê duyệt">
@@ -236,27 +241,48 @@ export function AuditPlan({
         </div>
       </section>
 
-      {/* ============ Đại diện đơn vị ============ */}
-      <section className="card p-5">
-        <h2 className="mb-4 font-semibold">Đại diện đơn vị</h2>
-        {units.length === 0 ? (
-          <p className="text-sm text-slate-400">Chưa khai báo đơn vị nào ở bước chuẩn bị.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {units.map((u) => (
-              <li key={u.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-sm">
-                <span className="min-w-0 flex-1 font-medium">{u.name}</span>
-                <input
-                  className="input sm:w-64"
-                  disabled={locked}
-                  placeholder="Họ tên người đại diện"
-                  value={contacts[u.id] ?? ''}
-                  onChange={(e) => setContacts((c) => ({ ...c, [u.id]: e.target.value }))}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* ============ Khung giờ làm việc ============ */}
+      <section className="card space-y-4 p-5">
+        <h2 className="font-semibold">Khung giờ làm việc</h2>
+
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="w-14 text-slate-500">Sáng</span>
+          <TimeInput value={info.amStart} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, amStart: v }))} />
+          <span className="text-slate-400">–</span>
+          <TimeInput value={info.amEnd} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, amEnd: v }))} />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="w-14 text-slate-500">Chiều</span>
+          <TimeInput value={info.pmStart} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, pmStart: v }))} />
+          <span className="text-slate-400">–</span>
+          <TimeInput value={info.pmEnd} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, pmEnd: v }))} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Thời lượng họp khai mạc (phút)">
+            <input
+              type="number"
+              min={15}
+              step={15}
+              className="input"
+              disabled={locked}
+              value={info.openingMinutes}
+              onChange={(e) => setInfo((v) => ({ ...v, openingMinutes: Number(e.target.value) || 30 }))}
+            />
+          </Field>
+          <Field label="Thời lượng họp kết thúc (phút)">
+            <input
+              type="number"
+              min={15}
+              step={15}
+              className="input"
+              disabled={locked}
+              value={info.closingMinutes}
+              onChange={(e) => setInfo((v) => ({ ...v, closingMinutes: Number(e.target.value) || 90 }))}
+            />
+          </Field>
+        </div>
       </section>
 
       {/* ============ Lịch đánh giá ============ */}
@@ -265,15 +291,31 @@ export function AuditPlan({
           <h2 className="font-semibold">Lịch đánh giá</h2>
           {!locked && (
             <button onClick={autoGenerate} className="btn-ghost !py-1.5 text-sm">
-              Sinh lịch nháp tự động
+              Sinh lịch tự động
             </button>
           )}
-          {conflicts.size > 0 && (
-            <span className="chip bg-red-100 text-red-800 ring-transparent">
-              {conflicts.size} xung đột lịch
-            </span>
-          )}
         </div>
+
+        {genNote && (
+          <p
+            className={`mb-4 rounded-lg px-3 py-2.5 text-sm ${
+              genNote.startsWith('Quỹ') ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-900'
+            }`}
+          >
+            {genNote}
+          </p>
+        )}
+
+        {conflicts.messages.length > 0 && (
+          <div className="mb-4 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">
+            <p className="font-medium">Trùng lịch đánh giá viên:</p>
+            <ul className="mt-1 space-y-0.5">
+              {conflicts.messages.map((m, i) => (
+                <li key={i}>• {m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {unscheduled.length > 0 && (
           <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
@@ -282,109 +324,98 @@ export function AuditPlan({
         )}
 
         <div className="space-y-4">
-          {days.map((day, dayIndex) => (
-            <div key={day} className="rounded-lg border border-slate-200">
-              <p className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium">
-                Ngày {dayIndex + 1} — {formatDayLong(day)}
-              </p>
+          {days.map((day, dayIndex) => {
+            const inDay = sessions
+              .filter((s) => s.day === day)
+              .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
 
-              <div className="grid gap-px bg-slate-200 sm:grid-cols-2">
-                {(['AM', 'PM'] as Half[]).map((half) => {
-                  const inSlot = sessions.filter((s) => s.day === day && s.half === half);
-                  const hours =
-                    half === 'AM' ? `${info.amStart}–${info.amEnd}` : `${info.pmStart}–${info.pmEnd}`;
+            return (
+              <div key={day} className="rounded-lg border border-slate-200">
+                <p className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium">
+                  Ngày {dayIndex + 1} — {formatDayLong(day)}
+                </p>
 
-                  return (
-                    <div key={half} className="bg-white p-3">
-                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                        {HALF_LABELS[half]} · {hours}
-                      </p>
+                <ul className="divide-y divide-slate-100">
+                  {inDay.map((s) => {
+                    const ms = sessionMembers(s, unitMembers, allMemberIds);
+                    const bad = conflicts.ids.has(s.id);
+                    const badTime = toMinutes(s.endTime) <= toMinutes(s.startTime);
 
-                      <ul className="space-y-1.5">
-                        {inSlot.map((s) => {
-                          const unit = s.unitId ? unitById.get(s.unitId) : null;
-                          const memberIds = s.unitId ? unitMembers.get(s.unitId) ?? [] : [];
-                          const hasConflict = memberIds.some((m) =>
-                            conflicts.has(`${day}|${half}|${m}`),
-                          );
+                    return (
+                      <li
+                        key={s.id}
+                        className={`flex flex-wrap items-start gap-3 px-3 py-3 text-sm ${
+                          bad || badTime ? 'bg-red-50' : ''
+                        }`}
+                      >
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <TimeInput
+                            value={s.startTime}
+                            disabled={locked}
+                            onChange={(v) => patchSession(s.id, { startTime: v })}
+                          />
+                          <span className="text-slate-400">–</span>
+                          <TimeInput
+                            value={s.endTime}
+                            disabled={locked}
+                            onChange={(v) => patchSession(s.id, { endTime: v })}
+                          />
+                          <span className="w-16 text-xs text-slate-500">
+                            {durationLabel(s.startTime, s.endTime)}
+                          </span>
+                        </div>
 
-                          return (
-                            <li
-                              key={s.id}
-                              className={`rounded-md border px-2.5 py-2 text-sm ${
-                                hasConflict
-                                  ? 'border-red-300 bg-red-50'
-                                  : s.kind === 'UNIT'
-                                    ? 'border-slate-200'
-                                    : 'border-slate-200 bg-slate-50'
-                              }`}
+                        <div className="min-w-0 flex-1">
+                          {s.kind === 'UNIT' ? (
+                            <select
+                              value={s.unitId ?? ''}
+                              disabled={locked}
+                              onChange={(e) => patchSession(s.id, { unitId: e.target.value })}
+                              className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                             >
-                              <div className="flex items-start gap-2">
-                                <span className="min-w-0 flex-1">
-                                  <span className="font-medium">
-                                    {s.kind === 'UNIT' ? unit?.name ?? '(đơn vị đã xoá)' : KIND_LABELS[s.kind]}
-                                  </span>
-                                  {s.kind === 'UNIT' && (
-                                    <span className="mt-0.5 block text-xs text-slate-500">
-                                      {memberIds.length === 0
-                                        ? 'Chưa phân công đánh giá viên'
-                                        : memberIds
-                                            .map((m) => {
-                                              const i = members.findIndex((x) => x.id === m);
-                                              return i >= 0 ? shortNames[i] : '?';
-                                            })
-                                            .join(' · ')}
-                                    </span>
-                                  )}
-                                </span>
+                              {units.map((u) => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="font-medium">{KIND_LABELS[s.kind]}</span>
+                          )}
 
-                                {!locked && (
-                                  <button
-                                    onClick={() => removeSession(s.id)}
-                                    className="shrink-0 text-xs text-red-600 hover:underline"
-                                  >
-                                    Bỏ
-                                  </button>
-                                )}
-                              </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {ms.length === 0
+                              ? 'Chưa phân công đánh giá viên'
+                              : ms.map((m) => shortById.get(m) ?? '?').join(' · ')}
+                          </p>
+                        </div>
 
-                              {!locked && slots.length > 1 && (
-                                <select
-                                  value={`${s.day}|${s.half}`}
-                                  onChange={(e) => {
-                                    const [d, h] = e.target.value.split('|');
-                                    moveSession(s.id, d, h as Half);
-                                  }}
-                                  className="mt-1.5 w-full rounded border border-slate-300 px-1.5 py-1 text-xs"
-                                >
-                                  {slots.map((sl, i) => (
-                                    <option key={i} value={`${sl.day}|${sl.half}`}>
-                                      Chuyển tới: Ngày {days.indexOf(sl.day) + 1} — {HALF_LABELS[sl.half]}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </li>
-                          );
-                        })}
-
-                        {inSlot.length === 0 && (
-                          <li className="py-2 text-xs text-slate-400">Chưa có gì</li>
+                        {!locked && (
+                          <button
+                            onClick={() => removeSession(s.id)}
+                            className="shrink-0 text-xs text-red-600 hover:underline"
+                          >
+                            Bỏ
+                          </button>
                         )}
-                      </ul>
+                      </li>
+                    );
+                  })}
 
-                      {!locked && (
-                        <AddToSlot
-                          units={units}
-                          onAdd={(kind, unitId) => addSession(day, half, kind, unitId)}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+                  {inDay.length === 0 && (
+                    <li className="px-3 py-3 text-xs text-slate-400">Chưa có phiên nào</li>
+                  )}
+                </ul>
+
+                {!locked && (
+                  <div className="border-t border-slate-100 px-3 py-2">
+                    <AddSession
+                      units={units}
+                      onAdd={(kind, unitId) => addSession(day, kind, unitId)}
+                    />
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -405,7 +436,7 @@ export function AuditPlan({
 
 /* ------------------------------------------------------------------ */
 
-function AddToSlot({
+function AddSession({
   units, onAdd,
 }: {
   units: Unit[];
@@ -423,9 +454,9 @@ function AddToSlot({
         else onAdd(v as SessionKind, null);
         setValue('');
       }}
-      className="mt-2 w-full rounded border border-dashed border-slate-300 px-2 py-1.5 text-xs text-slate-500"
+      className="w-full rounded border border-dashed border-slate-300 px-2 py-1.5 text-xs text-slate-500"
     >
-      <option value="">+ Thêm vào buổi này…</option>
+      <option value="">+ Thêm phiên vào ngày này…</option>
       <optgroup label="Đơn vị">
         {units.map((u) => (
           <option key={u.id} value={`unit:${u.id}`}>{u.name}</option>
@@ -450,6 +481,7 @@ function TimeInput({
   return (
     <input
       type="time"
+      step={900} // bước 15 phút
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}

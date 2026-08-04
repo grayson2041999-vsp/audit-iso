@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { assignments, auditMembers, auditSessions, auditUnits } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
 import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
-import { HALF_LABELS, KIND_LABELS, formatDayLong, listDays, type Half } from '@/lib/plan';
+import { KIND_LABELS, formatDayLong, listDays, toMinutes } from '@/lib/plan';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -215,55 +215,43 @@ export async function GET(_req: Request, { params }: Ctx) {
     body.push(p('Chưa lập lịch đánh giá.', { italics: true }));
   } else {
     days.forEach((day, dayIndex) => {
+      const inDay = sessions
+        .filter((x) => x.day === day)
+        .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+
+      if (inDay.length === 0) return;
+
       const rows: TableRow[] = [
         new TableRow({
           tableHeader: true,
           children: [
-            cell('Thời gian', { bold: true, width: 16, shade: 'F1F5F9' }),
-            cell('Đơn vị / Nội dung', { bold: true, width: 34, shade: 'F1F5F9' }),
-            cell('Đánh giá viên', { bold: true, width: 28, shade: 'F1F5F9' }),
-            cell('Đại diện đơn vị', { bold: true, width: 22, shade: 'F1F5F9' }),
+            cell('Thời gian', { bold: true, width: 20, shade: 'F1F5F9' }),
+            cell('Đơn vị / Nội dung', { bold: true, width: 44, shade: 'F1F5F9' }),
+            cell('Đánh giá viên', { bold: true, width: 36, shade: 'F1F5F9' }),
           ],
         }),
+        ...inDay.map((x) => {
+          const unit = x.unitId ? unitById.get(x.unitId) : null;
+          // Phiên đơn vị: người được phân công. Phiên họp: cả đoàn.
+          const names =
+            x.kind === 'UNIT'
+              ? (x.unitId ? unitMembers.get(x.unitId) ?? [] : [])
+                  .map((m) => memberById.get(m)?.fullName)
+                  .filter(Boolean)
+                  .join('\n')
+              : members.map((m) => m.fullName).join('\n');
+
+          return new TableRow({
+            children: [
+              cell(`${x.startTime} – ${x.endTime}`),
+              cell(x.kind === 'UNIT' ? unit?.name ?? '—' : KIND_LABELS[x.kind], {
+                bold: x.kind !== 'UNIT',
+              }),
+              cell(names || '—'),
+            ],
+          });
+        }),
       ];
-
-      let hasAny = false;
-
-      for (const half of ['AM', 'PM'] as Half[]) {
-        const inSlot = sessions.filter((s) => s.day === day && s.half === half);
-        if (inSlot.length === 0) continue;
-        hasAny = true;
-
-        const hours =
-          half === 'AM' ? `${audit.amStart} – ${audit.amEnd}` : `${audit.pmStart} – ${audit.pmEnd}`;
-
-        inSlot.forEach((s, i) => {
-          const unit = s.unitId ? unitById.get(s.unitId) : null;
-          const names = s.unitId
-            ? (unitMembers.get(s.unitId) ?? [])
-                .map((m) => memberById.get(m)?.fullName)
-                .filter(Boolean)
-                .join('\n')
-            : members.map((m) => m.fullName).join('\n');
-
-          rows.push(
-            new TableRow({
-              children: [
-                // Chỉ ghi giờ ở dòng đầu của mỗi buổi, các dòng song song để trống
-                // cho khỏi lặp — nhìn ra ngay đâu là các việc cùng một buổi.
-                cell(i === 0 ? `${HALF_LABELS[half]}\n${hours}` : ''),
-                cell(s.kind === 'UNIT' ? unit?.name ?? '—' : KIND_LABELS[s.kind], {
-                  bold: s.kind !== 'UNIT',
-                }),
-                cell(names || '—'),
-                cell(s.kind === 'UNIT' ? unit?.contactPerson ?? '—' : '—'),
-              ],
-            }),
-          );
-        });
-      }
-
-      if (!hasAny) return;
 
       body.push(
         p(`Ngày ${dayIndex + 1} — ${formatDayLong(day)}`, { bold: true, after: 60 }),
@@ -300,8 +288,7 @@ export async function GET(_req: Request, { params }: Ctx) {
               right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
             },
             children: [
-              p('TRƯỞNG ĐOÀN ĐÁNH GIÁ', { bold: true, align: AlignmentType.CENTER, after: 60 }),
-              p('(Ký, ghi rõ họ tên)', { italics: true, size: 20, align: AlignmentType.CENTER, after: 700 }),
+              p('TRƯỞNG ĐOÀN ĐÁNH GIÁ', { bold: true, align: AlignmentType.CENTER, after: 800 }),
               p(audit.leadAuditor ?? '', { bold: true, align: AlignmentType.CENTER }),
             ],
           }),
@@ -314,10 +301,9 @@ export async function GET(_req: Request, { params }: Ctx) {
               right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
             },
             children: [
-              p(audit.approverTitle || 'NGƯỜI PHÊ DUYỆT', {
-                bold: true, align: AlignmentType.CENTER, after: 60,
+              p((audit.approverTitle || 'NGƯỜI PHÊ DUYỆT').toLocaleUpperCase('vi'), {
+                bold: true, align: AlignmentType.CENTER, after: 800,
               }),
-              p('(Ký, ghi rõ họ tên)', { italics: true, size: 20, align: AlignmentType.CENTER, after: 700 }),
               p(audit.approverName ?? '', { bold: true, align: AlignmentType.CENTER }),
             ],
           }),

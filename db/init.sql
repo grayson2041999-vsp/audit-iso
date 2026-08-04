@@ -18,10 +18,6 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE session_half AS ENUM ('AM','PM');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-DO $$ BEGIN
   CREATE TYPE session_kind AS ENUM ('OPENING','UNIT','INTERNAL','CLOSING');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 

@@ -33,9 +33,6 @@ export const findingStatusEnum = pgEnum('finding_status', [
   'SUBMITTED',
 ]);
 
-/** Buổi trong ngày — một phiên đánh giá kéo dài trọn một buổi. */
-export const sessionHalfEnum = pgEnum('session_half', ['AM', 'PM']);
-
 /**
  * Loại phiên trong chương trình đánh giá.
  *   OPENING  — họp khai mạc
@@ -97,6 +94,9 @@ export const audits = pgTable('audits', {
   amEnd: text('am_end').default('11:30').notNull(),
   pmStart: text('pm_start').default('13:30').notNull(),
   pmEnd: text('pm_end').default('17:00').notNull(),
+  /** Thời lượng hai cuộc họp cố định, dùng khi sinh lịch tự động. */
+  openingMinutes: integer('opening_minutes').default(30).notNull(),
+  closingMinutes: integer('closing_minutes').default(90).notNull(),
 
   standards: jsonb('standards').$type<string[]>().default([]).notNull(),
   leadAuditor: text('lead_auditor'),             // Tên trưởng đoàn ghi trên báo cáo
@@ -125,8 +125,6 @@ export const auditUnits = pgTable(
       .references(() => audits.id, { onDelete: 'cascade' })
       .notNull(),
     name: text('name').notNull(),
-    /** Đại diện đơn vị có mặt trong buổi đánh giá — in vào chương trình. */
-    contactPerson: text('contact_person'),
     note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -186,12 +184,12 @@ export const assignments = pgTable(
 /* ------------------------------------------------------------------ */
 
 /**
- * Một phiên = một buổi (sáng hoặc chiều) của một ngày.
+ * Một phiên có giờ bắt đầu và kết thúc cụ thể, không bó theo buổi.
  *
- * Trong cùng một buổi có thể có NHIỀU đơn vị song song, miễn là do các đánh
- * giá viên khác nhau phụ trách. Không lưu danh sách đánh giá viên ở đây —
- * người tham gia suy ra từ bảng `assignments` của chính đơn vị đó, nên phân
- * công đổi thì lịch tự đúng theo, không phải sửa hai nơi.
+ * Nhiều phiên chạy song song được, miễn do các đánh giá viên khác nhau phụ
+ * trách. Không lưu danh sách đánh giá viên ở đây — người tham gia suy ra từ
+ * bảng `assignments` của chính đơn vị đó, nên phân công đổi thì lịch tự đúng
+ * theo, không phải sửa hai nơi. Phiên khai mạc và kết thúc thì cả đoàn dự.
  */
 export const auditSessions = pgTable(
   'audit_sessions',
@@ -202,7 +200,9 @@ export const auditSessions = pgTable(
       .notNull(),
     /** Ngày diễn ra, dạng "YYYY-MM-DD" — không cần múi giờ vì đây là lịch làm việc. */
     day: text('day').notNull(),
-    half: sessionHalfEnum('half').notNull(),
+    /** Giờ dạng "HH:MM", luôn rơi vào mốc 15 phút khi sinh tự động. */
+    startTime: text('start_time').notNull(),
+    endTime: text('end_time').notNull(),
     kind: sessionKindEnum('kind').default('UNIT').notNull(),
     /** Chỉ có với phiên loại UNIT. */
     unitId: uuid('unit_id').references(() => auditUnits.id, { onDelete: 'cascade' }),
@@ -211,7 +211,7 @@ export const auditSessions = pgTable(
   },
   (t) => ({
     auditIdx: index('audit_sessions_audit_idx').on(t.auditId),
-    dayIdx: index('audit_sessions_day_idx').on(t.auditId, t.day, t.half),
+    dayIdx: index('audit_sessions_day_idx').on(t.auditId, t.day, t.startTime),
   }),
 );
 

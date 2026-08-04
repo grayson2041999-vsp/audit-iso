@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { auditSessions, auditUnits, audits } from '@/lib/schema';
+import { auditSessions, audits } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
 
 export const runtime = 'nodejs';
@@ -22,16 +22,16 @@ const schema = z.object({
   amEnd: z.string().regex(timeRe, 'Giờ không hợp lệ').optional(),
   pmStart: z.string().regex(timeRe, 'Giờ không hợp lệ').optional(),
   pmEnd: z.string().regex(timeRe, 'Giờ không hợp lệ').optional(),
-
-  /* --- Đại diện từng đơn vị --- */
-  contacts: z.array(z.object({ unitId: z.string().uuid(), contactPerson: z.string() })).optional(),
+  openingMinutes: z.number().int().min(15).max(480).optional(),
+  closingMinutes: z.number().int().min(15).max(480).optional(),
 
   /* --- Toàn bộ lịch, ghi đè --- */
   sessions: z
     .array(
       z.object({
         day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        half: z.enum(['AM', 'PM']),
+        startTime: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+        endTime: z.string().regex(timeRe, 'Giờ không hợp lệ'),
         kind: z.enum(['OPENING', 'UNIT', 'INTERNAL', 'CLOSING']),
         unitId: z.string().uuid().nullable(),
         note: z.string().nullable().optional(),
@@ -71,31 +71,19 @@ export async function PUT(req: Request, { params }: Ctx) {
         objectives: d.objectives ?? null,
         criteria: d.criteria ?? null,
         location: d.location ?? null,
-        approverTitle: d.approverTitle ?? null,
+        // In hoa ở máy chủ luôn, không tin mỗi phía trình duyệt.
+        approverTitle: d.approverTitle ? d.approverTitle.toLocaleUpperCase('vi') : null,
         approverName: d.approverName ?? null,
         ...(d.amStart ? { amStart: d.amStart } : {}),
         ...(d.amEnd ? { amEnd: d.amEnd } : {}),
         ...(d.pmStart ? { pmStart: d.pmStart } : {}),
         ...(d.pmEnd ? { pmEnd: d.pmEnd } : {}),
+        ...(d.openingMinutes ? { openingMinutes: d.openingMinutes } : {}),
+        ...(d.closingMinutes ? { closingMinutes: d.closingMinutes } : {}),
         updatedAt: new Date(),
       })
       .where(eq(audits.id, id));
 
-    if (d.contacts) {
-      const valid = await db
-        .select({ id: auditUnits.id })
-        .from(auditUnits)
-        .where(eq(auditUnits.auditId, id));
-      const validIds = new Set(valid.map((u) => u.id));
-
-      for (const c of d.contacts) {
-        if (!validIds.has(c.unitId)) continue;
-        await db
-          .update(auditUnits)
-          .set({ contactPerson: c.contactPerson.trim() || null })
-          .where(eq(auditUnits.id, c.unitId));
-      }
-    }
 
     if (d.sessions) {
       // Lịch là một khối thống nhất, không có khoá tự nhiên để đối chiếu từng
@@ -107,7 +95,8 @@ export async function PUT(req: Request, { params }: Ctx) {
           d.sessions.map((s) => ({
             auditId: id,
             day: s.day,
-            half: s.half,
+            startTime: s.startTime,
+            endTime: s.endTime,
             kind: s.kind,
             unitId: s.kind === 'UNIT' ? s.unitId : null,
             note: s.note ?? null,

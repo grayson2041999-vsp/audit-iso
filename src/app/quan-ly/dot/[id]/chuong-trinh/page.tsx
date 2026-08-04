@@ -32,7 +32,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       .select()
       .from(auditSessions)
       .where(eq(auditSessions.auditId, id))
-      .orderBy(asc(auditSessions.day)),
+      .orderBy(asc(auditSessions.day), asc(auditSessions.startTime)),
   ]);
 
   const days = listDays(audit.startDate, audit.endDate);
@@ -50,7 +50,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         auditId={id}
         days={days}
         locked={audit.status === 'CLOSED'}
-        units={units.map((u) => ({ id: u.id, name: u.name, contactPerson: u.contactPerson }))}
+        units={units.map((u) => ({ id: u.id, name: u.name }))}
         members={members.map((m) => ({ id: m.id, fullName: m.fullName }))}
         assignments={links.map((l) => `${l.memberId}:${l.unitId}`)}
         initialInfo={{
@@ -65,12 +65,15 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           amEnd: audit.amEnd,
           pmStart: audit.pmStart,
           pmEnd: audit.pmEnd,
+          openingMinutes: audit.openingMinutes,
+          closingMinutes: audit.closingMinutes,
         }}
         initialSessions={sessions.map(
           (s): PlanSession => ({
             id: s.id,
             day: s.day,
-            half: s.half,
+            startTime: s.startTime,
+            endTime: s.endTime,
             kind: s.kind,
             unitId: s.unitId,
             note: s.note,
