@@ -19,8 +19,6 @@ type Props = {
   defaultStandards: StandardCode[];
 };
 
-const EXAMPLE = `Kho vật tư tầng 1: kiểm tra 8 bình chữa cháy, thấy 3 bình (BCC-04, BCC-07, BCC-11) tem kiểm định hết hạn từ 02/2026. Hỏi thủ kho thì không xuất trình được sổ theo dõi kiểm tra hàng tháng 6 tháng gần đây. Thủ tục QT-PCCC-01 mục 5.3 yêu cầu kiểm tra hàng tháng và ghi sổ.`;
-
 export function FindingEntry({
   auditId, unitId, unitName, memberName, defaultStandards,
 }: Props) {
@@ -31,7 +29,6 @@ export function FindingEntry({
     defaultStandards.length ? defaultStandards : ['ISO9001'],
   );
   const [area, setArea] = useState('');
-  const [process, setProcess] = useState('');
   const [images, setImages] = useState<UploadedImage[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -63,12 +60,11 @@ export function FindingEntry({
       const raw = window.localStorage.getItem(storageKey);
       if (!raw) return;
       const saved = JSON.parse(raw) as {
-        rawText?: string; area?: string; process?: string; standards?: StandardCode[];
+        rawText?: string; area?: string; standards?: StandardCode[];
       };
       if (saved.rawText?.trim()) {
         setRawText(saved.rawText);
         setArea(saved.area ?? '');
-        setProcess(saved.process ?? '');
         if (saved.standards?.length) setStandards(saved.standards);
         setRestored(true);
       }
@@ -81,10 +77,10 @@ export function FindingEntry({
     if (!loadedRef.current) return;
     const t = setTimeout(() => {
       try {
-        if (rawText.trim() || area.trim() || process.trim()) {
+        if (rawText.trim() || area.trim()) {
           window.localStorage.setItem(
             storageKey,
-            JSON.stringify({ rawText, area, process, standards }),
+            JSON.stringify({ rawText, area, standards }),
           );
         } else {
           window.localStorage.removeItem(storageKey);
@@ -94,7 +90,7 @@ export function FindingEntry({
       }
     }, 800);
     return () => clearTimeout(t);
-  }, [rawText, area, process, standards, storageKey]);
+  }, [rawText, area, standards, storageKey]);
 
   function clearDraftCache() {
     try {
@@ -120,7 +116,7 @@ export function FindingEntry({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rawText, standards, area, process,
+          rawText, standards, area,
           auditee: unitName,
           auditorName: memberName,
           imageKeys: images.map((i) => i.key),
@@ -148,7 +144,7 @@ export function FindingEntry({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           unitId,
-          rawText, standards, area, process,
+          rawText, standards, area,
           dueDate: dueDate || null,
           ai: result,
           images: images.map((i) => ({
@@ -178,7 +174,7 @@ export function FindingEntry({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           unitId,
-          rawText, standards, area, process,
+          rawText, standards, area,
           images: images.map((i) => ({
             key: i.key, fileName: i.fileName, contentType: i.contentType, size: i.size,
           })),
@@ -203,9 +199,6 @@ export function FindingEntry({
       {/* ---------------- Cột trái: nhập liệu ---------------- */}
       <section className="card p-5">
         <h2 className="mb-1 text-lg font-semibold">1. Ghi nhận tại hiện trường</h2>
-        <p className="mb-4 text-sm text-slate-500">
-          Viết tự nhiên, gạch đầu dòng cũng được. AI sẽ chuẩn hoá theo cấu trúc R–N–E của ISO.
-        </p>
         {restored && (
           <p className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
             <span className="flex-1">Đã khôi phục nội dung bạn gõ dở lần trước.</span>
@@ -213,7 +206,6 @@ export function FindingEntry({
               onClick={() => {
                 setRawText('');
                 setArea('');
-                setProcess('');
                 setRestored(false);
                 clearDraftCache();
               }}
@@ -252,47 +244,47 @@ export function FindingEntry({
         </div>
 
         <div className="mb-4">
-          <div className="mb-1.5 flex items-baseline justify-between">
-            <label className="label !mb-0">Nội dung ghi nhận *</label>
-            <button
-              type="button"
-              onClick={() => setRawText(EXAMPLE)}
-              className="text-xs text-brand-600 hover:underline"
-            >
-              Dùng ví dụ mẫu
-            </button>
-          </div>
+          <label className="label">Nội dung ghi nhận *</label>
           <textarea
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             rows={9}
             className="input font-normal"
-            placeholder="VD: Kiểm tra khu vực kho hoá chất, thấy 2 thùng dung môi không có nhãn nhận diện, không có MSDS tại chỗ…"
+            placeholder="Mô tả điều bạn quan sát được tại hiện trường…"
           />
-          <p className="mt-1 text-xs text-slate-400">
-            Mẹo: nêu càng cụ thể số hiệu tài liệu, mã thiết bị, ngày tháng, số mẫu kiểm tra thì finding càng chặt chẽ.
-          </p>
+          {/*
+            Cố ý viết trung tính, KHÔNG dùng những từ như "bất thường" hay "sai
+            quy định": hướng dẫn nghiêng về vi phạm sẽ đẩy đánh giá viên vào tâm
+            thế săn lỗi, và những gì đáng ghi nhận dưới dạng OFI hay điểm mạnh sẽ
+            bị bỏ qua. Chỉ ép chặt phần QUAN SÁT — phần chung của mọi loại finding.
+          */}
+          <div className="mt-2 flex gap-2.5 rounded-lg bg-amber-50 px-3 py-2.5">
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-500"
+              aria-hidden
+            >
+              <path d="M10 1a6 6 0 0 0-3.4 10.94c.35.24.57.6.63 1l.1.62c.06.37.38.64.75.64h3.84c.37 0 .69-.27.75-.64l.1-.62c.06-.4.28-.76.63-1A6 6 0 0 0 10 1Z" />
+              <path d="M7.5 16.5a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75ZM8.5 18.5a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75Z" />
+            </svg>
+            <p className="text-sm text-amber-900">
+              <strong>Ghi nhận càng cụ thể, finding càng chặt chẽ.</strong> Nêu rõ: kiểm tra
+              ở đâu, khi nào · đối tượng và số lượng đã xem xét (mã thiết bị, số hiệu tài liệu,
+              số mẫu) · quan sát được điều gì · nếu có liên quan tới quy định hay thủ tục nào
+              thì nêu tên.
+            </p>
+          </div>
         </div>
 
-        <div className="mb-4 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label">Nơi phát hiện</label>
-            <input
-              className="input"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              placeholder="Kho vật tư tầng 1"
-            />
-          </div>
-          <div>
-            <label className="label">Quá trình liên quan</label>
-            <input
-              className="input"
-              value={process}
-              onChange={(e) => setProcess(e.target.value)}
-              placeholder="Quản lý PCCC"
-            />
-          </div>
+        <div className="mb-4">
+          <label className="label">Nơi phát hiện</label>
+          <input
+            className="input"
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+            placeholder="Kho vật tư tầng 1"
+          />
         </div>
 
         <div className="mb-5">

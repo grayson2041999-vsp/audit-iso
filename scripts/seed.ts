@@ -41,7 +41,6 @@ async function main() {
     rawText:
       'Kho vật tư tầng 1: kiểm tra 8 bình chữa cháy, 3 bình (BCC-04, BCC-07, BCC-11) tem kiểm định hết hạn từ 02/2026. Thủ kho không xuất trình được sổ theo dõi kiểm tra hàng tháng 6 tháng gần đây.',
     rawArea: 'Kho vật tư tầng 1',
-    rawProcess: 'Quản lý PCCC',
     auditorName: 'Nguyễn Văn A',
     standards: ['ISO45001'],
     title: 'Bình chữa cháy hết hiệu lực kiểm định và thiếu hồ sơ kiểm tra định kỳ',

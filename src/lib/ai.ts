@@ -49,7 +49,9 @@ async function loadImageBlocks(keys: string[]): Promise<ImageBlock[]> {
 const FINDING_TOOL: Anthropic.Tool = {
   name: 'ghi_nhan_finding',
   description:
-    'Ghi nhận finding đã được chuẩn hoá theo cấu trúc Yêu cầu – Sự không phù hợp – Bằng chứng khách quan của ISO.',
+    'Ghi nhận finding đã được chuẩn hoá theo chuẩn ISO. Khuôn phát biểu đổi theo mức độ: ' +
+    'MAJOR/MINOR theo cấu trúc R–N–E, OBS theo hướng dấu hiệu suy giảm, ' +
+    'OFI theo hướng tiềm năng cải tiến, CONF theo hướng thực hành tốt.',
   input_schema: {
     type: 'object',
     properties: {
@@ -59,10 +61,18 @@ const FINDING_TOOL: Anthropic.Tool = {
         enum: ['MAJOR', 'MINOR', 'OBS', 'OFI', 'CONF'],
         description: 'Mức độ phân loại finding',
       },
-      severityRationale: { type: 'string', description: '1–2 câu giải thích vì sao xếp mức này' },
+      severityRationale: {
+        type: 'string',
+        description:
+          '1–2 câu giải thích vì sao xếp mức này. Nếu ghi nhận không mô tả vi phạm yêu cầu nào ' +
+          'thì phải xếp OBS/OFI/CONF, tuyệt đối không nống lên MINOR cho hợp khuôn',
+      },
       clauses: {
         type: 'array',
-        description: 'Điều khoản viện dẫn, đặt điều khoản phù hợp nhất ở đầu',
+        description:
+          'Điều khoản viện dẫn, đặt điều khoản phù hợp nhất ở đầu. Với MAJOR/MINOR là điều ' +
+          'khoản BỊ VI PHẠM; với OBS là điều khoản có NGUY CƠ vi phạm nếu không xử lý; ' +
+          'với OFI/CONF là điều khoản LIÊN QUAN tới thực hành đang xét, không mang nghĩa vi phạm',
         items: {
           type: 'object',
           properties: {
@@ -84,10 +94,15 @@ const FINDING_TOOL: Anthropic.Tool = {
       statement: {
         type: 'string',
         description:
-          'Phát biểu finding hoàn chỉnh dùng trực tiếp trong báo cáo, 3–6 câu, BẮT BUỘC đủ ba ' +
-          'thành phần theo đúng thứ tự: (1) bằng chứng khách quan quan sát ở đâu, khi nào; ' +
-          '(2) điều này không phù hợp với yêu cầu nào của tiêu chuẩn/thủ tục nào; ' +
-          '(3) bản chất sai lệch. Không nêu nguyên nhân gốc, không đề xuất giải pháp',
+          'Phát biểu finding hoàn chỉnh dùng trực tiếp trong báo cáo, 3–6 câu. Khuôn viết PHẢI ' +
+          'khớp với mức độ đã chọn: ' +
+          'MAJOR/MINOR = [bằng chứng] → [không phù hợp với yêu cầu nào] → [bản chất sai lệch]. ' +
+          'OBS = [bằng chứng] → [dấu hiệu suy giảm] → [nguy cơ trở thành không phù hợp ở điều ' +
+          'khoản nào nếu không theo dõi]; KHÔNG viết "không phù hợp với yêu cầu". ' +
+          'OFI = [thực hành hiện tại kèm bằng chứng, khẳng định rõ là ĐÃ PHÙ HỢP] → [chỗ còn dư ' +
+          'địa nâng cao hiệu lực/hiệu quả]. ' +
+          'CONF = [thực hành tốt kèm bằng chứng] → [vì sao đáng nhân rộng]. ' +
+          'Với mọi loại: không nêu nguyên nhân gốc, không đề xuất giải pháp cụ thể',
       },
       imageNotes: {
         type: 'array',
@@ -113,7 +128,6 @@ export async function standardizeFinding(input: {
   rawText: string;
   standards: StandardCode[];
   area?: string;
-  process?: string;
   auditee?: string;
   auditorName?: string;
   imageKeys?: string[];

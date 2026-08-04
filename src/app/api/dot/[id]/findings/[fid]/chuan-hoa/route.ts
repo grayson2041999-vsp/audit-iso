@@ -49,7 +49,6 @@ export async function POST(_req: Request, { params }: Ctx) {
       rawText: row.rawText,
       standards: row.standards as StandardCode[],
       area: row.rawArea ?? undefined,
-      process: row.rawProcess ?? undefined,
       auditee: row.auditee ?? undefined,
       auditorName: row.auditorName ?? undefined,
       imageKeys: imgs.map((i) => i.key),

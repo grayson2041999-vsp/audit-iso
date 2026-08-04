@@ -175,7 +175,6 @@ export const findings = pgTable(
     /* --- Input thô của auditor --- */
     rawText: text('raw_text').notNull(),
     rawArea: text('raw_area'),                   // Nơi phát hiện (vị trí cụ thể)
-    rawProcess: text('raw_process'),             // Quá trình liên quan
     /**
      * `auditee` và `auditorName` giữ lại làm BẢN CHỤP tên tại thời điểm ghi nhận.
      * Nhờ vậy báo cáo cũ vẫn đọc được nguyên vẹn kể cả khi đơn vị bị đổi tên hoặc

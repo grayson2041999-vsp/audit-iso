@@ -65,7 +65,6 @@ export async function POST(req: Request, { params }: Ctx) {
         status: 'DRAFT',
         rawText: d.rawText,
         rawArea: d.area ?? null,
-        rawProcess: d.process ?? null,
         // Bản chụp tên tại thời điểm ghi nhận — báo cáo cũ vẫn đọc được
         // kể cả khi đơn vị đổi tên hoặc đánh giá viên bị xoá khỏi đợt.
         auditee: unit?.name ?? null,

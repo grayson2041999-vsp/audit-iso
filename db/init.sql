@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS findings (
 
   raw_text          text NOT NULL,
   raw_area          text,
-  raw_process       text,
   auditee           text,
   auditor_name      text,
   observed_at       timestamptz,
