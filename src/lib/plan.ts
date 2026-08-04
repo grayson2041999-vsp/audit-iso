@@ -26,8 +26,15 @@ export type PlanSession = {
 
 /** Bước làm tròn mọi mốc giờ khi sinh lịch tự động. */
 export const STEP = 15;
+/**
+ * Bước khi trưởng đoàn tự kéo. Nhỏ hơn STEP vì lịch tự sinh cần số tròn để đọc
+ * trong file Word, còn kéo tay thì cần chỉnh được sát thực tế.
+ */
+export const MANUAL_STEP = 5;
 /** Sàn thời lượng một phiên. Chạm sàn thì báo là không đủ thời gian. */
 export const MIN_SESSION = 60;
+/** Sàn khi kéo tay — thấp hơn MIN_SESSION vì đây là lựa chọn có ý thức của người dùng. */
+export const MIN_MANUAL = 15;
 
 /* ------------------------------------------------------------------ */
 /* Giờ                                                                 */
@@ -176,6 +183,140 @@ export function checkWorkingHours(
 }
 
 /* ------------------------------------------------------------------ */
+/* Kéo thả: vùng cấm và vị trí hợp lệ                                   */
+/* ------------------------------------------------------------------ */
+
+/** Một khoảng thời gian trong ngày, tính bằng phút kể từ nửa đêm. */
+export type Span = { start: number; end: number };
+
+/** Làm tròn về mốc 5 phút gần nhất. */
+export const snapManual = (m: number) => Math.round(m / MANUAL_STEP) * MANUAL_STEP;
+
+/** Gộp các khoảng chồng hoặc chạm nhau thành danh sách rời rạc, đã sắp xếp. */
+function mergeSpans(spans: Span[]): Span[] {
+  const sorted = spans.filter((s) => s.end > s.start).sort((a, b) => a.start - b.start);
+  const out: Span[] = [];
+  for (const s of sorted) {
+    const last = out[out.length - 1];
+    if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
+    else out.push({ ...s });
+  }
+  return out;
+}
+
+/**
+ * Hai phiên có được phép chồng giờ không.
+ *
+ * Cấm khi: một trong hai là cuộc họp (cả đoàn dự nên không ai đi đâu được),
+ * hoặc cùng một đơn vị (không thể đánh giá chính nó hai lần cùng lúc), hoặc có
+ * chung ít nhất một đánh giá viên.
+ */
+function clashes(
+  a: Pick<PlanSession, 'kind' | 'unitId'>,
+  b: Pick<PlanSession, 'kind' | 'unitId'>,
+  unitMembers: Map<string, string[]>,
+) {
+  if (a.kind !== 'UNIT' || b.kind !== 'UNIT') return true;
+  if (a.unitId && a.unitId === b.unitId) return true;
+
+  const ma = a.unitId ? unitMembers.get(a.unitId) ?? [] : [];
+  const mb = b.unitId ? unitMembers.get(b.unitId) ?? [] : [];
+  return ma.some((x) => mb.includes(x));
+}
+
+/**
+ * Những khoảng giờ mà phiên `self` không được chạm vào, trong đúng ngày của nó.
+ *
+ * Gồm giờ nghỉ trưa và mọi phiên khác xung khắc với nó. Nhờ luật "cuộc họp là
+ * tường với tất cả" mà họp khai mạc và họp kết thúc không cần luật riêng.
+ */
+export function blockedSpans(input: {
+  self: Pick<PlanSession, 'id' | 'day' | 'kind' | 'unitId'>;
+  sessions: PlanSession[];
+  hours: Pick<Hours, 'amEnd' | 'pmStart'>;
+  unitMembers: Map<string, string[]>;
+}): Span[] {
+  const { self, sessions, hours, unitMembers } = input;
+
+  const spans: Span[] = [];
+
+  const lunchStart = toMinutes(hours.amEnd);
+  const lunchEnd = toMinutes(hours.pmStart);
+  if (lunchEnd > lunchStart) spans.push({ start: lunchStart, end: lunchEnd });
+
+  for (const s of sessions) {
+    if (s.id === self.id || s.day !== self.day) continue;
+    if (!clashes(self, s, unitMembers)) continue;
+    spans.push({ start: toMinutes(s.startTime), end: toMinutes(s.endTime) });
+  }
+
+  return mergeSpans(spans);
+}
+
+/** Phần còn lại của ngày làm việc sau khi trừ hết vùng cấm. */
+export function freeSpans(blocked: Span[], hours: Pick<Hours, 'amStart' | 'pmEnd'>): Span[] {
+  const dayStart = toMinutes(hours.amStart);
+  const dayEnd = toMinutes(hours.pmEnd);
+
+  const out: Span[] = [];
+  let cursor = dayStart;
+  for (const b of mergeSpans(blocked)) {
+    if (b.start > cursor) out.push({ start: cursor, end: Math.min(b.start, dayEnd) });
+    cursor = Math.max(cursor, b.end);
+    if (cursor >= dayEnd) break;
+  }
+  if (cursor < dayEnd) out.push({ start: cursor, end: dayEnd });
+
+  return out.filter((s) => s.end > s.start);
+}
+
+/**
+ * Mốc bắt đầu hợp lệ gần `wanted` nhất cho một phiên dài `duration`.
+ *
+ * Đây là thứ làm nên cảm giác "chặn cứng": khối đi theo chuột tới sát mép vùng
+ * cấm rồi dừng lại ở đó thay vì nhảy vọt qua. Trả về null khi không còn chỗ nào
+ * chứa nổi phiên dài như vậy.
+ */
+export function nearestStart(wanted: number, duration: number, free: Span[]): number | null {
+  const fits = free.filter((f) => f.end - f.start >= duration);
+  if (fits.length === 0) return null;
+
+  const target = snapManual(wanted);
+  let best: number | null = null;
+  let bestDist = Infinity;
+
+  for (const f of fits) {
+    const s = Math.min(Math.max(target, f.start), f.end - duration);
+    const dist = Math.abs(s - target);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = s;
+    }
+  }
+  return best;
+}
+
+/**
+ * Khoảng mà mép đang kéo được phép chạy tới, khi mép kia đứng yên tại `fixed`.
+ * `side` là mép ĐANG kéo.
+ */
+export function resizeLimit(
+  fixed: number,
+  side: 'start' | 'end',
+  free: Span[],
+): Span | null {
+  const home =
+    side === 'end'
+      ? free.find((f) => f.start <= fixed && fixed < f.end)
+      : free.find((f) => f.start < fixed && fixed <= f.end);
+  if (!home) return null;
+
+  return side === 'end'
+    ? { start: fixed + MIN_MANUAL, end: home.end }
+    : { start: home.start, end: fixed - MIN_MANUAL };
+}
+
+/* ------------------------------------------------------------------ */
 /* Quỹ thời gian                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -226,6 +367,10 @@ export type Capacity = {
   perUnitMinutes: number;
   /** Dưới sàn MIN_SESSION — quỹ thời gian không đủ. */
   atFloor: boolean;
+  /** Bị trần buổi dài nhất cắt bớt — quỹ còn dư, lịch sẽ có chỗ trống. */
+  capped: boolean;
+  /** Độ dài buổi làm việc dài nhất, phút. Không phiên nào dài hơn con số này. */
+  longestWindow: number;
   unitCount: number;
   dayCount: number;
 };
@@ -265,12 +410,30 @@ export function computeCapacity(input: {
 
   const raw = divisor > 0 ? floorStep(availableMinutes / divisor) : 0;
 
+  /**
+   * Trần bằng buổi làm việc dài nhất.
+   *
+   * Không có trần thì phép chia cho ra những con số đúng mà vô dụng: 3 đơn vị
+   * giao cho 3 người, mỗi người một đơn vị, số vòng bằng 1, thế là mỗi đơn vị
+   * "được" trọn cả quỹ hai ngày. Không buổi nào chứa nổi nên thuật toán bỏ hết
+   * và trưởng đoàn mở tab ra thấy lịch trắng.
+   *
+   * Một phiên không thể vắt qua giờ nghỉ trưa hay sang ngày hôm sau, nên buổi
+   * dài nhất chính là giới hạn vật lý. Phần quỹ dôi ra thành chỗ trống trong
+   * lịch — đúng bản chất, và trưởng đoàn tự quyết dùng vào việc gì.
+   */
+  const longestWindow = windows.reduce((mx, w) => Math.max(mx, w.end - w.start), 0);
+  const capped = raw > longestWindow && longestWindow > 0;
+  const perUnitMinutes = Math.max(0, capped ? floorStep(longestWindow) : raw);
+
   return {
     availableMinutes,
     mode,
     divisor,
-    perUnitMinutes: Math.max(0, raw),
-    atFloor: divisor > 0 && raw < MIN_SESSION,
+    perUnitMinutes,
+    atFloor: divisor > 0 && perUnitMinutes < MIN_SESSION,
+    capped,
+    longestWindow,
     unitCount: units.length,
     dayCount: days.length,
   };
@@ -409,11 +572,20 @@ export function generateTimedPlan(input: {
 
       let done = false;
       for (const w of windows) {
-        for (let t = ceilStep(w.start); t + per <= w.end; t += STEP) {
-          if (ms.length > 0 && !free(w.day, t, t + per, ms)) continue;
-          placed.push({ day: w.day, start: t, end: t + per, members: ms });
+        /**
+         * Buổi ngắn hơn thời lượng chuẩn vẫn dùng được, chỉ là phiên ngắn lại.
+         * Nếu đòi buổi nào cũng phải đủ `per` thì một buổi sáng 3 tiếng bị bỏ
+         * trống chỉ vì chuẩn là 3 tiếng rưỡi, rồi cả đoàn dồn hết vào buổi
+         * chiều — sớm hơn bao giờ cũng tốt hơn cho lịch đánh giá.
+         */
+        const dur = Math.min(per, w.end - w.start);
+        if (dur < Math.min(per, MIN_SESSION)) continue;
+
+        for (let t = ceilStep(w.start); t + dur <= w.end; t += STEP) {
+          if (ms.length > 0 && !free(w.day, t, t + dur, ms)) continue;
+          placed.push({ day: w.day, start: t, end: t + dur, members: ms });
           out.push({
-            day: w.day, startTime: toHHMM(t), endTime: toHHMM(t + per),
+            day: w.day, startTime: toHHMM(t), endTime: toHHMM(t + dur),
             kind: 'UNIT', unitId: u.id, note: null,
           });
           done = true;

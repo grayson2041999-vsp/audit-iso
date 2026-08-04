@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
 import { PlanCalculator } from './PlanCalculator';
 import { ScheduleGrid } from './ScheduleGrid';
+import { UnitPalette } from './UnitPalette';
 import {
-  KIND_LABELS, checkWorkingHours, durationLabel, findTimeConflicts,
-  generateTimedPlan, toHHMM, toMinutes,
+  KIND_LABELS, MIN_MANUAL, blockedSpans, checkWorkingHours, computeCapacity, durationLabel,
+  findTimeConflicts, freeSpans, generateTimedPlan, nearestStart, toHHMM, toMinutes,
   type Hours, type PlanSession, type SessionKind,
 } from '@/lib/plan';
 
@@ -54,6 +55,14 @@ export function AuditPlan({
 
   const [info, setInfo] = useState<PlanInfo>(initialInfo);
   const [genNote, setGenNote] = useState<string | null>(null);
+  /** Đơn vị đang được nhấc lên từ kho, để lưới làm sáng dòng đích. */
+  const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
+  /**
+   * Thời lượng mặc định cho phiên mới. null nghĩa là dùng con số hệ thống tự
+   * tính — giữ null thay vì chép giá trị vào state để nó tự đúng theo khi
+   * trưởng đoàn sửa giờ làm việc hoặc thêm ngày.
+   */
+  const [targetOverride, setTargetOverride] = useState<number | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,11 +135,29 @@ export function AuditPlan({
   const minutesPerDay =
     toMinutes(info.amEnd) - toMinutes(info.amStart) + (toMinutes(info.pmEnd) - toMinutes(info.pmStart));
 
-  const scheduledUnitIds = useMemo(
-    () => new Set(sessions.filter((s) => s.kind === 'UNIT' && s.unitId).map((s) => s.unitId!)),
-    [sessions],
+  const capacity = useMemo(
+    () => computeCapacity({ days, hours: info, units, unitMembers }),
+    [days, info, units, unitMembers],
   );
-  const unscheduled = units.filter((u) => !scheduledUnitIds.has(u.id));
+
+  /** Thời lượng nên dành cho mỗi đơn vị — hệ thống tính, trưởng đoàn đè lên được. */
+  const targetMinutes = targetOverride ?? capacity.perUnitMinutes;
+
+  /**
+   * Đã xếp bao nhiêu phút cho từng đơn vị. Một đơn vị có thể tách làm nhiều
+   * phiên nên phải cộng dồn, không thể đếm khối.
+   */
+  const allocated = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of sessions) {
+      if (s.kind !== 'UNIT' || !s.unitId) continue;
+      const mins = toMinutes(s.endTime) - toMinutes(s.startTime);
+      map.set(s.unitId, (map.get(s.unitId) ?? 0) + Math.max(0, mins));
+    }
+    return map;
+  }, [sessions]);
+
+  const unscheduled = units.filter((u) => !allocated.has(u.id));
 
   /** Lưới không đủ chỗ hiện chữ, nên gom lỗi giờ giấc thành danh sách bên dưới. */
   const hoursIssues = useMemo(() => {
@@ -158,25 +185,42 @@ export function AuditPlan({
     setSessions((prev) => prev.filter((s) => s.id !== id));
   }
 
-  function addSession(day: string, kind: SessionKind, unitId: string | null) {
-    // Nối tiếp phiên cuối cùng trong ngày, mặc định 90 phút.
-    const sameDay = sessions.filter((s) => s.day === day);
-    const lastEnd = sameDay.length
-      ? sameDay.reduce((mx, s) => Math.max(mx, toMinutes(s.endTime)), 0)
-      : toMinutes(info.amStart);
-    const start = Math.min(lastEnd, toMinutes(info.pmEnd) - 90);
-    const hh = (m: number) =>
-      `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const newId = () => `tam-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  /** Phiên thả từ kho xuống — lưới đã tính sẵn giờ hợp lệ. */
+  function createSession(day: string, unitId: string, startTime: string, endTime: string) {
+    setSessions((prev) => [
+      ...prev,
+      { id: newId(), day, startTime, endTime, kind: 'UNIT', unitId, note: null },
+    ]);
+  }
+
+  /**
+   * Thêm một cuộc họp. Trước đây hàm này xếp mù ngay sau phiên cuối trong ngày,
+   * nên thêm vào ngày cuối là rơi đúng vào họp kết thúc. Giờ nó đi tìm chỗ
+   * trống thật, theo cùng bộ luật với thao tác kéo.
+   */
+  function addMeeting(day: string, kind: SessionKind) {
+    const self = { id: '__moi__', day, kind, unitId: null };
+    const free = freeSpans(blockedSpans({ self, sessions, hours: info, unitMembers }), info);
+
+    const widest = free.reduce((mx, f) => Math.max(mx, f.end - f.start), 0);
+    const dur = Math.max(MIN_MANUAL, Math.min(60, widest));
+    const start = nearestStart(toMinutes(info.amStart), dur, free);
+    if (start === null) {
+      setError(`Ngày này không còn chỗ trống cho ${KIND_LABELS[kind].toLowerCase()}.`);
+      return;
+    }
 
     setSessions((prev) => [
       ...prev,
       {
-        id: `tam-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        id: newId(),
         day,
-        startTime: hh(Math.max(0, start)),
-        endTime: hh(Math.max(90, start + 90)),
+        startTime: toHHMM(start),
+        endTime: toHHMM(start + dur),
         kind,
-        unitId,
+        unitId: null,
         note: null,
       },
     ]);
@@ -353,6 +397,17 @@ export function AuditPlan({
         busiestRounds={busiestRounds}
       />
 
+      <UnitPalette
+        units={units}
+        targetMinutes={targetMinutes}
+        allocated={allocated}
+        unitMembers={unitMembers}
+        shortById={shortById}
+        locked={locked}
+        onDragStart={setDraggingUnitId}
+        onDragEnd={() => setDraggingUnitId(null)}
+      />
+
       {/* ============ Lịch đánh giá ============ */}
       <section className="card p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -361,6 +416,28 @@ export function AuditPlan({
             <button onClick={autoGenerate} className="btn-ghost !py-1.5 text-sm">
               Tính lại lịch
             </button>
+          )}
+          {!locked && (
+            <label className="flex items-center gap-2 text-sm text-slate-500">
+              Mỗi đơn vị
+              <input
+                type="number"
+                min={MIN_MANUAL}
+                step={5}
+                value={targetMinutes}
+                onChange={(e) => setTargetOverride(Math.max(MIN_MANUAL, Number(e.target.value) || MIN_MANUAL))}
+                className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+              />
+              phút
+              {targetOverride !== null && (
+                <button
+                  onClick={() => setTargetOverride(null)}
+                  className="text-xs text-brand-600 hover:underline"
+                >
+                  về mức tự tính
+                </button>
+              )}
+            </label>
           )}
           {neverSaved && (
             <span className="chip bg-slate-100 text-slate-600 ring-transparent">
@@ -371,6 +448,15 @@ export function AuditPlan({
 
         {drift && (
           <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">{drift}</p>
+        )}
+
+        {capacity.capped && (
+          <p className="mb-4 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+            Quỹ thời gian chia ra còn dư. Một phiên không thể vắt qua giờ nghỉ trưa hay sang
+            ngày hôm sau, nên mỗi đơn vị lấy tối đa{' '}
+            <strong>{durationLabel('00:00', toHHMM(capacity.longestWindow))}</strong> — đúng bằng
+            buổi làm việc dài nhất. Phần dôi ra để trống trong lịch, bạn dùng vào việc gì tuỳ ý.
+          </p>
         )}
 
         {genNote && (
@@ -409,13 +495,16 @@ export function AuditPlan({
           unitMembers={unitMembers}
           conflictIds={conflicts.ids}
           locked={locked}
+          draggingUnitId={draggingUnitId}
+          defaultMinutes={targetMinutes}
           onPatch={patchSession}
           onRemove={removeSession}
+          onCreate={createSession}
         />
 
         {!locked && (
           <div className="mt-4 border-t border-slate-100 pt-4">
-            <AddSessionRow days={days} units={units} onAdd={addSession} />
+            <AddMeetingRow days={days} onAdd={addMeeting} />
           </div>
         )}
 
@@ -448,12 +537,15 @@ export function AuditPlan({
 
 /* ------------------------------------------------------------------ */
 
-function AddSessionRow({
-  days, units, onAdd,
+/**
+ * Thêm cuộc họp. Đơn vị không nằm ở đây nữa — kéo từ kho xuống đúng chỗ mình
+ * muốn thì nhanh và rõ hơn chọn trong danh sách rồi đi tìm xem nó rơi vào đâu.
+ */
+function AddMeetingRow({
+  days, onAdd,
 }: {
   days: string[];
-  units: Unit[];
-  onAdd: (day: string, kind: SessionKind, unitId: string | null) => void;
+  onAdd: (day: string, kind: SessionKind) => void;
 }) {
   const [value, setValue] = useState('');
   const [day, setDay] = useState(days[0] ?? '');
@@ -470,29 +562,21 @@ function AddSessionRow({
         ))}
       </select>
 
-    <select
-      value={value}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (!v || !day) return;
-        if (v.startsWith('unit:')) onAdd(day, 'UNIT', v.slice(5));
-        else onAdd(day, v as SessionKind, null);
-        setValue('');
-      }}
-      className="flex-1 rounded-lg border border-dashed border-slate-300 px-2 py-1.5 text-sm text-slate-500"
-    >
-      <option value="">+ Thêm phiên…</option>
-      <optgroup label="Đơn vị">
-        {units.map((u) => (
-          <option key={u.id} value={`unit:${u.id}`}>{u.name}</option>
-        ))}
-      </optgroup>
-      <optgroup label="Khác">
+      <select
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!v || !day) return;
+          onAdd(day, v as SessionKind);
+          setValue('');
+        }}
+        className="flex-1 rounded-lg border border-dashed border-slate-300 px-2 py-1.5 text-sm text-slate-500"
+      >
+        <option value="">+ Thêm cuộc họp…</option>
         <option value="OPENING">{KIND_LABELS.OPENING}</option>
         <option value="INTERNAL">{KIND_LABELS.INTERNAL}</option>
         <option value="CLOSING">{KIND_LABELS.CLOSING}</option>
-      </optgroup>
-    </select>
+      </select>
     </div>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
-  KIND_LABELS, durationLabel, formatDayLong, toHHMM, toMinutes,
-  type Hours, type PlanSession,
+  KIND_LABELS, MIN_MANUAL, blockedSpans, durationLabel, formatDayLong, freeSpans,
+  nearestStart, resizeLimit, snapManual, toHHMM, toMinutes,
+  type Hours, type PlanSession, type Span,
 } from '@/lib/plan';
 
 type Unit = { id: string; name: string };
@@ -21,19 +22,35 @@ const UNIT_COLORS = [
   'bg-orange-100 text-orange-900 border-orange-300',
 ];
 
+/** Bề rộng vùng bấm để kéo mép, tính bằng pixel. */
+const EDGE = 7;
+/** Di chuyển dưới ngưỡng này coi như bấm chọn, không phải kéo. */
+const CLICK_SLOP = 3;
+
+type Drag = {
+  id: string;
+  mode: 'move' | 'start' | 'end';
+  pointerX: number;
+  laneWidth: number;
+  origStart: number;
+  origEnd: number;
+  moved: boolean;
+};
+
 /**
  * Lịch dạng lưới: mỗi đánh giá viên một dòng, trục ngang là thời gian.
  *
- * Nhìn một cái thấy ngay ai đang rảnh, ai kín lịch, chỗ nào chồng chéo, ngày
- * nào còn thừa — thứ mà danh sách theo ngày không cho thấy được.
+ * Kéo giữa khối để dời giờ, kéo mép để đổi thời lượng, bước 5 phút. Vùng cấm
+ * được CHẶN CỨNG chứ không cảnh báo sau: khối trượt tới sát mép giờ nghỉ trưa
+ * hoặc sát phiên khác của cùng đánh giá viên rồi dừng lại ở đó. Nhờ vậy lịch
+ * không bao giờ rơi vào trạng thái sai, và nút Lưu không phải đi kiểm tra lại.
  *
  * Dòng của một phiên KHÔNG kéo đổi được, vì dòng suy ra từ phân công ở bước
- * Chuẩn bị. Muốn đổi người thì sửa phân công, lưới tự đúng theo. Ở đây chỉ
- * chỉnh giờ và đổi đơn vị.
+ * Chuẩn bị. Muốn đổi người thì sửa phân công, lưới tự đúng theo.
  */
 export function ScheduleGrid({
   days, hours, sessions, units, members, unitMembers, conflictIds, locked,
-  onPatch, onRemove,
+  draggingUnitId, defaultMinutes, onPatch, onRemove, onCreate,
 }: {
   days: string[];
   hours: Hours;
@@ -43,10 +60,22 @@ export function ScheduleGrid({
   unitMembers: Map<string, string[]>;
   conflictIds: Set<string>;
   locked: boolean;
+  /** Đơn vị đang được nhấc lên từ kho — dùng để làm sáng dòng nó sắp rơi vào. */
+  draggingUnitId: string | null;
+  /** Thời lượng cho phiên mới thả từ kho xuống. */
+  defaultMinutes: number;
   onPatch: (id: string, patch: Partial<PlanSession>) => void;
   onRemove: (id: string) => void;
+  onCreate: (day: string, unitId: string, startTime: string, endTime: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  /**
+   * Bản sao ngoài React của trạng thái kéo. Mỗi lần chuột nhúc nhích là một lần
+   * gọi onPatch, nên nếu đọc trạng thái qua state thì các sự kiện trong cùng một
+   * khung hình sẽ đọc phải giá trị cũ.
+   */
+  const dragRef = useRef<Drag | null>(null);
 
   const dayStart = toMinutes(hours.amStart);
   const dayEnd = toMinutes(hours.pmEnd);
@@ -56,6 +85,7 @@ export function ScheduleGrid({
   const lunchEnd = toMinutes(hours.pmStart);
 
   const pct = (m: number) => ((m - dayStart) / span) * 100;
+  const width = (a: number, b: number) => ((b - a) / span) * 100;
 
   const colorOf = (unitId: string) =>
     UNIT_COLORS[Math.max(0, units.findIndex((u) => u.id === unitId)) % UNIT_COLORS.length];
@@ -82,6 +112,106 @@ export function ScheduleGrid({
     });
   }
 
+  /** Khoảng trống hợp lệ cho một phiên, tính lại mỗi lần chuột nhúc nhích. */
+  function freeFor(self: Pick<PlanSession, 'id' | 'day' | 'kind' | 'unitId'>): Span[] {
+    return freeSpans(blockedSpans({ self, sessions, hours, unitMembers }), hours);
+  }
+
+  /* ---------------- Kéo thả ---------------- */
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>, s: PlanSession) {
+    if (locked) return;
+    const box = e.currentTarget.getBoundingClientRect();
+    const lane = e.currentTarget.parentElement;
+    if (!lane) return;
+
+    const offset = e.clientX - box.left;
+    const mode: Drag['mode'] =
+      offset <= EDGE ? 'start' : offset >= box.width - EDGE ? 'end' : 'move';
+
+    const next: Drag = {
+      id: s.id,
+      mode,
+      pointerX: e.clientX,
+      laneWidth: lane.getBoundingClientRect().width,
+      origStart: toMinutes(s.startTime),
+      origEnd: toMinutes(s.endTime),
+      moved: false,
+    };
+    dragRef.current = next;
+    setDrag(next);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>, s: PlanSession) {
+    const d = dragRef.current;
+    if (!d || d.id !== s.id) return;
+
+    const dx = e.clientX - d.pointerX;
+    if (!d.moved) {
+      if (Math.abs(dx) < CLICK_SLOP) return;
+      d.moved = true;
+      setDrag({ ...d });
+    }
+
+    const deltaMin = (dx / d.laneWidth) * span;
+    const free = freeFor(s);
+
+    if (d.mode === 'move') {
+      const length = d.origEnd - d.origStart;
+      const start = nearestStart(d.origStart + deltaMin, length, free);
+      if (start === null) return;
+      onPatch(s.id, { startTime: toHHMM(start), endTime: toHHMM(start + length) });
+      return;
+    }
+
+    if (d.mode === 'end') {
+      const limit = resizeLimit(d.origStart, 'end', free);
+      if (!limit) return;
+      const wanted = snapManual(d.origEnd + deltaMin);
+      onPatch(s.id, { endTime: toHHMM(Math.min(Math.max(wanted, limit.start), limit.end)) });
+      return;
+    }
+
+    const limit = resizeLimit(d.origEnd, 'start', free);
+    if (!limit) return;
+    const wanted = snapManual(d.origStart + deltaMin);
+    onPatch(s.id, { startTime: toHHMM(Math.min(Math.max(wanted, limit.start), limit.end)) });
+  }
+
+  function handlePointerUp(s: PlanSession) {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setDrag(null);
+    // Bấm mà không kéo thì mở khối sửa — giữ nguyên cách dùng cũ trên cảm ứng.
+    if (d && !d.moved) setOpenId(openId === s.id ? null : s.id);
+  }
+
+  /* ---------------- Thả đơn vị từ kho xuống ---------------- */
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>, day: string) {
+    e.preventDefault();
+    if (locked) return;
+
+    const unitId = e.dataTransfer.getData('text/plain');
+    if (!unitId || !units.some((u) => u.id === unitId)) return;
+
+    const box = e.currentTarget.getBoundingClientRect();
+    const wanted = dayStart + ((e.clientX - box.left) / box.width) * span;
+
+    const self = { id: '__moi__', day, kind: 'UNIT' as const, unitId };
+    const free = freeSpans(blockedSpans({ self, sessions, hours, unitMembers }), hours);
+
+    // Chỗ trống hẹp hơn thời lượng mặc định thì thu ngắn phiên lại, còn hơn im
+    // lặng từ chối rồi để người dùng đoán xem vì sao thả không được.
+    const widest = free.reduce((mx, f) => Math.max(mx, f.end - f.start), 0);
+    const dur = Math.max(MIN_MANUAL, Math.min(defaultMinutes, widest));
+
+    const start = nearestStart(wanted, dur, free);
+    if (start === null) return;
+    onCreate(day, unitId, toHHMM(start), toHHMM(start + dur));
+  }
+
   if (rows.length === 0) {
     return (
       <p className="card p-6 text-sm text-slate-500">
@@ -89,6 +219,16 @@ export function ScheduleGrid({
       </p>
     );
   }
+
+  const dragged = drag?.moved ? sessions.find((s) => s.id === drag.id) ?? null : null;
+  const draggedBlocked = dragged
+    ? blockedSpans({ self: dragged, sessions, hours, unitMembers })
+    : [];
+
+  /** Dòng nào sẽ nhận đơn vị đang được nhấc lên từ kho. */
+  const targetRows = new Set(draggingUnitId ? unitMembers.get(draggingUnitId) ?? [] : []);
+  const targetOrphan =
+    draggingUnitId !== null && (unitMembers.get(draggingUnitId) ?? []).length === 0;
 
   return (
     <div className="space-y-5">
@@ -117,77 +257,118 @@ export function ScheduleGrid({
               </div>
 
               {/* --- Từng dòng đánh giá viên --- */}
-              {rows.map((row) => (
-                <div key={row.id} className="flex border-b border-slate-100 last:border-0">
-                  <div
-                    className="w-28 shrink-0 truncate px-3 py-2 text-xs font-medium text-slate-700"
-                    title={members.find((m) => m.id === row.id)?.fullName}
-                  >
-                    {row.label}
-                  </div>
+              {rows.map((row) => {
+                const isTarget = row.memberId ? targetRows.has(row.memberId) : targetOrphan;
+                return (
+                  <div key={row.id} className="flex border-b border-slate-100 last:border-0">
+                    <div
+                      className={`w-28 shrink-0 truncate px-3 py-2 text-xs font-medium ${
+                        isTarget ? 'bg-brand-50 text-brand-700' : 'text-slate-700'
+                      }`}
+                      title={members.find((m) => m.id === row.id)?.fullName}
+                    >
+                      {row.label}
+                    </div>
 
-                  <div className="relative h-12 flex-1 bg-slate-50/60">
-                    {/* Dải nghỉ trưa */}
-                    {lunchEnd > lunchStart && (
-                      <div
-                        className="absolute inset-y-0 bg-slate-200/70"
-                        style={{
-                          left: `${pct(lunchStart)}%`,
-                          width: `${((lunchEnd - lunchStart) / span) * 100}%`,
-                        }}
-                        title="Nghỉ trưa"
-                      />
-                    )}
-
-                    {/* Vạch giờ mờ */}
-                    {ticks.map((t) => (
-                      <div
-                        key={t}
-                        className="absolute inset-y-0 w-px bg-slate-200/80"
-                        style={{ left: `${pct(t)}%` }}
-                      />
-                    ))}
-
-                    {sessionsForRow(day, row).map((s) => {
-                      const a = toMinutes(s.startTime);
-                      const b = toMinutes(s.endTime);
-                      const bad = conflictIds.has(s.id);
-                      const unit = s.unitId ? units.find((u) => u.id === s.unitId) : null;
-
-                      const cls =
-                        s.kind !== 'UNIT'
-                          ? 'bg-slate-800 text-white border-slate-900'
-                          : s.unitId
-                            ? colorOf(s.unitId)
-                            : 'bg-slate-100 text-slate-600 border-slate-300';
-
-                      return (
-                        <button
-                          key={s.id}
-                          onClick={() => setOpenId(openId === s.id ? null : s.id)}
-                          title={`${s.startTime}–${s.endTime} · ${
-                            s.kind === 'UNIT' ? unit?.name ?? '—' : KIND_LABELS[s.kind]
-                          }`}
-                          className={`absolute top-1 bottom-1 overflow-hidden rounded border px-1.5 text-left text-[11px] leading-tight transition ${cls} ${
-                            bad ? 'ring-2 ring-red-500' : ''
-                          } ${openId === s.id ? 'ring-2 ring-brand-500' : ''}`}
+                    <div
+                      onDragOver={(e) => {
+                        if (!locked && draggingUnitId) e.preventDefault();
+                      }}
+                      onDrop={(e) => handleDrop(e, day)}
+                      className={`relative h-12 flex-1 ${
+                        isTarget ? 'bg-brand-50/60' : 'bg-slate-50/60'
+                      }`}
+                    >
+                      {/* Dải nghỉ trưa */}
+                      {lunchEnd > lunchStart && (
+                        <div
+                          className="absolute inset-y-0 bg-slate-200/70"
                           style={{
-                            left: `${pct(a)}%`,
-                            width: `${Math.max(1.5, ((b - a) / span) * 100)}%`,
+                            left: `${pct(lunchStart)}%`,
+                            width: `${width(lunchStart, lunchEnd)}%`,
                           }}
-                        >
-                          <span className="block truncate font-medium">
-                            {s.kind === 'UNIT' ? unit?.name ?? '(đã xoá)' : KIND_LABELS[s.kind]}
-                          </span>
-                          <span className="block truncate opacity-70">
-                            {s.startTime}–{s.endTime}
-                          </span>
-                        </button>
-                      );
-                    })}
+                          title="Nghỉ trưa"
+                        />
+                      )}
+
+                      {/* Vạch giờ mờ */}
+                      {ticks.map((t) => (
+                        <div
+                          key={t}
+                          className="absolute inset-y-0 w-px bg-slate-200/80"
+                          style={{ left: `${pct(t)}%` }}
+                        />
+                      ))}
+
+                      {/* Vùng cấm của khối đang kéo, hiện trên mọi dòng trong ngày */}
+                      {dragged?.day === day &&
+                        draggedBlocked.map((b) => (
+                          <div
+                            key={`${b.start}-${b.end}`}
+                            className="pointer-events-none absolute inset-y-0 bg-red-500/10"
+                            style={{ left: `${pct(b.start)}%`, width: `${width(b.start, b.end)}%` }}
+                          />
+                        ))}
+
+                      {sessionsForRow(day, row).map((s) => {
+                        const a = toMinutes(s.startTime);
+                        const b = toMinutes(s.endTime);
+                        const bad = conflictIds.has(s.id);
+                        const unit = s.unitId ? units.find((u) => u.id === s.unitId) : null;
+                        const active = drag?.id === s.id && drag.moved;
+
+                        const cls =
+                          s.kind !== 'UNIT'
+                            ? 'bg-slate-800 text-white border-slate-900'
+                            : s.unitId
+                              ? colorOf(s.unitId)
+                              : 'bg-slate-100 text-slate-600 border-slate-300';
+
+                        return (
+                          <div
+                            key={s.id}
+                            role="button"
+                            tabIndex={0}
+                            onPointerDown={(e) => handlePointerDown(e, s)}
+                            onPointerMove={(e) => handlePointerMove(e, s)}
+                            onPointerUp={() => handlePointerUp(s)}
+                            onPointerCancel={() => {
+                              dragRef.current = null;
+                              setDrag(null);
+                            }}
+                            title={`${s.startTime}–${s.endTime} · ${
+                              s.kind === 'UNIT' ? unit?.name ?? '—' : KIND_LABELS[s.kind]
+                            }${locked ? '' : ' · kéo để dời giờ, kéo mép để đổi thời lượng'}`}
+                            className={`absolute top-1 bottom-1 select-none overflow-hidden rounded border px-1.5 text-left text-[11px] leading-tight ${cls} ${
+                              bad ? 'ring-2 ring-red-500' : ''
+                            } ${openId === s.id ? 'ring-2 ring-brand-500' : ''} ${
+                              active ? 'z-20 shadow-lg' : 'transition-[left,width]'
+                            } ${locked ? '' : 'cursor-grab touch-none active:cursor-grabbing'}`}
+                            style={{
+                              left: `${pct(a)}%`,
+                              width: `${Math.max(1.5, width(a, b))}%`,
+                            }}
+                          >
+                            <span className="block truncate font-medium">
+                              {s.kind === 'UNIT' ? unit?.name ?? '(đã xoá)' : KIND_LABELS[s.kind]}
+                            </span>
+                            <span className="block truncate opacity-70">
+                              {s.startTime}–{s.endTime}
+                            </span>
+
+                            {!locked && (
+                              <>
+                                <span className="absolute inset-y-0 left-0 w-[7px] cursor-col-resize" />
+                                <span className="absolute inset-y-0 right-0 w-[7px] cursor-col-resize" />
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -196,6 +377,7 @@ export function ScheduleGrid({
             <SessionEditor
               session={sessions.find((s) => s.id === openId)!}
               units={units}
+              days={days}
               onPatch={onPatch}
               onRemove={(id) => {
                 onRemove(id);
@@ -211,10 +393,11 @@ export function ScheduleGrid({
 }
 
 function SessionEditor({
-  session, units, onPatch, onRemove, onClose,
+  session, units, days, onPatch, onRemove, onClose,
 }: {
   session: PlanSession;
   units: Unit[];
+  days: string[];
   onPatch: (id: string, patch: Partial<PlanSession>) => void;
   onRemove: (id: string) => void;
   onClose: () => void;
@@ -225,7 +408,7 @@ function SessionEditor({
         <span className="mb-1 block text-xs text-slate-500">Bắt đầu</span>
         <input
           type="time"
-          step={900}
+          step={300}
           value={session.startTime}
           onChange={(e) => onPatch(session.id, { startTime: e.target.value })}
           className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
@@ -235,7 +418,7 @@ function SessionEditor({
         <span className="mb-1 block text-xs text-slate-500">Kết thúc</span>
         <input
           type="time"
-          step={900}
+          step={300}
           value={session.endTime}
           onChange={(e) => onPatch(session.id, { endTime: e.target.value })}
           className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
@@ -260,7 +443,25 @@ function SessionEditor({
         </div>
       )}
 
-      <button onClick={() => onRemove(session.id)} className="pb-2 text-xs text-red-600 hover:underline">
+      {days.length > 1 && (
+        <div>
+          <span className="mb-1 block text-xs text-slate-500">Ngày</span>
+          <select
+            value={session.day}
+            onChange={(e) => onPatch(session.id, { day: e.target.value })}
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+          >
+            {days.map((d, i) => (
+              <option key={d} value={d}>Ngày {i + 1}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <button
+        onClick={() => onRemove(session.id)}
+        className="pb-2 text-xs text-red-600 hover:underline"
+      >
         Bỏ phiên
       </button>
       <button onClick={onClose} className="pb-2 text-xs text-slate-500 hover:underline">
