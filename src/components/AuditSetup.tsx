@@ -69,10 +69,7 @@ export function AuditSetup({
 
       {/* ============ 1. Đơn vị được đánh giá ============ */}
       <section className="card p-5">
-        <h2 className="font-semibold">1. Đơn vị được đánh giá</h2>
-        <p className="mb-4 mt-1 text-sm text-slate-500">
-          Khai báo riêng cho đợt này. Đánh giá viên sẽ ghi nhận finding theo từng đơn vị.
-        </p>
+        <h2 className="mb-4 font-semibold">1. Đơn vị được đánh giá</h2>
 
         {!locked && (
           <AddRow
@@ -126,11 +123,7 @@ export function AuditSetup({
 
       {/* ============ 2. Đánh giá viên ============ */}
       <section className="card p-5">
-        <h2 className="font-semibold">2. Đánh giá viên</h2>
-        <p className="mb-4 mt-1 text-sm text-slate-500">
-          Ô đơn vị công tác không bắt buộc, dùng để cảnh báo khi phân công một người vào
-          chính đơn vị họ đang làm việc.
-        </p>
+        <h2 className="mb-4 font-semibold">2. Đánh giá viên</h2>
 
         {!locked && (
           <>
@@ -198,11 +191,7 @@ export function AuditSetup({
 
       {/* ============ 3. Phân công ============ */}
       <section className="card p-5">
-        <h2 className="font-semibold">3. Phân công</h2>
-        <p className="mb-4 mt-1 text-sm text-slate-500">
-          Tick vào ô giao nhau. Một đánh giá viên nhận nhiều đơn vị, một đơn vị có nhiều
-          đánh giá viên. Ô viền vàng là cảnh báo người đó đang được giao chính đơn vị mình.
-        </p>
+        <h2 className="mb-4 font-semibold">3. Phân công</h2>
 
         {units.length === 0 || members.length === 0 ? (
           <p className="text-sm text-slate-400">
