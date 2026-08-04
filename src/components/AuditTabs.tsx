@@ -8,6 +8,7 @@ export function AuditTabs({ auditId }: { auditId: string }) {
 
   const tabs = [
     { href: `/quan-ly/dot/${auditId}`, label: 'Chuẩn bị đợt', exact: true },
+    { href: `/quan-ly/dot/${auditId}/chuong-trinh`, label: 'Chương trình đánh giá', exact: false },
     { href: `/quan-ly/dot/${auditId}/tong-hop`, label: 'Tổng hợp finding', exact: false },
   ];
 

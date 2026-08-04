@@ -33,6 +33,18 @@ export const findingStatusEnum = pgEnum('finding_status', [
   'SUBMITTED',
 ]);
 
+/** Buổi trong ngày — một phiên đánh giá kéo dài trọn một buổi. */
+export const sessionHalfEnum = pgEnum('session_half', ['AM', 'PM']);
+
+/**
+ * Loại phiên trong chương trình đánh giá.
+ *   OPENING  — họp khai mạc
+ *   UNIT     — đánh giá một đơn vị
+ *   INTERNAL — họp nội bộ đoàn đánh giá
+ *   CLOSING  — họp kết thúc
+ */
+export const sessionKindEnum = pgEnum('session_kind', ['OPENING', 'UNIT', 'INTERNAL', 'CLOSING']);
+
 /**
  * Trạng thái đợt đánh giá — suy ra từ hành động, không có nút bật/tắt riêng:
  *   PLANNED     "Đang chuẩn bị"   — chưa sinh mã cho đánh giá viên
@@ -73,6 +85,19 @@ export const audits = pgTable('audits', {
   organization: text('organization').notNull(),
   title: text('title').notNull(),
   scope: text('scope'),                          // Phạm vi đánh giá
+
+  /* --- Chương trình đánh giá --- */
+  objectives: text('objectives'),                // Mục tiêu đánh giá
+  criteria: text('criteria'),                    // Chuẩn mực đánh giá
+  location: text('location'),                    // Địa điểm
+  approverTitle: text('approver_title'),         // Chức danh người phê duyệt (khối ký)
+  approverName: text('approver_name'),           // Họ tên người phê duyệt, không bắt buộc
+  /** Giờ hiển thị của buổi sáng / buổi chiều. Chỉ dùng để in ra chương trình. */
+  amStart: text('am_start').default('08:00').notNull(),
+  amEnd: text('am_end').default('11:30').notNull(),
+  pmStart: text('pm_start').default('13:30').notNull(),
+  pmEnd: text('pm_end').default('17:00').notNull(),
+
   standards: jsonb('standards').$type<string[]>().default([]).notNull(),
   leadAuditor: text('lead_auditor'),             // Tên trưởng đoàn ghi trên báo cáo
   startDate: timestamp('start_date', { withTimezone: true }),
@@ -100,6 +125,8 @@ export const auditUnits = pgTable(
       .references(() => audits.id, { onDelete: 'cascade' })
       .notNull(),
     name: text('name').notNull(),
+    /** Đại diện đơn vị có mặt trong buổi đánh giá — in vào chương trình. */
+    contactPerson: text('contact_person'),
     note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -151,6 +178,40 @@ export const assignments = pgTable(
   (t) => ({
     auditIdx: index('assignments_audit_idx').on(t.auditId),
     pairIdx: uniqueIndex('assignments_pair_idx').on(t.memberId, t.unitId),
+  }),
+);
+
+/* ------------------------------------------------------------------ */
+/* audit_sessions — lịch đánh giá, mỗi dòng là MỘT BUỔI                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Một phiên = một buổi (sáng hoặc chiều) của một ngày.
+ *
+ * Trong cùng một buổi có thể có NHIỀU đơn vị song song, miễn là do các đánh
+ * giá viên khác nhau phụ trách. Không lưu danh sách đánh giá viên ở đây —
+ * người tham gia suy ra từ bảng `assignments` của chính đơn vị đó, nên phân
+ * công đổi thì lịch tự đúng theo, không phải sửa hai nơi.
+ */
+export const auditSessions = pgTable(
+  'audit_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Ngày diễn ra, dạng "YYYY-MM-DD" — không cần múi giờ vì đây là lịch làm việc. */
+    day: text('day').notNull(),
+    half: sessionHalfEnum('half').notNull(),
+    kind: sessionKindEnum('kind').default('UNIT').notNull(),
+    /** Chỉ có với phiên loại UNIT. */
+    unitId: uuid('unit_id').references(() => auditUnits.id, { onDelete: 'cascade' }),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    auditIdx: index('audit_sessions_audit_idx').on(t.auditId),
+    dayIdx: index('audit_sessions_day_idx').on(t.auditId, t.day, t.half),
   }),
 );
 
@@ -261,7 +322,13 @@ export const auditsRelations = relations(audits, ({ one, many }) => ({
   units: many(auditUnits),
   members: many(auditMembers),
   assignments: many(assignments),
+  sessions: many(auditSessions),
   findings: many(findings),
+}));
+
+export const auditSessionsRelations = relations(auditSessions, ({ one }) => ({
+  audit: one(audits, { fields: [auditSessions.auditId], references: [audits.id] }),
+  unit: one(auditUnits, { fields: [auditSessions.unitId], references: [auditUnits.id] }),
 }));
 
 export const auditUnitsRelations = relations(auditUnits, ({ one, many }) => ({
@@ -301,5 +368,6 @@ export type Audit = typeof audits.$inferSelect;
 export type AuditUnit = typeof auditUnits.$inferSelect;
 export type AuditMember = typeof auditMembers.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
+export type AuditSession = typeof auditSessions.$inferSelect;
 export type Finding = typeof findings.$inferSelect;
 export type FindingImage = typeof findingImages.$inferSelect;

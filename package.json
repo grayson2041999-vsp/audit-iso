@@ -20,6 +20,7 @@
     "@aws-sdk/s3-request-presigner": "^3.699.0",
     "@neondatabase/serverless": "^0.10.4",
     "clsx": "^2.1.1",
+    "docx": "^9.0.3",
     "drizzle-orm": "^0.38.3",
     "exceljs": "^4.4.0",
     "next": "15.1.11",

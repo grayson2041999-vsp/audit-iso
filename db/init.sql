@@ -17,6 +17,14 @@ DO $$ BEGIN
   CREATE TYPE audit_status AS ENUM ('PLANNED','IN_PROGRESS','REPORTING','CLOSED');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+DO $$ BEGIN
+  CREATE TYPE session_half AS ENUM ('AM','PM');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE session_kind AS ENUM ('OPENING','UNIT','INTERNAL','CLOSING');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 CREATE TABLE IF NOT EXISTS audits (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code          text NOT NULL,
