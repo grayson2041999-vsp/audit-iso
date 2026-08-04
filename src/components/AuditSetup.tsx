@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AuditMember, AuditUnit } from '@/lib/schema';
-import { sameUnitName } from '@/lib/utils';
+import { buildShortNames, sameUnitName } from '@/lib/utils';
 
 type Props = {
   auditId: string;
@@ -22,7 +22,51 @@ export function AuditSetup({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const linkSet = new Set(links);
+
+  /**
+   * Ma trận phân công giữ hoàn toàn ở phía trình duyệt cho tới khi bấm Lưu.
+   * Trước đây mỗi ô tick là một yêu cầu mạng kèm dựng lại cả trang — bấm phát
+   * nào chờ phát đó. Giờ tick tức thì, chỉ tốn một lượt gửi khi lưu.
+   */
+  const [linkSet, setLinkSet] = useState<Set<string>>(() => new Set(links));
+  const savedKey = links.slice().sort().join('|');
+
+  // Đồng bộ lại khi dữ liệu máy chủ đổi (thêm/xoá đơn vị, đánh giá viên…).
+  useEffect(() => {
+    setLinkSet(new Set(savedKey ? savedKey.split('|') : []));
+  }, [savedKey]);
+
+  const dirty = useMemo(() => {
+    const now = [...linkSet].sort().join('|');
+    return now !== savedKey;
+  }, [linkSet, savedKey]);
+
+  function toggleLink(memberId: string, unitId: string, on: boolean) {
+    const key = `${memberId}:${unitId}`;
+    setLinkSet((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
+
+  async function saveAssignments() {
+    const pairs = [...linkSet].map((k) => {
+      const [memberId, unitId] = k.split(':');
+      return { memberId, unitId };
+    });
+    return call(`/api/audits/${auditId}/assignments`, {
+      method: 'PUT',
+      body: JSON.stringify({ pairs }),
+    });
+  }
+
+  /** Tên viết tắt cho hàng tiêu đề ma trận: "Lê Hữu Hoàng Sơn" → "L.H.H. Sơn". */
+  const shortNames = useMemo(
+    () => buildShortNames(members.map((m) => m.fullName)),
+    [members],
+  );
 
   const locked = status === 'CLOSED';
   const opened = status !== 'PLANNED';
@@ -53,7 +97,11 @@ export function AuditSetup({
     (u) => !members.some((m) => linkSet.has(`${m.id}:${u.id}`)),
   );
   const canOpen =
-    units.length > 0 && members.length > 0 && unitsWithoutMember.length === 0 && !locked;
+    units.length > 0 &&
+    members.length > 0 &&
+    unitsWithoutMember.length === 0 &&
+    !dirty && // chưa lưu phân công thì chưa cho mở đợt
+    !locked;
 
   return (
     <div className="space-y-6">
@@ -162,6 +210,9 @@ export function AuditSetup({
               <li key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
                 <span className="font-medium">{m.fullName}</span>
                 {m.homeUnit && <span className="text-xs text-slate-500">{m.homeUnit}</span>}
+                <span className="chip bg-slate-100 text-slate-600 ring-transparent">
+                  {units.filter((u) => linkSet.has(`${m.id}:${u.id}`)).length} đơn vị
+                </span>
                 <span className="ml-auto font-mono text-xs">
                   {m.accessCode ? (
                     <span className="rounded bg-brand-50 px-2 py-1 text-brand-700">
@@ -205,10 +256,10 @@ export function AuditSetup({
                   <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-medium text-slate-500">
                     Đơn vị \ Đánh giá viên
                   </th>
-                  {members.map((m) => (
+                  {members.map((m, i) => (
                     <th key={m.id} className="px-3 py-2 text-center font-medium">
-                      <span className="block max-w-[7rem] truncate" title={m.fullName}>
-                        {m.fullName}
+                      <span className="block whitespace-nowrap" title={m.fullName}>
+                        {shortNames[i]}
                       </span>
                     </th>
                   ))}
@@ -217,7 +268,7 @@ export function AuditSetup({
               <tbody className="divide-y divide-slate-100">
                 {units.map((u) => (
                   <tr key={u.id}>
-                    <td className="sticky left-0 z-10 max-w-[14rem] truncate bg-white px-3 py-2 font-medium">
+                    <td className="sticky left-0 z-10 min-w-[12rem] max-w-[18rem] bg-white px-3 py-2 font-medium">
                       {u.name}
                     </td>
                     {members.map((m) => {
@@ -232,18 +283,9 @@ export function AuditSetup({
                             title={
                               selfAudit
                                 ? `${m.fullName} đang công tác tại ${u.name} — không nên tự đánh giá đơn vị mình`
-                                : undefined
+                                : m.fullName
                             }
-                            onChange={(e) =>
-                              call(`/api/audits/${auditId}/assignments`, {
-                                method: 'POST',
-                                body: JSON.stringify({
-                                  memberId: m.id,
-                                  unitId: u.id,
-                                  on: e.target.checked,
-                                }),
-                              })
-                            }
+                            onChange={(e) => toggleLink(m.id, u.id, e.target.checked)}
                             className={`h-4 w-4 accent-brand-600 ${
                               selfAudit && on ? 'rounded ring-2 ring-amber-400' : ''
                             }`}
@@ -255,6 +297,35 @@ export function AuditSetup({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {units.length > 0 && members.length > 0 && !locked && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+            <button
+              onClick={saveAssignments}
+              disabled={!dirty || busy}
+              className="btn-primary"
+            >
+              {busy ? 'Đang lưu…' : dirty ? 'Lưu phân công' : 'Đã lưu'}
+            </button>
+
+            {dirty && (
+              <>
+                <span className="text-sm text-amber-600">Có thay đổi chưa lưu</span>
+                <button
+                  onClick={() => setLinkSet(new Set(savedKey ? savedKey.split('|') : []))}
+                  disabled={busy}
+                  className="text-sm text-slate-500 hover:underline"
+                >
+                  Hoàn tác
+                </button>
+              </>
+            )}
+
+            <span className="ml-auto text-xs text-slate-400">
+              Rê chuột vào tên viết tắt để xem tên đầy đủ
+            </span>
           </div>
         )}
       </section>
@@ -274,6 +345,13 @@ export function AuditSetup({
               <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
                 Chưa phân công đánh giá viên cho:{' '}
                 <strong>{unitsWithoutMember.map((u) => u.name).join(', ')}</strong>
+              </p>
+            )}
+
+            {dirty && (
+              <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                Bấm <strong>Lưu phân công</strong> ở bước 3 trước đã — phân công chưa lưu
+                thì đánh giá viên sẽ không thấy đơn vị nào.
               </p>
             )}
 

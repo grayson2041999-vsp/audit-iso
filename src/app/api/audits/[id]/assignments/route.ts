@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { and, eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { assignments, auditMembers, auditUnits } from '@/lib/schema';
@@ -9,55 +9,77 @@ export const runtime = 'nodejs';
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const schema = z.object({
-  memberId: z.string().uuid(),
-  unitId: z.string().uuid(),
-  on: z.boolean(),
+const putSchema = z.object({
+  pairs: z
+    .array(z.object({ memberId: z.string().uuid(), unitId: z.string().uuid() }))
+    .max(2000),
 });
 
-/** Bật/tắt một ô trong ma trận phân công. */
-export async function POST(req: Request, { params }: Ctx) {
+/**
+ * Lưu toàn bộ ma trận phân công trong MỘT lượt.
+ *
+ * Trước đây mỗi ô tick là một yêu cầu riêng kèm dựng lại cả trang — tick 44 ô
+ * là 44 lần chờ. Giờ trưởng đoàn tick thoải mái rồi bấm Lưu một lần.
+ *
+ * Chỉ ghi phần CHÊNH LỆCH thay vì xoá sạch rồi chèn lại: nếu lệnh chèn hỏng
+ * giữa chừng thì phân công cũ vẫn còn nguyên chứ không mất trắng.
+ */
+export async function PUT(req: Request, { params }: Ctx) {
   const { id } = await params;
+
   const owned = await getOwnedAudit(id);
   if (!owned) return NextResponse.json({ error: 'Không có quyền.' }, { status: 403 });
   if (owned.audit.status === 'CLOSED') {
     return NextResponse.json({ error: 'Đợt đã khoá, không sửa được.' }, { status: 409 });
   }
 
-  const parsed = schema.safeParse(await req.json());
+  const parsed = putSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: 'Dữ liệu không hợp lệ.' }, { status: 400 });
   }
-  const { memberId, unitId, on } = parsed.data;
-
-  // Cả đánh giá viên lẫn đơn vị đều phải thuộc đúng đợt này.
-  const [member] = await db
-    .select()
-    .from(auditMembers)
-    .where(and(eq(auditMembers.id, memberId), eq(auditMembers.auditId, id)));
-  const [unit] = await db
-    .select()
-    .from(auditUnits)
-    .where(and(eq(auditUnits.id, unitId), eq(auditUnits.auditId, id)));
-
-  if (!member || !unit) {
-    return NextResponse.json({ error: 'Đánh giá viên hoặc đơn vị không thuộc đợt này.' }, { status: 400 });
-  }
 
   try {
-    if (on) {
+    const [units, members, current] = await Promise.all([
+      db.select({ id: auditUnits.id }).from(auditUnits).where(eq(auditUnits.auditId, id)),
+      db.select({ id: auditMembers.id }).from(auditMembers).where(eq(auditMembers.auditId, id)),
+      db.select().from(assignments).where(eq(assignments.auditId, id)),
+    ]);
+
+    const unitIds = new Set(units.map((u) => u.id));
+    const memberIds = new Set(members.map((m) => m.id));
+
+    // Bỏ qua cặp trỏ tới đơn vị hoặc người không thuộc đợt này.
+    const wanted = new Set(
+      parsed.data.pairs
+        .filter((p) => unitIds.has(p.unitId) && memberIds.has(p.memberId))
+        .map((p) => `${p.memberId}:${p.unitId}`),
+    );
+    const existing = new Map(current.map((a) => [`${a.memberId}:${a.unitId}`, a.id]));
+
+    const toAdd = [...wanted].filter((k) => !existing.has(k));
+    const toRemoveIds = [...existing.entries()]
+      .filter(([k]) => !wanted.has(k))
+      .map(([, rowId]) => rowId);
+
+    if (toAdd.length > 0) {
       await db
         .insert(assignments)
-        .values({ auditId: id, memberId, unitId })
+        .values(
+          toAdd.map((k) => {
+            const [memberId, unitId] = k.split(':');
+            return { auditId: id, memberId, unitId };
+          }),
+        )
         .onConflictDoNothing();
-    } else {
-      await db
-        .delete(assignments)
-        .where(and(eq(assignments.memberId, memberId), eq(assignments.unitId, unitId)));
     }
-    return NextResponse.json({ ok: true });
+
+    if (toRemoveIds.length > 0) {
+      await db.delete(assignments).where(inArray(assignments.id, toRemoveIds));
+    }
+
+    return NextResponse.json({ ok: true, added: toAdd.length, removed: toRemoveIds.length });
   } catch (e) {
-    console.error('[assignments:POST]', e);
-    return NextResponse.json({ error: 'Không cập nhật được phân công.' }, { status: 500 });
+    console.error('[assignments:PUT]', e);
+    return NextResponse.json({ error: 'Không lưu được phân công.' }, { status: 500 });
   }
 }

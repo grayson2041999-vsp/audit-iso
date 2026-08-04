@@ -15,6 +15,33 @@ export function formatDate(d: Date | string | null | undefined) {
 }
 
 /**
+ * Viết tắt tên người Việt: "Lê Hữu Hoàng Sơn" → "L.H.H. Sơn".
+ * Giữ nguyên tên cuối vì đó là phần người Việt dùng để gọi nhau.
+ */
+export function abbreviateName(full: string): string {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return full.trim();
+  const last = parts[parts.length - 1];
+  const initials = parts
+    .slice(0, -1)
+    .map((p) => p[0].toLocaleUpperCase('vi') + '.')
+    .join('');
+  return `${initials} ${last}`;
+}
+
+/**
+ * Viết tắt cả danh sách, nhưng GIỮ NGUYÊN tên đầy đủ cho những người bị trùng
+ * dạng viết tắt — "Lê Hữu Hoàng Sơn" và "Lý Hồng Hải Sơn" đều ra "L.H.H. Sơn",
+ * viết tắt lúc đó gây nhầm còn tệ hơn tên dài.
+ */
+export function buildShortNames(names: string[]): string[] {
+  const abbrs = names.map(abbreviateName);
+  const count = new Map<string, number>();
+  for (const a of abbrs) count.set(a, (count.get(a) ?? 0) + 1);
+  return abbrs.map((a, i) => (count.get(a)! > 1 ? names[i] : a));
+}
+
+/**
  * So tên đơn vị bỏ qua hoa thường và khoảng trắng thừa.
  * Đặt ở utils vì cả máy chủ lẫn component trình duyệt đều dùng.
  */
