@@ -149,6 +149,32 @@ export function findTimeConflicts(
   return { ids, messages: [...new Set(messages)] };
 }
 
+/**
+ * Phiên có nằm trọn trong một khung giờ làm việc không.
+ *
+ * Lịch sinh tự động luôn thoả điều kiện này, nhưng khi trưởng đoàn sửa tay thì
+ * có thể tạo ra phiên ôm trọn giờ nghỉ trưa hoặc tràn ra ngoài giờ tan ca.
+ * Trả về mô tả lỗi, hoặc null nếu hợp lệ.
+ */
+export function checkWorkingHours(
+  s: Pick<PlanSession, 'startTime' | 'endTime'>,
+  hours: { amStart: string; amEnd: string; pmStart: string; pmEnd: string },
+): string | null {
+  const a = toMinutes(s.startTime);
+  const b = toMinutes(s.endTime);
+  if (b <= a) return 'Giờ kết thúc phải sau giờ bắt đầu';
+
+  const inAm = a >= toMinutes(hours.amStart) && b <= toMinutes(hours.amEnd);
+  const inPm = a >= toMinutes(hours.pmStart) && b <= toMinutes(hours.pmEnd);
+  if (inAm || inPm) return null;
+
+  // Bắt đầu trong buổi sáng nhưng kết thúc sau giờ nghỉ → ôm trọn giờ trưa.
+  if (a < toMinutes(hours.amEnd) && b > toMinutes(hours.pmStart)) {
+    return 'Phiên vắt qua giờ nghỉ trưa';
+  }
+  return `Nằm ngoài giờ làm việc (${hours.amStart}–${hours.amEnd}, ${hours.pmStart}–${hours.pmEnd})`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Sinh lịch tự động                                                   */
 /* ------------------------------------------------------------------ */

@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
 import {
-  KIND_LABELS, MIN_SESSION, durationLabel, findTimeConflicts, formatDayLong,
-  generateTimedPlan, sessionMembers, toMinutes,
+  KIND_LABELS, MIN_SESSION, checkWorkingHours, durationLabel, findTimeConflicts,
+  formatDayLong, generateTimedPlan, sessionMembers, toMinutes,
   type PlanSession, type SessionKind,
 } from '@/lib/plan';
 
@@ -339,13 +339,13 @@ export function AuditPlan({
                   {inDay.map((s) => {
                     const ms = sessionMembers(s, unitMembers, allMemberIds);
                     const bad = conflicts.ids.has(s.id);
-                    const badTime = toMinutes(s.endTime) <= toMinutes(s.startTime);
+                    const hoursIssue = checkWorkingHours(s, info);
 
                     return (
                       <li
                         key={s.id}
                         className={`flex flex-wrap items-start gap-3 px-3 py-3 text-sm ${
-                          bad || badTime ? 'bg-red-50' : ''
+                          bad ? 'bg-red-50' : hoursIssue ? 'bg-amber-50' : ''
                         }`}
                       >
                         <div className="flex shrink-0 items-center gap-1.5">
@@ -386,6 +386,10 @@ export function AuditPlan({
                               ? 'Chưa phân công đánh giá viên'
                               : ms.map((m) => shortById.get(m) ?? '?').join(' · ')}
                           </p>
+
+                          {hoursIssue && (
+                            <p className="mt-1 text-xs font-medium text-amber-700">{hoursIssue}</p>
+                          )}
                         </div>
 
                         {!locked && (
