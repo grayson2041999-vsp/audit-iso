@@ -8,7 +8,7 @@ import { ScheduleGrid } from './ScheduleGrid';
 import { UnitPalette } from './UnitPalette';
 import {
   KIND_LABELS, MIN_MANUAL, blockedSpans, checkWorkingHours, computeCapacity, durationLabel,
-  findTimeConflicts, freeSpans, generateTimedPlan, nearestStart, toHHMM, toMinutes,
+  findTimeConflicts, freeSpans, generateTimedPlan, nearestStart, reflowToHours, toHHMM, toMinutes,
   type Hours, type PlanSession, type SessionKind,
 } from '@/lib/plan';
 
@@ -293,6 +293,30 @@ export function AuditPlan({
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
+  /* ---------------- Khung giờ ---------------- */
+
+  /**
+   * Khung giờ đã nắn lịch theo. Ô nhập cập nhật `info` ngay từng ký tự để trục
+   * thời gian chạy theo, nhưng việc nắn lịch chỉ chạy khi rời khỏi ô — gõ dở
+   * "08:3" mà máy đã đi cắt phiên thì lịch nát trước khi bạn gõ xong.
+   */
+  const committedHours = useRef({ amStart: info.amStart, pmEnd: info.pmEnd });
+
+  function commitHours() {
+    if (locked || hoursBroken) return;
+
+    const next = reflowToHours({ sessions, days, from: committedHours.current, to: hours });
+    committedHours.current = { amStart: info.amStart, pmEnd: info.pmEnd };
+
+    const changed =
+      next.length !== sessions.length ||
+      next.some((s, i) => s.startTime !== sessions[i]?.startTime || s.endTime !== sessions[i]?.endTime);
+    if (!changed) return;
+
+    snapshot();
+    setSessions(next);
+  }
+
   /* ---------------- Thao tác ---------------- */
 
   /** Không tự ghi lịch sử: lúc kéo, hàm này chạy mỗi lần chuột nhúc nhích. */
@@ -352,19 +376,20 @@ export function AuditPlan({
     const list = sessions;
 
     /**
-     * Không lưu khi còn phiên nằm ngoài giờ làm việc. Chặn ở đây chứ không ở
-     * từng nút, để không có đường vòng: sửa giờ rồi bấm Lưu chương trình ở
-     * chân trang cũng phải qua cửa này.
+     * Hai điều kiện chặn, đặt ở đây chứ không ở từng nút để không có đường vòng.
+     *
+     * Phiên nằm ngoài giờ làm việc thì không cần chặn nữa — đổi khung giờ đã tự
+     * nắn lịch. Còn lại đúng cái không suy ra được: chương trình đánh giá mà bỏ
+     * sót đơn vị thì bản thân nó sai, xuất Word ra là thiếu.
      */
     if (hoursBroken) {
       setError('Khung giờ không hợp lệ: giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.');
       return;
     }
-    const issues = findHoursIssues(list, info);
-    if (issues.length > 0) {
+    if (unscheduled.length > 0) {
       setError(
-        `Còn ${issues.length} phiên nằm ngoài khung giờ làm việc — xem danh sách dưới lưới. ` +
-          'Kéo hoặc rút ngắn các phiên đó cho vừa giờ mới, rồi lưu lại.',
+        `Chưa xếp lịch cho: ${unscheduled.map((u) => u.name).join(', ')}. ` +
+          'Kéo các đơn vị đó từ kho xuống lưới rồi lưu lại.',
       );
       return;
     }
@@ -472,16 +497,36 @@ export function AuditPlan({
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="w-14 text-slate-500">Sáng</span>
-          <TimeInput value={info.amStart} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, amStart: v }))} />
+          <TimeInput
+            value={info.amStart}
+            disabled={locked}
+            onChange={(v) => setInfo((s) => ({ ...s, amStart: v }))}
+            onCommit={commitHours}
+          />
           <span className="text-slate-400">–</span>
-          <TimeInput value={info.amEnd} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, amEnd: v }))} />
+          <TimeInput
+            value={info.amEnd}
+            disabled={locked}
+            onChange={(v) => setInfo((s) => ({ ...s, amEnd: v }))}
+            onCommit={commitHours}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="w-14 text-slate-500">Chiều</span>
-          <TimeInput value={info.pmStart} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, pmStart: v }))} />
+          <TimeInput
+            value={info.pmStart}
+            disabled={locked}
+            onChange={(v) => setInfo((s) => ({ ...s, pmStart: v }))}
+            onCommit={commitHours}
+          />
           <span className="text-slate-400">–</span>
-          <TimeInput value={info.pmEnd} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, pmEnd: v }))} />
+          <TimeInput
+            value={info.pmEnd}
+            disabled={locked}
+            onChange={(v) => setInfo((s) => ({ ...s, pmEnd: v }))}
+            onCommit={commitHours}
+          />
         </div>
 
         {hoursBroken ? (
@@ -599,7 +644,8 @@ export function AuditPlan({
 
         {unscheduled.length > 0 && (
           <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-            Chưa xếp lịch cho: <strong>{unscheduled.map((u) => u.name).join(', ')}</strong>
+            Chưa xếp lịch cho: <strong>{unscheduled.map((u) => u.name).join(', ')}</strong>. Kéo
+            từ kho xuống lưới — còn đơn vị chưa xếp thì chưa lưu được.
           </p>
         )}
 
@@ -628,9 +674,7 @@ export function AuditPlan({
 
         {hoursIssues.length > 0 && (
           <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-            <p className="font-medium">
-              Phiên nằm ngoài giờ làm việc — phải xử lý xong mới lưu được:
-            </p>
+            <p className="font-medium">Phiên nằm ngoài giờ làm việc:</p>
             <ul className="mt-1 space-y-0.5">
               {hoursIssues.map((m, i) => (
                 <li key={i}>• {m}</li>
@@ -702,10 +746,12 @@ function AddMeetingRow({
 }
 
 function TimeInput({
-  value, onChange, disabled,
+  value, onChange, onCommit, disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** Gọi khi rời khỏi ô — lúc đó giá trị mới thật sự là ý của người dùng. */
+  onCommit: () => void;
   disabled: boolean;
 }) {
   return (
@@ -715,6 +761,7 @@ function TimeInput({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onCommit}
       className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
     />
   );

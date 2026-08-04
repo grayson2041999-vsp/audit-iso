@@ -316,6 +316,103 @@ export function resizeLimit(
     : { start: home.start, end: fixed - MIN_MANUAL };
 }
 
+/**
+ * Nắn lịch theo khung giờ làm việc mới.
+ *
+ * Trước đây đổi khung giờ chỉ hiện cảnh báo rồi bắt trưởng đoàn tự đi dọn từng
+ * phiên. Nhưng máy suy ra được kết quả nên máy làm, còn người nhìn lưới rồi
+ * chỉnh tiếp — nắn xong là một bước Ctrl+Z, không ưng thì lùi lại.
+ *
+ * Ba luật, theo đúng thứ tự:
+ *
+ *  1. Hai cuộc họp NEO vào khung và giữ nguyên thời lượng. Dời giờ vào 08:00 →
+ *     08:30 thì họp khai mạc 30 phút thành 08:30–09:00. Chỉ neo lại khi chính
+ *     mốc đó đổi, để không giật cuộc họp mà trưởng đoàn đã cố ý kéo đi chỗ khác.
+ *
+ *  2. Mọi phiên bị CẮT phần nằm ngoài vùng hợp lệ — ngoài giờ làm việc, trong
+ *     giờ nghỉ trưa, hoặc chồng lên cuộc họp vừa neo lại. Cắt chứ không đẩy:
+ *     đẩy thì đụng phiên kế tiếp rồi kéo theo dây chuyền, một thay đổi nhỏ xáo
+ *     cả lịch. Cắt là cục bộ và đoán trước được.
+ *
+ *  3. Phiên bị cắt đến gần như không còn gì thì bỏ hẳn. Đơn vị đó quay về kho ở
+ *     trạng thái chưa xếp, và chưa xếp đủ đơn vị thì không lưu được.
+ */
+export function reflowToHours(input: {
+  sessions: PlanSession[];
+  days: string[];
+  /** Khung giờ trước khi đổi — chỉ dùng để biết mốc nào vừa thay đổi. */
+  from: Pick<Hours, 'amStart' | 'pmEnd'>;
+  to: Hours;
+}): PlanSession[] {
+  const { sessions, days, from, to } = input;
+  if (days.length === 0) return sessions;
+
+  const amS = toMinutes(to.amStart);
+  const amE = toMinutes(to.amEnd);
+  const pmS = toMinutes(to.pmStart);
+  const pmE = toMinutes(to.pmEnd);
+  if (amE <= amS || pmE <= pmS) return sessions; // khung giờ đang gõ dở
+
+  const first = days[0];
+  const last = days[days.length - 1];
+  const startMoved = to.amStart !== from.amStart;
+  const endMoved = to.pmEnd !== from.pmEnd;
+
+  /* 1. Neo lại hai cuộc họp */
+  const anchored = sessions.map((s) => {
+    const len = toMinutes(s.endTime) - toMinutes(s.startTime);
+    if (s.kind === 'OPENING' && s.day === first && startMoved) {
+      return { ...s, startTime: toHHMM(amS), endTime: toHHMM(Math.min(amS + len, amE)) };
+    }
+    if (s.kind === 'CLOSING' && s.day === last && endMoved) {
+      return { ...s, startTime: toHHMM(Math.max(pmE - len, pmS)), endTime: toHHMM(pmE) };
+    }
+    return s;
+  });
+
+  /** Hai cuộc họp sau khi neo — chúng là chướng ngại cho mọi phiên khác. */
+  const meetingsByDay = new Map<string, Span[]>();
+  for (const s of anchored) {
+    if (s.kind !== 'OPENING' && s.kind !== 'CLOSING') continue;
+    const span = { start: toMinutes(s.startTime), end: toMinutes(s.endTime) };
+    meetingsByDay.set(s.day, [...(meetingsByDay.get(s.day) ?? []), span]);
+  }
+
+  const lunch: Span[] = pmS > amE ? [{ start: amE, end: pmS }] : [];
+
+  /* 2–3. Cắt vào vùng hợp lệ, bỏ hẳn nếu không còn gì */
+  return anchored.flatMap<PlanSession>((s) => {
+    const isMeetingAnchor = s.kind === 'OPENING' || s.kind === 'CLOSING';
+    const obstacles = isMeetingAnchor ? [] : meetingsByDay.get(s.day) ?? [];
+    const free = freeSpans([...lunch, ...obstacles], to);
+
+    const a = toMinutes(s.startTime);
+    const b = toMinutes(s.endTime);
+
+    // Giữ phần nằm trong khoảng trống chồng lấn NHIỀU NHẤT. Khi giờ nghỉ trưa
+    // dời vào giữa một phiên, phiên bị chẻ đôi — lấy mẩu dài hơn thay vì sinh
+    // thêm một phiên mà trưởng đoàn không yêu cầu.
+    let best: Span | null = null;
+    let bestOverlap = 0;
+    for (const f of free) {
+      const overlap = Math.min(b, f.end) - Math.max(a, f.start);
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        best = f;
+      }
+    }
+
+    if (!best || bestOverlap < MANUAL_STEP) return [];
+    return [
+      {
+        ...s,
+        startTime: toHHMM(Math.max(a, best.start)),
+        endTime: toHHMM(Math.min(b, best.end)),
+      },
+    ];
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Quỹ thời gian                                                       */
 /* ------------------------------------------------------------------ */
