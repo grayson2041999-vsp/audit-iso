@@ -50,7 +50,7 @@ type Drag = {
  */
 export function ScheduleGrid({
   days, hoursOf, sessions, units, members, unitMembers, conflictIds, locked,
-  draggingUnitId, defaultMinutes, onPatch, onRemove, onCreate, onSnapshot,
+  activeUnitId, defaultMinutes, onPatch, onRemove, onCreate, onSnapshot,
 }: {
   days: string[];
   /** Khung giờ của từng ngày — mỗi ngày một trục thời gian riêng. */
@@ -61,8 +61,11 @@ export function ScheduleGrid({
   unitMembers: Map<string, string[]>;
   conflictIds: Set<string>;
   locked: boolean;
-  /** Đơn vị đang được nhấc lên từ kho — dùng để làm sáng dòng nó sắp rơi vào. */
-  draggingUnitId: string | null;
+  /**
+   * Đơn vị đang được chọn ở kho — làm sáng những dòng nó sắp rơi vào, và biến
+   * mọi ô trống trong lưới thành chỗ bấm để đặt phiên.
+   */
+  activeUnitId: string | null;
   /** Thời lượng cho phiên mới thả từ kho xuống. */
   defaultMinutes: number;
   onPatch: (id: string, patch: Partial<PlanSession>) => void;
@@ -265,16 +268,19 @@ export function ScheduleGrid({
 
   /* ---------------- Thả đơn vị từ kho xuống ---------------- */
 
-  function handleDrop(e: React.DragEvent<HTMLDivElement>, day: string) {
-    e.preventDefault();
-    if (locked) return;
-
-    const unitId = e.dataTransfer.getData('text/plain');
-    if (!unitId || !units.some((u) => u.id === unitId)) return;
+  /**
+   * Đặt một phiên mới cho `unitId` vào ngày `day`, gần chỗ vừa bấm nhất.
+   *
+   * Dùng chung cho hai cách: bấm chọn ở kho rồi bấm vào lưới, và kéo thả. Kéo
+   * thả không dùng được khi lưới nằm ngoài màn hình — kéo tới mép trang thì
+   * trình duyệt không tự cuộn — nên bấm–bấm mới là đường chính.
+   */
+  function placeUnit(day: string, unitId: string, clientX: number, lane: HTMLElement) {
+    if (locked || !units.some((u) => u.id === unitId)) return;
 
     const g = geometry(day);
-    const box = e.currentTarget.getBoundingClientRect();
-    const wanted = g.start + ((e.clientX - box.left) / box.width) * g.span;
+    const box = lane.getBoundingClientRect();
+    const wanted = g.start + ((clientX - box.left) / box.width) * g.span;
 
     const self = { id: '__moi__', day, kind: 'UNIT' as const, unitId };
     const free = freeSpans(blockedSpans({ self, sessions, hours: g.h, unitMembers }), g.h);
@@ -287,6 +293,19 @@ export function ScheduleGrid({
     const start = nearestStart(wanted, dur, free);
     if (start === null) return;
     onCreate(day, unitId, toHHMM(start), toHHMM(start + dur));
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>, day: string) {
+    e.preventDefault();
+    const unitId = e.dataTransfer.getData('text/plain');
+    if (unitId) placeUnit(day, unitId, e.clientX, e.currentTarget);
+  }
+
+  function handleLaneClick(e: React.MouseEvent<HTMLDivElement>, day: string) {
+    if (!activeUnitId) return;
+    // Bấm trúng một khối là để chọn khối đó, không phải để đặt phiên mới.
+    if ((e.target as HTMLElement).closest('[data-session]')) return;
+    placeUnit(day, activeUnitId, e.clientX, e.currentTarget);
   }
 
   if (rows.length === 0) {
@@ -303,9 +322,9 @@ export function ScheduleGrid({
     : [];
 
   /** Dòng nào sẽ nhận đơn vị đang được nhấc lên từ kho. */
-  const targetRows = new Set(draggingUnitId ? unitMembers.get(draggingUnitId) ?? [] : []);
+  const targetRows = new Set(activeUnitId ? unitMembers.get(activeUnitId) ?? [] : []);
   const targetOrphan =
-    draggingUnitId !== null && (unitMembers.get(draggingUnitId) ?? []).length === 0;
+    activeUnitId !== null && (unitMembers.get(activeUnitId) ?? []).length === 0;
 
   return (
     <div className="space-y-5">
@@ -355,12 +374,13 @@ export function ScheduleGrid({
 
                     <div
                       onDragOver={(e) => {
-                        if (!locked && draggingUnitId) e.preventDefault();
+                        if (!locked && activeUnitId) e.preventDefault();
                       }}
                       onDrop={(e) => handleDrop(e, day)}
+                      onClick={(e) => handleLaneClick(e, day)}
                       className={`relative h-12 flex-1 ${
                         isTarget ? 'bg-brand-50/60' : 'bg-slate-50/60'
-                      }`}
+                      } ${activeUnitId && !locked ? 'cursor-copy' : ''}`}
                     >
                       {/* Dải nghỉ trưa */}
                       {lunchEnd > lunchStart && (
@@ -410,6 +430,7 @@ export function ScheduleGrid({
                         return (
                           <div
                             key={s.id}
+                            data-session
                             role="button"
                             tabIndex={0}
                             onPointerDown={(e) => handlePointerDown(e, s)}

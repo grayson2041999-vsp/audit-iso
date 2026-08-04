@@ -26,7 +26,7 @@ const UNIT_COLORS = [
  */
 export function UnitPalette({
   units, targetMinutes, allocated, unitMembers, shortById, locked,
-  onDragStart, onDragEnd,
+  selectedId, onSelect, onDragStart, onDragEnd,
 }: {
   units: Unit[];
   /** Thời lượng nên dành cho mỗi đơn vị, phút. */
@@ -36,6 +36,9 @@ export function UnitPalette({
   unitMembers: Map<string, string[]>;
   shortById: Map<string, string>;
   locked: boolean;
+  /** Đơn vị đang chọn — bấm tiếp vào lưới là đặt phiên. */
+  selectedId: string | null;
+  onSelect: (unitId: string | null) => void;
   onDragStart: (unitId: string) => void;
   onDragEnd: () => void;
 }) {
@@ -46,9 +49,17 @@ export function UnitPalette({
       <div className="mb-3">
         <h2 className="font-semibold">Kho đơn vị</h2>
         <p className="mt-1 text-sm text-slate-500">
-          {locked
-            ? 'Đợt đã khoá, không sửa lịch được nữa.'
-            : 'Kéo tên đơn vị thả xuống một ngày trong lưới bên dưới để tạo phiên. Thả được nhiều lần nếu muốn tách buổi sáng và buổi chiều.'}
+          {locked ? (
+            'Đợt đã khoá, không sửa lịch được nữa.'
+          ) : selectedId ? (
+            <>
+              Đang chọn{' '}
+              <strong>{units.find((u) => u.id === selectedId)?.name}</strong> — bấm vào chỗ
+              trống trong lưới bên dưới để đặt phiên. Bấm lại tên đơn vị hoặc nhấn Esc để bỏ chọn.
+            </>
+          ) : (
+            'Bấm một đơn vị để chọn, rồi bấm vào lưới bên dưới để đặt phiên. Đặt được nhiều lần nếu muốn tách buổi sáng và buổi chiều.'
+          )}
         </p>
       </div>
 
@@ -64,8 +75,11 @@ export function UnitPalette({
             done === 0 ? 'chua' : done < targetMinutes ? 'thieu' : done > targetMinutes ? 'du' : 'dung';
 
           return (
-            <div
+            <button
               key={u.id}
+              type="button"
+              disabled={locked}
+              onClick={() => onSelect(selectedId === u.id ? null : u.id)}
               draggable={!locked}
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', u.id);
@@ -74,9 +88,11 @@ export function UnitPalette({
               }}
               onDragEnd={onDragEnd}
               title={people ? `Đánh giá viên: ${people}` : 'Chưa phân công đánh giá viên nào'}
-              className={`rounded-lg border px-3 py-2 text-sm ${UNIT_COLORS[i % UNIT_COLORS.length]} ${
-                locked ? '' : 'cursor-grab active:cursor-grabbing'
-              } ${state === 'chua' ? 'opacity-60' : ''}`}
+              className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+                UNIT_COLORS[i % UNIT_COLORS.length]
+              } ${locked ? '' : 'cursor-pointer hover:brightness-95'} ${
+                selectedId === u.id ? 'ring-2 ring-slate-900 ring-offset-1' : ''
+              } ${state === 'chua' && selectedId !== u.id ? 'opacity-60' : ''}`}
             >
               <span className="block font-medium">{u.name}</span>
               <span className="block text-[11px] opacity-80">
@@ -89,7 +105,7 @@ export function UnitPalette({
               <span className="block text-[11px] opacity-70">
                 {people || 'chưa có đánh giá viên'}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>

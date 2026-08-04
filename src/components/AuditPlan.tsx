@@ -95,8 +95,16 @@ export function AuditPlan({
       return days.map((_, i) => prev[i] ?? { ...seed });
     });
   }, [days.length, initialInfo]);
-  /** Đơn vị đang được nhấc lên từ kho, để lưới làm sáng dòng đích. */
+  /**
+   * Đơn vị đang chọn ở kho, chờ bấm vào lưới để đặt phiên.
+   *
+   * Kéo thả vẫn dùng được, nhưng không phải đường chính: khi lưới nằm ngoài
+   * màn hình thì kéo tới mép trang trình duyệt không tự cuộn, coi như bế tắc.
+   * Bấm chọn rồi bấm đặt thì cuộn thoải mái giữa hai lần bấm.
+   */
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
+  const activeUnitId = draggingUnitId ?? selectedUnitId;
   /**
    * Thời lượng mặc định cho phiên mới. null nghĩa là dùng con số hệ thống tự
    * tính — giữ null thay vì chép giá trị vào state để nó tự đúng theo khi
@@ -331,6 +339,10 @@ export function AuditPlan({
     if (locked) return;
 
     function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setSelectedUnitId(null);
+        return;
+      }
       if (e.key.toLowerCase() !== 'z' || !(e.metaKey || e.ctrlKey)) return;
       // Trong ô nhập thì để trình duyệt tự hoàn tác chữ.
       const el = e.target as HTMLElement | null;
@@ -416,6 +428,7 @@ export function AuditPlan({
   /** Phiên thả từ kho xuống — lưới đã tính sẵn giờ hợp lệ. */
   function createSession(day: string, unitId: string, startTime: string, endTime: string) {
     snapshot();
+    setSelectedUnitId(null);
     setSessions((prev) => [
       ...prev,
       { id: newId(), day, startTime, endTime, kind: 'UNIT', unitId, note: null },
@@ -597,7 +610,7 @@ export function AuditPlan({
                 <span className="ml-1.5 text-xs">{formatDayLong(day).replace(/^.*?, /, '')}</span>
               </span>
 
-              <span className="text-xs text-slate-400">Sáng</span>
+              <span className="text-xs font-medium text-slate-600">Sáng</span>
               <TimeInput
                 value={dayHours[i]?.amStart ?? info.amStart}
                 disabled={locked}
@@ -612,7 +625,7 @@ export function AuditPlan({
                 onCommit={() => commitHours()}
               />
 
-              <span className="ml-3 text-xs text-slate-400">Chiều</span>
+              <span className="ml-3 text-xs font-medium text-slate-600">Chiều</span>
               <TimeInput
                 value={dayHours[i]?.pmStart ?? info.pmStart}
                 disabled={locked}
@@ -643,8 +656,7 @@ export function AuditPlan({
         ) : (
           <p className="border-t border-slate-100 pt-4 text-xs text-slate-500">
             Họp khai mạc <strong>{durationLabel('00:00', toHHMM(openingMinutes))}</strong> ·
-            họp kết thúc <strong>{durationLabel('00:00', toHHMM(closingMinutes))}</strong> —
-            đọc thẳng từ lịch bên dưới. Muốn đổi thì kéo mép khối họp trên lưới.
+            họp kết thúc <strong>{durationLabel('00:00', toHHMM(closingMinutes))}</strong>
           </p>
         )}
       </section>
@@ -657,6 +669,8 @@ export function AuditPlan({
         unitMembers={unitMembers}
         shortById={shortById}
         locked={locked}
+        selectedId={selectedUnitId}
+        onSelect={setSelectedUnitId}
         onDragStart={setDraggingUnitId}
         onDragEnd={() => setDraggingUnitId(null)}
       />
@@ -756,7 +770,7 @@ export function AuditPlan({
           unitMembers={unitMembers}
           conflictIds={conflicts.ids}
           locked={locked}
-          draggingUnitId={draggingUnitId}
+          activeUnitId={activeUnitId}
           defaultMinutes={targetMinutes}
           onPatch={patchSession}
           onRemove={removeSession}
