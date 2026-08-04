@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STANDARD_LABELS, type StandardCode } from '@/lib/iso';
+import { formatDayLong, listDays } from '@/lib/plan';
 
 const STANDARDS = Object.keys(STANDARD_LABELS) as StandardCode[];
 
@@ -25,7 +26,14 @@ type Values = {
  *
  * Mặc định đóng lại: đây là màn hình để xem, không phải để sửa.
  */
-export function AuditEdit({ auditId, initial }: { auditId: string; initial: Values }) {
+export function AuditEdit({
+  auditId, initial, sessionsPerDay,
+}: {
+  auditId: string;
+  initial: Values;
+  /** Số phiên đang xếp trên từng ngày, để xem trước lịch sẽ dời đi đâu. */
+  sessionsPerDay: Record<string, number>;
+}) {
   const router = useRouter();
 
   const [open, setOpen] = useState(false);
@@ -40,6 +48,36 @@ export function AuditEdit({ auditId, initial }: { auditId: string; initial: Valu
       : 0;
 
   const dirty = JSON.stringify(v) !== JSON.stringify(initial);
+
+  /**
+   * Xem trước việc dời lịch. Ghép theo THỨ TỰ ngày trong đợt: ngày 1 vẫn là
+   * ngày 1, chỉ đổi ngày dương lịch. Tính lại đúng luật của máy chủ để trưởng
+   * đoàn thấy trước kết quả thay vì bấm Lưu rồi mới biết.
+   */
+  const preview = useMemo(() => {
+    if (dateInvalid) return null;
+    if (v.startDate === initial.startDate && v.endDate === initial.endDate) return null;
+
+    const oldDays = listDays(initial.startDate, initial.endDate);
+    const newDays = listDays(v.startDate, v.endDate);
+
+    const moves = oldDays
+      .map((day, i) => ({ from: day, to: newDays[i] ?? null, count: sessionsPerDay[day] ?? 0 }))
+      .filter((m) => m.count > 0 || m.to === null);
+
+    const lostCount = moves.filter((m) => m.to === null).reduce((n, m) => n + m.count, 0);
+    const movedCount = moves
+      .filter((m) => m.to !== null && m.to !== m.from)
+      .reduce((n, m) => n + m.count, 0);
+
+    return {
+      moves: moves.filter((m) => m.count > 0 && m.to !== null && m.to !== m.from),
+      lost: moves.filter((m) => m.to === null && m.count > 0),
+      lostCount,
+      movedCount,
+      extraDays: Math.max(0, newDays.length - oldDays.length),
+    };
+  }, [v.startDate, v.endDate, initial.startDate, initial.endDate, sessionsPerDay, dateInvalid]);
 
   function set<K extends keyof Values>(key: K, value: Values[K]) {
     setV((prev) => ({ ...prev, [key]: value }));
@@ -127,12 +165,48 @@ export function AuditEdit({ auditId, initial }: { auditId: string; initial: Valu
           {days > 0 && <span className="mt-5 text-sm text-slate-500">{days} ngày</span>}
         </div>
 
-        {(v.startDate !== initial.startDate || v.endDate !== initial.endDate) && (
-          <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            Đổi ngày không ảnh hưởng tới finding đã ghi nhận. Nhưng nếu có phiên đang nằm ở
-            ngày bị cắt đi thì hệ thống sẽ từ chối lưu và chỉ rõ ngày nào — bạn tự quyết dời
-            hay bỏ phiên đó, chứ nó sẽ không tự xoá.
-          </p>
+        {preview && (
+          <div
+            className={`mt-2 rounded-lg px-3 py-2.5 text-xs ${
+              preview.lostCount > 0 ? 'bg-amber-50 text-amber-900' : 'bg-slate-50 text-slate-600'
+            }`}
+          >
+            {preview.moves.length > 0 && (
+              <>
+                <p className="font-medium">
+                  Lịch dời theo, giữ nguyên thứ tự ngày ({preview.movedCount} phiên):
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {preview.moves.map((m, i) => (
+                    <li key={m.from}>
+                      • Ngày {i + 1}: {formatDayLong(m.from)} → <strong>{formatDayLong(m.to!)}</strong>{' '}
+                      ({m.count} phiên)
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {preview.extraDays > 0 && (
+              <p className={preview.moves.length > 0 ? 'mt-1.5' : ''}>
+                Thêm {preview.extraDays} ngày trống ở cuối đợt để bạn xếp tiếp.
+              </p>
+            )}
+
+            {preview.lostCount > 0 && (
+              <p className={preview.moves.length > 0 ? 'mt-1.5 font-medium' : 'font-medium'}>
+                Rút ngắn đợt sẽ bỏ mất {preview.lost.map((m) => formatDayLong(m.from)).join(', ')},
+                đang có {preview.lostCount} phiên. Sang tab Chương trình dời hoặc bỏ các phiên đó
+                trước — hệ thống sẽ không tự xoá.
+              </p>
+            )}
+
+            {preview.moves.length === 0 &&
+              preview.lostCount === 0 &&
+              preview.extraDays === 0 && <p>Chưa có phiên nào bị ảnh hưởng.</p>}
+
+            <p className="mt-1.5 opacity-80">Finding đã ghi nhận không gắn với ngày nên không đổi.</p>
+          </div>
         )}
       </div>
 

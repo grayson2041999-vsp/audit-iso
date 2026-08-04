@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { auditSessions, audits } from '@/lib/schema';
@@ -30,11 +30,14 @@ const schema = z
 /**
  * Sửa thông tin gốc của đợt đánh giá.
  *
- * Đổi ngày là thao tác nguy hiểm nhất ở đây: rút ngắn khoảng ngày có thể khiến
- * những phiên đã xếp rơi ra ngoài đợt. Chỗ này KHÔNG tự dời và KHÔNG tự xoá
- * chúng — lịch là thứ trưởng đoàn bỏ công sắp, hệ thống im lặng sửa sau lưng
- * thì tới lúc xuất Word mới phát hiện mất phiên. Thay vào đó nó từ chối lưu và
- * nói rõ ngày nào đang vướng, để trưởng đoàn tự quyết gỡ hay giữ.
+ * Đổi ngày là chỗ khó nhất. Lịch không bám vào ngày dương lịch mà bám vào THỨ
+ * TỰ NGÀY TRONG ĐỢT: phiên nằm ở ngày 1 thì vẫn ở ngày 1 sau khi đổi, chỉ đổi
+ * ngày dương lịch tương ứng. Nhờ vậy dời cả đợt sang tuần khác — việc hay xảy
+ * ra nhất khi đơn vị xin hoãn — không mất công sắp lại lịch.
+ *
+ * Chỉ có một trường hợp không tự xử được: rút ngắn đợt khiến những ngày cuối
+ * biến mất trong khi vẫn còn phiên nằm đó. Lúc ấy hệ thống từ chối lưu và nói
+ * rõ ngày nào đang vướng, chứ không tự xoá phiên sau lưng trưởng đoàn.
  */
 export async function PATCH(req: Request, { params }: Ctx) {
   const { id } = await params;
@@ -55,22 +58,32 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const d = parsed.data;
 
   try {
-    // Khoảng ngày mới có chứa hết các phiên đã xếp không.
-    const keep = new Set(listDays(d.startDate, d.endDate));
+    const oldDays = listDays(owned.audit.startDate, owned.audit.endDate);
+    const newDays = listDays(d.startDate, d.endDate);
+
     const rows = await db
       .select({ day: auditSessions.day })
       .from(auditSessions)
       .where(eq(auditSessions.auditId, id));
 
-    const orphanDays = [...new Set(rows.map((r) => r.day))].filter((day) => !keep.has(day)).sort();
+    /** Ngày dương lịch cũ → ngày dương lịch mới, ghép theo thứ tự ngày trong đợt. */
+    const remap = new Map<string, string>();
+    const lost: string[] = [];
+    oldDays.forEach((day, i) => {
+      if (i < newDays.length) remap.set(day, newDays[i]);
+      else lost.push(day);
+    });
 
-    if (orphanDays.length > 0) {
-      const n = rows.filter((r) => !keep.has(r.day)).length;
+    // Phiên nằm ở ngày bị cắt mất, hoặc ở ngày lạ không thuộc đợt cũ.
+    const stranded = rows.filter((r) => !remap.has(r.day));
+    if (stranded.length > 0) {
+      const days = [...new Set(stranded.map((r) => r.day))].sort();
+      const reason = lost.length > 0 ? 'Rút ngắn đợt sẽ bỏ mất' : 'Có phiên nằm ngoài đợt ở';
       return NextResponse.json(
         {
           error:
-            `Khoảng ngày mới không còn ${orphanDays.map(formatDayLong).join(', ')}, ` +
-            `nhưng ${n} phiên đang nằm ở đó. Sang tab Chương trình dời hoặc bỏ các phiên ấy trước, rồi đổi ngày.`,
+            `${reason} ${days.map(formatDayLong).join(', ')}, đang có ${stranded.length} phiên. ` +
+            'Sang tab Chương trình dời hoặc bỏ các phiên đó trước, rồi đổi ngày.',
         },
         { status: 409 },
       );
@@ -89,7 +102,20 @@ export async function PATCH(req: Request, { params }: Ctx) {
       })
       .where(eq(audits.id, id));
 
-    return NextResponse.json({ ok: true });
+    /**
+     * Dời lịch theo. Chỉ đụng những ngày thực sự đổi, và làm sau khi đã cập nhật
+     * đợt: nếu bước này hỏng giữa chừng thì lịch lệch, còn hơn là đợt và lịch
+     * cùng ở trạng thái nửa vời.
+     */
+    for (const [from, to] of remap) {
+      if (from === to) continue;
+      await db
+        .update(auditSessions)
+        .set({ day: to })
+        .where(and(eq(auditSessions.auditId, id), eq(auditSessions.day, from)));
+    }
+
+    return NextResponse.json({ ok: true, movedSessions: rows.length });
   } catch (e) {
     console.error('[audits:PATCH]', e);
     return NextResponse.json({ error: 'Không lưu được vào cơ sở dữ liệu.' }, { status: 500 });
