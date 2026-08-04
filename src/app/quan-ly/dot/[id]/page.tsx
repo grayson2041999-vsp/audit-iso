@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { assignments, auditMembers, auditUnits } from '@/lib/schema';
+import { assignments, auditMembers, auditUnits, findingImages, findings } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
 import { getOwnedAudit, AUDIT_STATUS_LABELS, AUDIT_STATUS_STYLE } from '@/lib/audit-access';
 import { AuditSetup } from '@/components/AuditSetup';
 import { AuditTabs } from '@/components/AuditTabs';
+import { DeleteAuditBox } from '@/components/DeleteAuditBox';
 import { formatDateOnly } from '@/lib/utils';
 import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
 
@@ -22,11 +23,24 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   const { audit } = owned;
 
-  const [units, members, links] = await Promise.all([
+  const [units, members, links, findingRows] = await Promise.all([
     db.select().from(auditUnits).where(eq(auditUnits.auditId, id)).orderBy(asc(auditUnits.createdAt)),
     db.select().from(auditMembers).where(eq(auditMembers.auditId, id)).orderBy(asc(auditMembers.createdAt)),
     db.select().from(assignments).where(eq(assignments.auditId, id)),
+    db.select({ id: findings.id }).from(findings).where(eq(findings.auditId, id)),
   ]);
+
+  // Đếm ảnh để cảnh báo trước khi xoá — ảnh nằm trên R2, mất là mất hẳn.
+  const imageCount = findingRows.length
+    ? Number(
+        (
+          await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(findingImages)
+            .where(inArray(findingImages.findingId, findingRows.map((f) => f.id)))
+        )[0]?.n ?? 0,
+      )
+    : 0;
 
   // Dựng URL công khai của đợt từ chính request hiện tại.
   const h = await headers();
@@ -68,6 +82,17 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         links={links.map((l) => `${l.memberId}:${l.unitId}`)}
         publicUrl={publicUrl}
         leaderName={owned.leader.fullName}
+      />
+
+      <DeleteAuditBox
+        auditId={audit.id}
+        auditTitle={audit.title}
+        counts={{
+          units: units.length,
+          members: members.length,
+          findings: findingRows.length,
+          images: imageCount,
+        }}
       />
     </div>
   );
