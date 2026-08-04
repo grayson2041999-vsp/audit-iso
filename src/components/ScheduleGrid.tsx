@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  KIND_LABELS, MIN_MANUAL, blockedSpans, durationLabel, formatDayLong, freeSpans,
-  nearestStart, resizeLimit, snapManual, toHHMM, toMinutes,
+  KIND_LABELS, MANUAL_STEP, MIN_MANUAL, STEP, blockedSpans, durationLabel, formatDayLong,
+  freeSpans, nearestStart, resizeLimit, snapManual, toHHMM, toMinutes,
   type Hours, type PlanSession, type Span,
 } from '@/lib/plan';
 
@@ -50,7 +50,7 @@ type Drag = {
  */
 export function ScheduleGrid({
   days, hours, sessions, units, members, unitMembers, conflictIds, locked,
-  draggingUnitId, defaultMinutes, onPatch, onRemove, onCreate,
+  draggingUnitId, defaultMinutes, onPatch, onRemove, onCreate, onSnapshot,
 }: {
   days: string[];
   hours: Hours;
@@ -67,6 +67,12 @@ export function ScheduleGrid({
   onPatch: (id: string, patch: Partial<PlanSession>) => void;
   onRemove: (id: string) => void;
   onCreate: (day: string, unitId: string, startTime: string, endTime: string) => void;
+  /**
+   * Đánh dấu mốc hoàn tác, gọi TRƯỚC khi đổi. `tag` để gộp một chuỗi thao tác
+   * liên tiếp cùng loại thành một bước — cả lần kéo chuột, cả tràng phím mũi
+   * tên đều chỉ đáng một lần Ctrl+Z.
+   */
+  onSnapshot: (tag?: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -151,6 +157,9 @@ export function ScheduleGrid({
     if (!d.moved) {
       if (Math.abs(dx) < CLICK_SLOP) return;
       d.moved = true;
+      // Ghi mốc ở đây chứ không ở lúc bấm chuột: bấm rồi thả tại chỗ là thao
+      // tác chọn, không có gì để hoàn tác.
+      onSnapshot();
       setDrag({ ...d });
     }
 
@@ -186,6 +195,56 @@ export function ScheduleGrid({
     // Bấm mà không kéo thì mở khối sửa — giữ nguyên cách dùng cũ trên cảm ứng.
     if (d && !d.moved) setOpenId(openId === s.id ? null : s.id);
   }
+
+  /* ---------------- Bàn phím ---------------- */
+
+  /**
+   * Bấm chọn một khối rồi dùng bàn phím: Delete/Backspace bỏ phiên, mũi tên
+   * trái/phải dời 5 phút (giữ Shift thì 15 phút), Esc bỏ chọn.
+   *
+   * Nghe ở cấp window chứ không ở khối, vì khối rất dễ mất focus — bấm vào ô
+   * giờ trong bảng sửa là focus đã đi chỗ khác trong khi khối vẫn đang chọn.
+   * Đổi lại phải tự loại các ô nhập ra, nếu không thì xoá một chữ trong ô giờ
+   * sẽ xoá luôn cả phiên.
+   */
+  useEffect(() => {
+    if (locked || !openId) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, select, textarea, [contenteditable]')) return;
+
+      const s = sessions.find((x) => x.id === openId);
+      if (!s) return;
+
+      if (e.key === 'Escape') {
+        setOpenId(null);
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        onRemove(s.id);
+        setOpenId(null);
+        return;
+      }
+
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+
+      const step = (e.shiftKey ? STEP : MANUAL_STEP) * (e.key === 'ArrowLeft' ? -1 : 1);
+      const a = toMinutes(s.startTime);
+      const length = toMinutes(s.endTime) - a;
+      const start = nearestStart(a + step, length, freeFor(s));
+      if (start === null || start === a) return;
+
+      onSnapshot(`nudge:${s.id}`);
+      onPatch(s.id, { startTime: toHHMM(start), endTime: toHHMM(start + length) });
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
 
   /* ---------------- Thả đơn vị từ kho xuống ---------------- */
 
@@ -379,6 +438,7 @@ export function ScheduleGrid({
               units={units}
               days={days}
               onPatch={onPatch}
+              onSnapshot={onSnapshot}
               onRemove={(id) => {
                 onRemove(id);
                 setOpenId(null);
@@ -393,15 +453,22 @@ export function ScheduleGrid({
 }
 
 function SessionEditor({
-  session, units, days, onPatch, onRemove, onClose,
+  session, units, days, onPatch, onSnapshot, onRemove, onClose,
 }: {
   session: PlanSession;
   units: Unit[];
   days: string[];
   onPatch: (id: string, patch: Partial<PlanSession>) => void;
+  onSnapshot: (tag?: string) => void;
   onRemove: (id: string) => void;
   onClose: () => void;
 }) {
+  /** Gõ vào ô giờ phát ra một sự kiện mỗi ký tự — gộp cả tràng thành một bước. */
+  const patch = (field: string, value: Partial<PlanSession>) => {
+    onSnapshot(`sua:${session.id}:${field}`);
+    onPatch(session.id, value);
+  };
+
   return (
     <div className="flex flex-wrap items-end gap-3 border-t border-slate-200 bg-brand-50/40 px-3 py-3 text-sm">
       <div>
@@ -410,7 +477,7 @@ function SessionEditor({
           type="time"
           step={300}
           value={session.startTime}
-          onChange={(e) => onPatch(session.id, { startTime: e.target.value })}
+          onChange={(e) => patch('bat-dau', { startTime: e.target.value })}
           className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
         />
       </div>
@@ -420,7 +487,7 @@ function SessionEditor({
           type="time"
           step={300}
           value={session.endTime}
-          onChange={(e) => onPatch(session.id, { endTime: e.target.value })}
+          onChange={(e) => patch('ket-thuc', { endTime: e.target.value })}
           className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
         />
       </div>
@@ -433,7 +500,7 @@ function SessionEditor({
           <span className="mb-1 block text-xs text-slate-500">Đơn vị</span>
           <select
             value={session.unitId ?? ''}
-            onChange={(e) => onPatch(session.id, { unitId: e.target.value })}
+            onChange={(e) => patch('don-vi', { unitId: e.target.value })}
             className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
           >
             {units.map((u) => (
@@ -448,7 +515,7 @@ function SessionEditor({
           <span className="mb-1 block text-xs text-slate-500">Ngày</span>
           <select
             value={session.day}
-            onChange={(e) => onPatch(session.id, { day: e.target.value })}
+            onChange={(e) => patch('ngay', { day: e.target.value })}
             className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
           >
             {days.map((d, i) => (
@@ -458,12 +525,13 @@ function SessionEditor({
         </div>
       )}
 
-      <button
-        onClick={() => onRemove(session.id)}
-        className="pb-2 text-xs text-red-600 hover:underline"
-      >
-        Bỏ phiên
-      </button>
+      <span className="pb-2 text-xs text-slate-500">
+        <kbd className="rounded border border-slate-300 bg-white px-1 font-mono">Delete</kbd> bỏ phiên
+        {' · '}
+        <kbd className="rounded border border-slate-300 bg-white px-1 font-mono">←</kbd>
+        <kbd className="ml-0.5 rounded border border-slate-300 bg-white px-1 font-mono">→</kbd> dời 5
+        phút
+      </span>
       <button onClick={onClose} className="pb-2 text-xs text-slate-500 hover:underline">
         Đóng
       </button>

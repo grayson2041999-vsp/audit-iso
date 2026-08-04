@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
 import { PlanCalculator } from './PlanCalculator';
@@ -54,7 +54,6 @@ export function AuditPlan({
   const router = useRouter();
 
   const [info, setInfo] = useState<PlanInfo>(initialInfo);
-  const [genNote, setGenNote] = useState<string | null>(null);
   /** Đơn vị đang được nhấc lên từ kho, để lưới làm sáng dòng đích. */
   const [draggingUnitId, setDraggingUnitId] = useState<string | null>(null);
   /**
@@ -115,7 +114,7 @@ export function AuditPlan({
     const parts: string[] = [];
     if (added.length) parts.push(`đã thêm ${added.length} đơn vị (${added.map((u) => u.name).join(', ')})`);
     if (removed.length) parts.push(`${removed.length} đơn vị trong lịch đã bị xoá`);
-    return `Sau khi lưu lịch, ${parts.join(' và ')}. Bấm Tính lại lịch để cập nhật.`;
+    return `Sau khi lưu lịch, ${parts.join(' và ')}. Kéo đơn vị từ kho xuống lưới để cập nhật.`;
   }, [neverSaved, initialSessions, units]);
 
   const conflicts = useMemo(
@@ -175,13 +174,88 @@ export function AuditPlan({
   const unitById = new Map(units.map((u) => [u.id, u]));
   const shortById = new Map(members.map((m, i) => [m.id, shortNames[i]]));
 
+  /* ---------------- Hoàn tác ---------------- */
+
+  /**
+   * Lịch sử chỉ cho LỊCH, không cho các ô chữ — ô chữ đã có Ctrl+Z sẵn của
+   * trình duyệt, chen vào đó chỉ làm hỏng thứ người dùng vốn đã quen.
+   *
+   * Giữ trong ref chứ không trong state: đẩy một bước không cần vẽ lại gì, chỉ
+   * hai nút Hoàn tác / Làm lại cần biết nên mới có `tick`.
+   */
+  const past = useRef<PlanSession[][]>([]);
+  const future = useRef<PlanSession[][]>([]);
+  const lastMark = useRef<{ tag: string; at: number } | null>(null);
+  const [tick, setTick] = useState(0);
+
+  /**
+   * Ghi lại trạng thái TRƯỚC khi đổi.
+   *
+   * `tag` để gộp các thao tác liên tiếp cùng loại thành một bước: gõ vào ô giờ
+   * hay giữ phím mũi tên phát ra hàng chục lần đổi, mà người dùng chỉ coi đó là
+   * một lần sửa — bấm Hoàn tác phải quay về trước cả chuỗi, không phải lùi từng
+   * 5 phút một.
+   */
+  function snapshot(tag?: string) {
+    const now = Date.now();
+    if (tag && lastMark.current?.tag === tag && now - lastMark.current.at < 700) {
+      lastMark.current.at = now;
+      return;
+    }
+    lastMark.current = tag ? { tag, at: now } : null;
+
+    past.current = [...past.current, sessions].slice(-60);
+    future.current = [];
+    setTick((t) => t + 1);
+  }
+
+  function undo() {
+    const prev = past.current[past.current.length - 1];
+    if (!prev) return;
+    past.current = past.current.slice(0, -1);
+    future.current = [...future.current, sessions];
+    lastMark.current = null;
+    setSessions(prev);
+    setTick((t) => t + 1);
+  }
+
+  function redo() {
+    const next = future.current[future.current.length - 1];
+    if (!next) return;
+    future.current = future.current.slice(0, -1);
+    past.current = [...past.current, sessions];
+    lastMark.current = null;
+    setSessions(next);
+    setTick((t) => t + 1);
+  }
+
+  useEffect(() => {
+    if (locked) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key.toLowerCase() !== 'z' || !(e.metaKey || e.ctrlKey)) return;
+      // Trong ô nhập thì để trình duyệt tự hoàn tác chữ.
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, select, textarea, [contenteditable]')) return;
+
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
   /* ---------------- Thao tác ---------------- */
 
+  /** Không tự ghi lịch sử: lúc kéo, hàm này chạy mỗi lần chuột nhúc nhích. */
   function patchSession(id: string, patch: Partial<PlanSession>) {
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
   function removeSession(id: string) {
+    snapshot();
     setSessions((prev) => prev.filter((s) => s.id !== id));
   }
 
@@ -189,6 +263,7 @@ export function AuditPlan({
 
   /** Phiên thả từ kho xuống — lưới đã tính sẵn giờ hợp lệ. */
   function createSession(day: string, unitId: string, startTime: string, endTime: string) {
+    snapshot();
     setSessions((prev) => [
       ...prev,
       { id: newId(), day, startTime, endTime, kind: 'UNIT', unitId, note: null },
@@ -212,6 +287,7 @@ export function AuditPlan({
       return;
     }
 
+    snapshot();
     setSessions((prev) => [
       ...prev,
       {
@@ -226,29 +302,71 @@ export function AuditPlan({
     ]);
   }
 
-  function autoGenerate() {
-    if (
-      sessions.length > 0 &&
-      !confirm('Tính lại lịch sẽ thay thế toàn bộ lịch hiện tại, kể cả những chỗ bạn đã sửa tay. Tiếp tục?')
-    ) {
+  /**
+   * Đưa thời lượng hai cuộc họp vào lịch.
+   *
+   * Sửa con số trong ô không tự làm khối trên lịch dài ra: khối là bản ghi có
+   * giờ riêng, còn con số chỉ là ý định. Nút này nối hai thứ đó lại.
+   *
+   * Nếu kéo dài cuộc họp sẽ đè lên phiên đơn vị thì dừng lại và nói rõ vướng
+   * phiên nào — cùng luật với kéo thả và với đổi ngày, máy không tự đẩy phiên
+   * của trưởng đoàn đi chỗ khác.
+   */
+  async function applyMeetingLengths() {
+    const first = days[0];
+    const last = days[days.length - 1];
+
+    const wanted: { kind: SessionKind; day: string; start: number; end: number }[] = [
+      {
+        kind: 'OPENING',
+        day: first,
+        start: toMinutes(info.amStart),
+        end: toMinutes(info.amStart) + info.openingMinutes,
+      },
+      {
+        kind: 'CLOSING',
+        day: last,
+        start: toMinutes(info.pmEnd) - info.closingMinutes,
+        end: toMinutes(info.pmEnd),
+      },
+    ];
+
+    const blockers = sessions.filter((s) =>
+      wanted.some(
+        (w) =>
+          s.kind !== w.kind &&
+          s.day === w.day &&
+          toMinutes(s.startTime) < w.end &&
+          w.start < toMinutes(s.endTime),
+      ),
+    );
+
+    if (blockers.length > 0) {
+      const names = blockers
+        .map((s) =>
+          s.kind === 'UNIT'
+            ? `${units.find((u) => u.id === s.unitId)?.name ?? 'Phiên'} ${s.startTime}–${s.endTime}`
+            : `${KIND_LABELS[s.kind]} ${s.startTime}–${s.endTime}`,
+        )
+        .join('; ');
+      setError(
+        `Thời lượng mới sẽ đè lên: ${names}. Dời hoặc rút ngắn phiên đó trước, rồi bấm lại.`,
+      );
       return;
     }
-    const res = build(info);
-    setSessions(
-      res.sessions.map((x, i) => ({ ...x, id: `tam-${i}-${Math.random().toString(36).slice(2, 7)}` })),
-    );
 
-    const { capacity: c } = res;
-    setGenNote(
-      c.atFloor
-        ? `Quỹ thời gian không đủ: ${c.unitCount} đơn vị trong ${c.dayCount} ngày. Cần thêm ngày đánh giá hoặc thêm đánh giá viên.`
-        : c.mode === 'SEQUENTIAL'
-          ? `Cả đoàn đi cùng nhau, mỗi đơn vị khoảng ${durationLabel('00:00', toHHMM(c.perUnitMinutes))}. Tick phân công ở bước Chuẩn bị để các đánh giá viên làm song song.`
-          : `Xếp song song theo phân công, mỗi đơn vị khoảng ${durationLabel('00:00', toHHMM(c.perUnitMinutes))}.`,
-    );
+    const next = sessions.map((s) => {
+      const w = wanted.find((x) => x.kind === s.kind && x.day === s.day);
+      return w ? { ...s, startTime: toHHMM(w.start), endTime: toHHMM(w.end) } : s;
+    });
+
+    snapshot();
+    setSessions(next);
+    await save(next);
   }
 
-  async function save() {
+  async function save(override?: PlanSession[]) {
+    const list = override ?? sessions;
     setBusy(true);
     setError(null);
     try {
@@ -257,7 +375,7 @@ export function AuditPlan({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...info,
-          sessions: sessions.map(({ day, startTime, endTime, kind, unitId, note }) => ({
+          sessions: list.map(({ day, startTime, endTime, kind, unitId, note }) => ({
             day, startTime, endTime, kind, unitId, note,
           })),
         }),
@@ -365,26 +483,41 @@ export function AuditPlan({
           <Field label="Thời lượng họp khai mạc (phút)">
             <input
               type="number"
-              min={15}
-              step={15}
+              min={MIN_MANUAL}
+              step={5}
               className="input"
               disabled={locked}
               value={info.openingMinutes}
-              onChange={(e) => setInfo((v) => ({ ...v, openingMinutes: Number(e.target.value) || 30 }))}
+              onChange={(e) =>
+                setInfo((v) => ({ ...v, openingMinutes: Number(e.target.value) || MIN_MANUAL }))
+              }
             />
           </Field>
           <Field label="Thời lượng họp kết thúc (phút)">
             <input
               type="number"
-              min={15}
-              step={15}
+              min={MIN_MANUAL}
+              step={5}
               className="input"
               disabled={locked}
               value={info.closingMinutes}
-              onChange={(e) => setInfo((v) => ({ ...v, closingMinutes: Number(e.target.value) || 90 }))}
+              onChange={(e) =>
+                setInfo((v) => ({ ...v, closingMinutes: Number(e.target.value) || MIN_MANUAL }))
+              }
             />
           </Field>
         </div>
+
+        {!locked && (
+          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+            <button onClick={applyMeetingLengths} disabled={busy} className="btn-ghost">
+              {busy ? 'Đang lưu…' : 'Lưu & cập nhật lịch'}
+            </button>
+            <span className="text-xs text-slate-500">
+              Đưa thời lượng hai cuộc họp vào lịch bên dưới rồi lưu cả chương trình.
+            </span>
+          </div>
+        )}
       </section>
 
       <PlanCalculator
@@ -412,11 +545,28 @@ export function AuditPlan({
       <section className="card p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h2 className="font-semibold">Lịch đánh giá</h2>
+
           {!locked && (
-            <button onClick={autoGenerate} className="btn-ghost !py-1.5 text-sm">
-              Tính lại lịch
-            </button>
+            <span className="flex items-center gap-1" data-history={tick}>
+              <button
+                onClick={undo}
+                disabled={past.current.length === 0}
+                title="Hoàn tác (Ctrl+Z)"
+                className="btn-ghost !px-2 !py-1 text-sm disabled:opacity-40"
+              >
+                ↶ Hoàn tác
+              </button>
+              <button
+                onClick={redo}
+                disabled={future.current.length === 0}
+                title="Làm lại (Ctrl+Shift+Z)"
+                className="btn-ghost !px-2 !py-1 text-sm disabled:opacity-40"
+              >
+                ↷ Làm lại
+              </button>
+            </span>
           )}
+
           {!locked && (
             <label className="flex items-center gap-2 text-sm text-slate-500">
               Mỗi đơn vị
@@ -459,16 +609,6 @@ export function AuditPlan({
           </p>
         )}
 
-        {genNote && (
-          <p
-            className={`mb-4 rounded-lg px-3 py-2.5 text-sm ${
-              genNote.startsWith('Quỹ') ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-900'
-            }`}
-          >
-            {genNote}
-          </p>
-        )}
-
         {conflicts.messages.length > 0 && (
           <div className="mb-4 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">
             <p className="font-medium">Trùng lịch đánh giá viên:</p>
@@ -500,6 +640,7 @@ export function AuditPlan({
           onPatch={patchSession}
           onRemove={removeSession}
           onCreate={createSession}
+          onSnapshot={snapshot}
         />
 
         {!locked && (
@@ -522,7 +663,7 @@ export function AuditPlan({
 
       {!locked && (
         <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white/95 py-3 backdrop-blur">
-          <button onClick={save} disabled={busy} className="btn-primary">
+          <button onClick={() => save()} disabled={busy} className="btn-primary">
             {busy ? 'Đang lưu…' : saved ? 'Đã lưu' : 'Lưu chương trình'}
           </button>
           <a href={`/api/audits/${auditId}/xuat-word`} className="btn-ghost">
