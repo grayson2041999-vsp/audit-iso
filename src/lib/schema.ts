@@ -65,7 +65,12 @@ export const audits = pgTable('audits', {
   leaderId: uuid('leader_id')
     .references(() => leaders.id, { onDelete: 'cascade' })
     .notNull(),
-  code: text('code').notNull(),                  // VD: IA-2026-07
+  /**
+   * Cấp TỔ CHỨC — doanh nghiệp/xí nghiệp sở hữu hệ thống quản lý được đánh giá.
+   * Khác hẳn `audit_units` là các phòng/ban/xưởng bên trong tổ chức đó.
+   * Dùng đúng từ "tổ chức" theo bản tiếng Việt của ISO 9001/14001/45001.
+   */
+  organization: text('organization').notNull(),
   title: text('title').notNull(),
   scope: text('scope'),                          // Phạm vi đánh giá
   standards: jsonb('standards').$type<string[]>().default([]).notNull(),

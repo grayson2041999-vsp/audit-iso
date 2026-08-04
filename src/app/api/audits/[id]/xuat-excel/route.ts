@@ -64,7 +64,8 @@ export async function GET(req: Request, { params }: Ctx) {
 
   ws.mergeCells('A2:K2');
   ws.getCell('A2').value =
-    `Mã đợt: ${audit.code}   ·   Thời gian: ${d(audit.startDate)} – ${d(audit.endDate)}   ·   ` +
+    `Tổ chức được đánh giá: ${audit.organization}   ·   ` +
+    `Thời gian: ${d(audit.startDate)} – ${d(audit.endDate)}   ·   ` +
     `Trưởng đoàn: ${audit.leadAuditor ?? ''}`;
   ws.getCell('A2').font = { size: 10, color: { argb: 'FF666666' } };
 
@@ -159,7 +160,16 @@ export async function GET(req: Request, { params }: Ctx) {
   /* ---------------- Trả file ---------------- */
 
   const buffer = await wb.xlsx.writeBuffer();
-  const fileName = `${audit.code.replace(/[^\w-]/g, '_')}_tong-hop-finding.xlsx`;
+  // Không còn mã đợt — đặt tên file theo tên tổ chức, bỏ dấu để tải về không lỗi.
+  const slug = audit.organization
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/[^\w]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  const fileName = `${slug || 'tong-hop'}_finding.xlsx`;
 
   return new NextResponse(buffer, {
     headers: {

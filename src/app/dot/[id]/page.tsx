@@ -37,7 +37,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="text-center">
-        <p className="font-mono text-xs text-slate-500">{audit.code}</p>
+        <p className="text-sm font-medium text-slate-500">{audit.organization}</p>
         <h1 className="mt-1 text-2xl font-semibold">{audit.title}</h1>
         <p className="mt-1 text-sm text-slate-500">
           {formatDateOnly(audit.startDate)} → {formatDateOnly(audit.endDate)} · Trưởng đoàn:{' '}

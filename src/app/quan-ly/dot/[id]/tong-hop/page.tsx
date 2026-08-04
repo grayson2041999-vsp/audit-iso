@@ -72,11 +72,11 @@ export default async function Page({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-slate-500">{audit.code}</span>
             <span className={`chip ring-transparent ${AUDIT_STATUS_STYLE[audit.status] ?? ''}`}>
               {AUDIT_STATUS_LABELS[audit.status] ?? audit.status}
             </span>
           </div>
+          <p className="text-sm font-medium text-slate-500">{audit.organization}</p>
           <h1 className="text-2xl font-semibold">{audit.title}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">

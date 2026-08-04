@@ -25,7 +25,7 @@ async function main() {
     .insert(audits)
     .values({
       leaderId: leader.id,
-      code: 'IA-2026-07',
+      organization: 'Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị',
       title: 'Đánh giá nội bộ định kỳ Quý III/2026',
       scope: 'Toàn bộ các quá trình thuộc phạm vi HTQL tích hợp',
       standards: ['ISO9001', 'ISO14001', 'ISO45001'],

@@ -27,7 +27,7 @@ export async function GET() {
 
 const createSchema = z
   .object({
-    code: z.string().trim().min(1, 'Nhập mã đợt'),
+    organization: z.string().trim().min(1, 'Nhập tên tổ chức được đánh giá'),
     title: z.string().trim().min(1, 'Nhập tên đợt đánh giá'),
     scope: z.string().optional(),
     standards: z.array(z.string()).min(1, 'Chọn ít nhất một tiêu chuẩn'),
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       .insert(audits)
       .values({
         leaderId: leader.id,
-        code: d.code,
+        organization: d.organization,
         title: d.title,
         scope: d.scope || null,
         standards: d.standards,

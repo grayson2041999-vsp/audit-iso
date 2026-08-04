@@ -68,9 +68,9 @@ export default async function Page() {
               <li key={a.id} className="card p-5 transition hover:border-brand-300 hover:shadow">
                 <Link href={`/quan-ly/dot/${a.id}`} className="block">
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="font-mono text-xs text-slate-500">{a.code}</span>
                   <span className={`chip ring-transparent ${st.cls}`}>{st.label}</span>
                 </div>
+                <p className="text-sm font-medium text-slate-500">{a.organization}</p>
                 <h2 className="font-semibold">{a.title}</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {formatDateOnly(a.startDate)} → {formatDateOnly(a.endDate)}

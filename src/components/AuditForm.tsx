@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STANDARD_LABELS, type StandardCode } from '@/lib/iso';
 
@@ -8,10 +8,13 @@ const STANDARDS = Object.keys(STANDARD_LABELS) as StandardCode[];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** Nhớ tên tổ chức của đợt gần nhất — trưởng đoàn thường đánh giá lại cùng một nơi. */
+const ORG_KEY = 'to-chuc-gan-nhat';
+
 export function AuditForm({ leaderName }: { leaderName: string }) {
   const router = useRouter();
 
-  const [code, setCode] = useState(`IA-${new Date().getFullYear()}-`);
+  const [organization, setOrganization] = useState('');
   const [title, setTitle] = useState('');
   const [scope, setScope] = useState('');
   const [standards, setStandards] = useState<StandardCode[]>(['ISO9001']);
@@ -21,6 +24,17 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Điền sẵn tên tổ chức lần trước, tránh mỗi đợt viết một kiểu khác nhau
+  // làm hỏng việc tra cứu về sau.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(ORG_KEY);
+      if (saved) setOrganization(saved);
+    } catch {
+      /* bộ nhớ trình duyệt bị chặn — bỏ qua */
+    }
+  }, []);
 
   const dateInvalid = Boolean(startDate && endDate && endDate < startDate);
 
@@ -42,10 +56,17 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
       const res = await fetch('/api/audits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, title, scope, standards, leadAuditor, startDate, endDate }),
+        body: JSON.stringify({
+          organization, title, scope, standards, leadAuditor, startDate, endDate,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Không tạo được đợt đánh giá.');
+      try {
+        window.localStorage.setItem(ORG_KEY, organization.trim());
+      } catch {
+        /* bỏ qua */
+      }
       router.push('/quan-ly');
       router.refresh();
     } catch (e) {
@@ -56,27 +77,30 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
 
   return (
     <form onSubmit={submit} className="card max-w-2xl space-y-5 p-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div>
-          <label className="label">Mã đợt *</label>
-          <input
-            className="input"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="IA-2026-01"
-            required
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="label">Tên đợt đánh giá *</label>
-          <input
-            className="input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Đánh giá nội bộ định kỳ Quý III/2026"
-            required
-          />
-        </div>
+      <div>
+        <label className="label">Tổ chức được đánh giá *</label>
+        <input
+          className="input"
+          value={organization}
+          onChange={(e) => setOrganization(e.target.value)}
+          placeholder="Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị"
+          required
+        />
+        <p className="mt-1 text-xs text-slate-400">
+          Tên doanh nghiệp / xí nghiệp sở hữu hệ thống quản lý được đánh giá. Các phòng, ban,
+          xưởng bên trong sẽ khai báo riêng ở bước sau dưới tên <strong>đơn vị được đánh giá</strong>.
+        </p>
+      </div>
+
+      <div>
+        <label className="label">Tên đợt đánh giá *</label>
+        <input
+          className="input"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Đánh giá nội bộ định kỳ Quý III/2026"
+          required
+        />
       </div>
 
       <div>
@@ -184,7 +208,7 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
 
       <p className="border-t border-slate-100 pt-4 text-xs text-slate-400">
         Tạo xong, đợt ở trạng thái <strong>Đang chuẩn bị</strong>. Bước tiếp theo là khai báo
-        đơn vị được đánh giá và đánh giá viên, rồi phân công — làm ở đợt phát triển sau.
+        đơn vị được đánh giá và đánh giá viên, rồi phân công và sinh mã cho cả đoàn.
       </p>
     </form>
   );
