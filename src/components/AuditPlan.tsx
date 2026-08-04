@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
-import { PlanCalculator } from './PlanCalculator';
 import { ScheduleGrid } from './ScheduleGrid';
 import { UnitPalette } from './UnitPalette';
 import {
@@ -121,18 +120,6 @@ export function AuditPlan({
     () => findTimeConflicts(sessions, unitMembers, members),
     [sessions, unitMembers, members],
   );
-
-  /** Số đơn vị mà đánh giá viên bận nhất đang giữ, theo phân công thực tế. */
-  const busiestRounds = useMemo(() => {
-    const load = new Map<string, number>();
-    for (const ms of unitMembers.values()) {
-      for (const m of ms) load.set(m, (load.get(m) ?? 0) + 1);
-    }
-    return load.size === 0 ? 0 : Math.max(...load.values());
-  }, [unitMembers]);
-
-  const minutesPerDay =
-    toMinutes(info.amEnd) - toMinutes(info.amStart) + (toMinutes(info.pmEnd) - toMinutes(info.pmStart));
 
   /**
    * Thời lượng hai cuộc họp ĐỌC TỪ LỊCH, không phải từ ô nhập riêng.
@@ -564,15 +551,6 @@ export function AuditPlan({
         )}
       </section>
 
-      <PlanCalculator
-        unitCount={units.length}
-        actualDays={days.length}
-        actualMembers={members.length}
-        minutesPerDay={minutesPerDay}
-        openingMinutes={hours.openingMinutes}
-        closingMinutes={hours.closingMinutes}
-        busiestRounds={busiestRounds}
-      />
 
       <UnitPalette
         units={units}
