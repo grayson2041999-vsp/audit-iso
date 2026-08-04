@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { SeverityBadge } from './Badge';
 import { SEVERITY_LABELS } from '@/lib/iso';
-import { formatDateOnly, dueStatus } from '@/lib/utils';
+import { formatDateOnly, dueStatus, abbreviateName, buildShortNames } from '@/lib/utils';
 
 export type FindingRow = {
   id: string;
@@ -93,6 +93,20 @@ export function FindingsTable({
 
   const hasFilter = Object.values(filters).some(Boolean);
 
+  /**
+   * Tên viết tắt cho cột Đánh giá viên. Tính trên cả danh sách để phát hiện
+   * trùng dạng viết tắt; finding của người đã bị xoá khỏi đợt thì dùng tên
+   * được chụp lại trong chính finding, viết tắt riêng lẻ.
+   */
+  const shortByMember = useMemo(() => {
+    const shorts = buildShortNames(members.map((m) => m.label));
+    return new Map(members.map((m, i) => [m.id, shorts[i]]));
+  }, [members]);
+
+  const auditorLabel = (f: FindingRow) =>
+    (f.memberId && shortByMember.get(f.memberId)) ||
+    (f.auditorName ? abbreviateName(f.auditorName) : '—');
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -145,33 +159,41 @@ export function FindingsTable({
       )}
 
       <div className="card overflow-x-auto">
-        <table className="w-full min-w-[1150px] text-sm">
+        <table className="w-full min-w-[1150px] border-collapse text-sm [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-200">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-4 py-3">Mã</th>
-              <th className="whitespace-nowrap px-4 py-3">Phân loại</th>
-              <th className="px-4 py-3">Đơn vị được đánh giá</th>
-              <th className="px-4 py-3">Nơi phát hiện</th>
-              <th className="px-4 py-3">Điều khoản</th>
-              <th className="px-4 py-3">Mô tả phát hiện</th>
-              <th className="whitespace-nowrap px-4 py-3">Thời hạn</th>
-              <th className="px-4 py-3">Đánh giá viên</th>
-              <th className="px-4 py-3">Trạng thái</th>
+              <th className="w-16 whitespace-nowrap px-3 py-3 text-center">Mã</th>
+              <th className="whitespace-nowrap px-3 py-3">Phân loại</th>
+              <th className="px-3 py-3">Đơn vị được đánh giá</th>
+              <th className="px-3 py-3">Nơi phát hiện</th>
+              <th className="px-3 py-3">Điều khoản</th>
+              <th className="px-3 py-3">Mô tả phát hiện</th>
+              <th className="whitespace-nowrap px-3 py-3">Thời hạn</th>
+              <th className="whitespace-nowrap px-3 py-3">Đánh giá viên</th>
+              <th className="px-3 py-3">Trạng thái</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {filtered.map((f) => {
               const st = FINDING_STATUS[f.status] ?? FINDING_STATUS.DRAFT;
               return (
                 <tr key={f.id} className="align-top hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{f.code}</td>
-                  <td className="px-4 py-3"><SeverityBadge value={f.severity} /></td>
-                  <td className="px-4 py-3 text-slate-700">{f.auditee ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-700">{f.rawArea ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-slate-600">
-                    {f.clauses.map((c) => `${c.standard} ${c.clause}`).join(', ') || '—'}
+                  <td className="whitespace-nowrap px-3 py-3 text-center font-mono text-xs text-slate-500">
+                    {f.code}
                   </td>
-                  <td className="max-w-lg px-4 py-3">
+                  <td className="px-3 py-3"><SeverityBadge value={f.severity} short /></td>
+                  <td className="px-3 py-3 text-slate-700">{f.auditee ?? '—'}</td>
+                  <td className="px-3 py-3 text-slate-700">{f.rawArea ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-slate-600">
+                    {f.clauses.length === 0
+                      ? '—'
+                      : f.clauses.map((c, i) => (
+                          <span key={i} className="block whitespace-nowrap">
+                            {c.standard} {c.clause}
+                          </span>
+                        ))}
+                  </td>
+                  <td className="max-w-lg px-3 py-3">
                     <Link
                       href={`/quan-ly/dot/${auditId}/finding/${f.id}`}
                       className="font-medium text-brand-700 hover:underline"
@@ -182,19 +204,26 @@ export function FindingsTable({
                       {f.statement ?? f.rawText}
                     </p>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3">
+                  <td className="whitespace-nowrap px-3 py-3">
                     <DueCell dueDate={f.dueDate} closed={f.status === 'CLOSED'} />
                   </td>
-                  <td className="px-4 py-3 text-slate-700">{f.auditorName ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`chip ring-transparent ${st.cls}`}>{st.label}</span>
+                  <td
+                    className="whitespace-nowrap px-3 py-3 text-slate-700"
+                    title={f.auditorName ?? undefined}
+                  >
+                    {auditorLabel(f)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={`chip whitespace-nowrap ring-transparent ${st.cls}`}>
+                      {st.label}
+                    </span>
                   </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
+                <td colSpan={9} className="px-3 py-12 text-center text-slate-500">
                   {rows.length === 0
                     ? 'Chưa có finding nào trong đợt này.'
                     : 'Không có finding nào khớp bộ lọc.'}

@@ -178,6 +178,19 @@ export function isValidClause(standard: string, clause: string) {
   return ISO_CLAUSES[code].some(([c]) => c === clause);
 }
 
+/**
+ * Nhãn rút gọn — CHỈ dùng trong bảng tổng hợp, nơi cột đã có màu phân biệt nên
+ * chữ chỉ đóng vai trò xác nhận. Mọi chỗ khác (ô chọn mức độ, dashboard, trang
+ * chi tiết, file Excel) vẫn dùng nhãn đầy đủ để người đọc hiểu ngay nghĩa.
+ */
+export const SEVERITY_SHORT: Record<string, string> = {
+  MAJOR: 'Major NC',
+  MINOR: 'Minor NC',
+  OBS: 'Obs',
+  OFI: 'OFI',
+  CONF: 'Phù hợp',
+};
+
 export const SEVERITY_LABELS: Record<string, string> = {
   MAJOR: 'Không phù hợp nặng (Major NC)',
   MINOR: 'Không phù hợp nhẹ (Minor NC)',

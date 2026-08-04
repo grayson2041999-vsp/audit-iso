@@ -77,12 +77,12 @@ export default async function Page({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {(['MAJOR', 'MINOR', 'OBS', 'OFI'] as const).map((s) => (
-          <div key={s} className="card p-4">
+          <div key={s} className="card p-4 text-center">
             <p className="text-xs text-slate-500">{SEVERITY_LABELS[s]}</p>
             <p className="mt-1 text-2xl font-semibold">{countBy(s)}</p>
           </div>
         ))}
-        <div className="card p-4">
+        <div className="card p-4 text-center">
           <p className="text-xs text-slate-500">Chưa nộp</p>
           <p className={`mt-1 text-2xl font-semibold ${drafts > 0 ? 'text-amber-600' : ''}`}>
             {drafts}
@@ -90,12 +90,6 @@ export default async function Page({
         </div>
       </div>
 
-      {drafts > 0 && (
-        <p className="rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-          Còn {drafts} finding ở dạng bản nháp — đánh giá viên chưa nộp. Bảng dưới vẫn hiện
-          để bạn nắm tiến độ, nhưng nội dung có thể còn thay đổi.
-        </p>
-      )}
 
       <FindingsTable
         auditId={id}
