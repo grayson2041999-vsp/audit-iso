@@ -158,18 +158,37 @@ export function AuditPlan({
 
   const unscheduled = units.filter((u) => !allocated.has(u.id));
 
-  /** Lưới không đủ chỗ hiện chữ, nên gom lỗi giờ giấc thành danh sách bên dưới. */
-  const hoursIssues = useMemo(() => {
+  /**
+   * Phiên nào không nằm trọn trong khung giờ làm việc.
+   *
+   * Dùng cho cả hai việc: hiện danh sách dưới lưới, và chặn lưu. Nhận `list` và
+   * `hours` làm tham số chứ không đọc thẳng state, vì lúc kiểm tra trước khi
+   * lưu thì state chưa kịp cập nhật theo thay đổi vừa tính ra.
+   */
+  function findHoursIssues(list: PlanSession[], hours: PlanInfo) {
     const out: string[] = [];
-    for (const s of sessions) {
-      const issue = checkWorkingHours(s, info);
+    for (const s of list) {
+      const issue = checkWorkingHours(s, hours);
       if (!issue) continue;
       const unit = units.find((u) => u.id === s.unitId);
       const what = s.kind === 'UNIT' ? unit?.name ?? 'Phiên' : KIND_LABELS[s.kind];
       out.push(`${what} ${s.startTime}–${s.endTime}: ${issue}`);
     }
     return out;
-  }, [sessions, info, units]);
+  }
+
+  /** Lưới không đủ chỗ hiện chữ, nên gom lỗi giờ giấc thành danh sách bên dưới. */
+  const hoursIssues = useMemo(
+    () => findHoursIssues(sessions, info),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessions, info, units],
+  );
+
+  /** Khung giờ có tự mâu thuẫn không — sáng phải trước trưa, trưa phải trước chiều. */
+  const hoursBroken =
+    toMinutes(info.amEnd) <= toMinutes(info.amStart) ||
+    toMinutes(info.pmStart) < toMinutes(info.amEnd) ||
+    toMinutes(info.pmEnd) <= toMinutes(info.pmStart);
 
   const unitById = new Map(units.map((u) => [u.id, u]));
   const shortById = new Map(members.map((m, i) => [m.id, shortNames[i]]));
@@ -303,16 +322,22 @@ export function AuditPlan({
   }
 
   /**
-   * Đưa thời lượng hai cuộc họp vào lịch.
+   * Đưa khung giờ làm việc và thời lượng hai cuộc họp vào lịch, rồi lưu.
    *
-   * Sửa con số trong ô không tự làm khối trên lịch dài ra: khối là bản ghi có
+   * Sửa con số trong ô không tự làm khối trên lịch đổi theo: khối là bản ghi có
    * giờ riêng, còn con số chỉ là ý định. Nút này nối hai thứ đó lại.
    *
-   * Nếu kéo dài cuộc họp sẽ đè lên phiên đơn vị thì dừng lại và nói rõ vướng
-   * phiên nào — cùng luật với kéo thả và với đổi ngày, máy không tự đẩy phiên
-   * của trưởng đoàn đi chỗ khác.
+   * Hai cuộc họp thì tính lại được vì vị trí của chúng suy ra từ khung giờ.
+   * Phiên đơn vị thì KHÔNG tự dời — nếu thu hẹp giờ làm việc khiến phiên nào
+   * rơi ra ngoài, nó dừng lại và chỉ đích danh, cùng luật với kéo thả và với
+   * đổi ngày.
    */
-  async function applyMeetingLengths() {
+  async function applyHours() {
+    if (hoursBroken) {
+      setError('Khung giờ không hợp lệ: giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.');
+      return;
+    }
+
     const first = days[0];
     const last = days[days.length - 1];
 
@@ -367,6 +392,25 @@ export function AuditPlan({
 
   async function save(override?: PlanSession[]) {
     const list = override ?? sessions;
+
+    /**
+     * Không lưu khi còn phiên nằm ngoài giờ làm việc. Chặn ở đây chứ không ở
+     * từng nút, để không có đường vòng: sửa giờ rồi bấm Lưu chương trình ở
+     * chân trang cũng phải qua cửa này.
+     */
+    if (hoursBroken) {
+      setError('Khung giờ không hợp lệ: giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.');
+      return;
+    }
+    const issues = findHoursIssues(list, info);
+    if (issues.length > 0) {
+      setError(
+        `Còn ${issues.length} phiên nằm ngoài khung giờ làm việc — xem danh sách dưới lưới. ` +
+          'Kéo hoặc rút ngắn các phiên đó cho vừa giờ mới, rồi lưu lại.',
+      );
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -510,12 +554,17 @@ export function AuditPlan({
 
         {!locked && (
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
-            <button onClick={applyMeetingLengths} disabled={busy} className="btn-ghost">
+            <button onClick={applyHours} disabled={busy || hoursBroken} className="btn-ghost">
               {busy ? 'Đang lưu…' : 'Lưu & cập nhật lịch'}
             </button>
             <span className="text-xs text-slate-500">
-              Đưa thời lượng hai cuộc họp vào lịch bên dưới rồi lưu cả chương trình.
+              Đưa khung giờ và thời lượng hai cuộc họp vào lịch bên dưới, rồi lưu cả chương trình.
             </span>
+            {hoursBroken && (
+              <span className="text-xs text-red-600">
+                Giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.
+              </span>
+            )}
           </div>
         )}
       </section>
@@ -651,7 +700,9 @@ export function AuditPlan({
 
         {hoursIssues.length > 0 && (
           <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-            <p className="font-medium">Phiên nằm ngoài giờ làm việc:</p>
+            <p className="font-medium">
+              Phiên nằm ngoài giờ làm việc — phải xử lý xong mới lưu được:
+            </p>
             <ul className="mt-1 space-y-0.5">
               {hoursIssues.map((m, i) => (
                 <li key={i}>• {m}</li>
@@ -732,7 +783,7 @@ function TimeInput({
   return (
     <input
       type="time"
-      step={900} // bước 15 phút
+      step={300} // bước 5 phút, cùng nhịp với thao tác kéo trên lưới
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
