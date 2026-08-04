@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chọn font cho app đánh giá nội bộ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand: #1f45f5;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 80px;
+    background: var(--bg); color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .intro { margin-bottom: 32px; }
+  .intro h1 { font-size: 26px; margin: 0 0 8px; }
+  .intro p { color: var(--muted); margin: 0 0 6px; line-height: 1.6; }
+
+  .card {
+    background: #fff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px; margin-bottom: 22px;
+  }
+  .head {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+    padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--line);
+  }
+  .name { font-size: 19px; font-weight: 700; }
+  .tag {
+    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    background: #eef2ff; color: #3730a3; font-weight: 600;
+  }
+  .tag.rec { background: #dcfce7; color: #166534; }
+  .note { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  h2.sample { font-size: 23px; margin: 0 0 4px; font-weight: 600; }
+  .sub { font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+
+  .stress {
+    font-size: 21px; letter-spacing: .01em; margin: 0 0 18px;
+    padding: 12px 14px; background: var(--bg); border-radius: 9px;
+  }
+
+  .statement { font-size: 15px; line-height: 1.72; margin: 0 0 18px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 16px; }
+  th {
+    text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 9px 10px; background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  td { padding: 11px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .chip {
+    font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 6px;
+  }
+  .major { background: #fee2e2; color: #991b1b; }
+  .minor { background: #fef3c7; color: #92400e; }
+  .obs   { background: #e0f2fe; color: #075985; }
+  .btn {
+    background: var(--brand); color: #fff; border: 0; border-radius: 9px;
+    padding: 9px 17px; font-size: 14px; font-weight: 500; font-family: inherit;
+  }
+  .btn.ghost { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
+
+  .digits { font-size: 30px; letter-spacing: .32em; font-weight: 500; }
+  .mono-card { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .mono-box { border: 1px solid var(--line); border-radius: 11px; padding: 16px; }
+  .mono-box .lbl { font-size: 12px; color: var(--muted); margin-bottom: 10px; font-family: 'Inter', sans-serif; }
+
+  /* --- các font đem so --- */
+  .f-bvp   { font-family: 'Be Vietnam Pro', sans-serif; }
+  .f-inter { font-family: 'Inter', sans-serif; }
+  .f-pjs   { font-family: 'Plus Jakarta Sans', sans-serif; }
+  .f-ss3   { font-family: 'Source Sans 3', sans-serif; }
+  .f-lex   { font-family: 'Lexend', sans-serif; }
+  .f-plex  { font-family: 'IBM Plex Sans', sans-serif; }
+  .m-jb    { font-family: 'JetBrains Mono', monospace; }
+  .m-plex  { font-family: 'IBM Plex Mono', monospace; }
+  .m-sys   { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="intro">
+    <h1>Chọn font cho app đánh giá nội bộ ISO</h1>
+    <p>Sáu font dưới đây đều có bộ ký tự tiếng Việt đầy đủ trên Google Fonts, tải miễn phí, và nhúng thẳng vào Next.js được.</p>
+    <p>Mỗi khối hiển thị đúng những gì app thật đang có: tiêu đề, dòng thử dấu nặng nhất, một phát biểu finding dài, và một mẩu bảng tổng hợp. Xem trên chính màn hình bạn hay dùng.</p>
+  </div>
+
+  <!-- ================= Be Vietnam Pro ================= -->
+  <div class="card f-bvp">
+    <div class="head">
+      <span class="name">Be Vietnam Pro</span>
+      <span class="tag rec">Khuyến nghị</span>
+      <span class="note">Người Việt thiết kế, riêng cho tiếng Việt</span>
+    </div>
+    <h2 class="sample">Đánh giá nội bộ định kỳ Quý III/2026</h2>
+    <p class="sub">Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị · 12 finding</p>
+    <p class="stress">Ẳ Ẵ Ặ Ẽ Ệ Ỗ Ợ Ữ Ỹ — đường ống, thiết bị, nghiêm trọng, khuyến nghị</p>
+    <p class="statement">Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với yêu cầu tại điều khoản 8.2 của ISO 45001:2018.</p>
+    <table>
+      <tr><th>Mã</th><th>Phân loại</th><th>Đơn vị được đánh giá</th><th>Nơi phát hiện</th><th>Thời hạn</th></tr>
+      <tr><td>F-01</td><td><span class="chip major">Không phù hợp nặng</span></td><td>Phòng Kỹ thuật – Vật tư</td><td>Kho vật tư tầng 1</td><td>03/09/2026</td></tr>
+      <tr><td>F-02</td><td><span class="chip minor">Không phù hợp nhẹ</span></td><td>Xưởng Cơ khí</td><td>Khu vực hàn</td><td>03/10/2026</td></tr>
+    </table>
+    <div class="row"><button class="btn">Chuẩn hoá bằng AI</button><button class="btn ghost">Lưu nháp</button></div>
+  </div>
+
+  <!-- ================= Inter ================= -->
+  <div class="card f-inter">
+    <div class="head">
+      <span class="name">Inter</span>
+      <span class="tag">Trung tính</span>
+      <span class="note">Chuẩn mực cho giao diện nhiều dữ liệu</span>
+    </div>
+    <h2 class="sample">Đánh giá nội bộ định kỳ Quý III/2026</h2>
+    <p class="sub">Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị · 12 finding</p>
+    <p class="stress">Ẳ Ẵ Ặ Ẽ Ệ Ỗ Ợ Ữ Ỹ — đường ống, thiết bị, nghiêm trọng, khuyến nghị</p>
+    <p class="statement">Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với yêu cầu tại điều khoản 8.2 của ISO 45001:2018.</p>
+    <table>
+      <tr><th>Mã</th><th>Phân loại</th><th>Đơn vị được đánh giá</th><th>Nơi phát hiện</th><th>Thời hạn</th></tr>
+      <tr><td>F-01</td><td><span class="chip major">Không phù hợp nặng</span></td><td>Phòng Kỹ thuật – Vật tư</td><td>Kho vật tư tầng 1</td><td>03/09/2026</td></tr>
+      <tr><td>F-02</td><td><span class="chip minor">Không phù hợp nhẹ</span></td><td>Xưởng Cơ khí</td><td>Khu vực hàn</td><td>03/10/2026</td></tr>
+    </table>
+    <div class="row"><button class="btn">Chuẩn hoá bằng AI</button><button class="btn ghost">Lưu nháp</button></div>
+  </div>
+
+  <!-- ================= Plus Jakarta Sans ================= -->
+  <div class="card f-pjs">
+    <div class="head">
+      <span class="name">Plus Jakarta Sans</span>
+      <span class="tag">Hiện đại</span>
+      <span class="note">Chữ tròn, cảm giác mềm và mới</span>
+    </div>
+    <h2 class="sample">Đánh giá nội bộ định kỳ Quý III/2026</h2>
+    <p class="sub">Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị · 12 finding</p>
+    <p class="stress">Ẳ Ẵ Ặ Ẽ Ệ Ỗ Ợ Ữ Ỹ — đường ống, thiết bị, nghiêm trọng, khuyến nghị</p>
+    <p class="statement">Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với yêu cầu tại điều khoản 8.2 của ISO 45001:2018.</p>
+    <table>
+      <tr><th>Mã</th><th>Phân loại</th><th>Đơn vị được đánh giá</th><th>Nơi phát hiện</th><th>Thời hạn</th></tr>
+      <tr><td>F-01</td><td><span class="chip major">Không phù hợp nặng</span></td><td>Phòng Kỹ thuật – Vật tư</td><td>Kho vật tư tầng 1</td><td>03/09/2026</td></tr>
+      <tr><td>F-02</td><td><span class="chip minor">Không phù hợp nhẹ</span></td><td>Xưởng Cơ khí</td><td>Khu vực hàn</td><td>03/10/2026</td></tr>
+    </table>
+    <div class="row"><button class="btn">Chuẩn hoá bằng AI</button><button class="btn ghost">Lưu nháp</button></div>
+  </div>
+
+  <!-- ================= Source Sans 3 ================= -->
+  <div class="card f-ss3">
+    <div class="head">
+      <span class="name">Source Sans 3</span>
+      <span class="tag">Đọc dài</span>
+      <span class="note">Adobe · gọn, hợp văn bản nhiều chữ</span>
+    </div>
+    <h2 class="sample">Đánh giá nội bộ định kỳ Quý III/2026</h2>
+    <p class="sub">Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị · 12 finding</p>
+    <p class="stress">Ẳ Ẵ Ặ Ẽ Ệ Ỗ Ợ Ữ Ỹ — đường ống, thiết bị, nghiêm trọng, khuyến nghị</p>
+    <p class="statement">Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với yêu cầu tại điều khoản 8.2 của ISO 45001:2018.</p>
+    <table>
+      <tr><th>Mã</th><th>Phân loại</th><th>Đơn vị được đánh giá</th><th>Nơi phát hiện</th><th>Thời hạn</th></tr>
+      <tr><td>F-01</td><td><span class="chip major">Không phù hợp nặng</span></td><td>Phòng Kỹ thuật – Vật tư</td><td>Kho vật tư tầng 1</td><td>03/09/2026</td></tr>
+      <tr><td>F-02</td><td><span class="chip minor">Không phù hợp nhẹ</span></td><td>Xưởng Cơ khí</td><td>Khu vực hàn</td><td>03/10/2026</td></tr>
+    </table>
+    <div class="row"><button class="btn">Chuẩn hoá bằng AI</button><button class="btn ghost">Lưu nháp</button></div>
+  </div>
+
+  <!-- ================= Lexend ================= -->
+  <div class="card f-lex">
+    <div class="head">
+      <span class="name">Lexend</span>
+      <span class="tag">Dễ đọc</span>
+      <span class="note">Thiết kế để giảm mỏi mắt khi đọc</span>
+    </div>
+    <h2 class="sample">Đánh giá nội bộ định kỳ Quý III/2026</h2>
+    <p class="sub">Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị · 12 finding</p>
+    <p class="stress">Ẳ Ẵ Ặ Ẽ Ệ Ỗ Ợ Ữ Ỹ — đường ống, thiết bị, nghiêm trọng, khuyến nghị</p>
+    <p class="statement">Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với yêu cầu tại điều khoản 8.2 của ISO 45001:2018.</p>
+    <table>
+      <tr><th>Mã</th><th>Phân loại</th><th>Đơn vị được đánh giá</th><th>Nơi phát hiện</th><th>Thời hạn</th></tr>
+      <tr><td>F-01</td><td><span class="chip major">Không phù hợp nặng</span></td><td>Phòng Kỹ thuật – Vật tư</td><td>Kho vật tư tầng 1</td><td>03/09/2026</td></tr>
+      <tr><td>F-02</td><td><span class="chip minor">Không phù hợp nhẹ</span></td><td>Xưởng Cơ khí</td><td>Khu vực hàn</td><td>03/10/2026</td></tr>
+    </table>
+    <div class="row"><button class="btn">Chuẩn hoá bằng AI</button><button class="btn ghost">Lưu nháp</button></div>
+  </div>
+
+  <!-- ================= IBM Plex Sans ================= -->
+  <div class="card f-plex">
+    <div class="head">
+      <span class="name">IBM Plex Sans</span>
+      <span class="tag">Kỹ thuật</span>
+      <span class="note">Nghiêm túc, hợp tài liệu kỹ thuật</span>
+    </div>
+    <h2 class="sample">Đánh giá nội bộ định kỳ Quý III/2026</h2>
+    <p class="sub">Xí nghiệp Dịch vụ Cảng và Cung ứng vật tư thiết bị · 12 finding</p>
+    <p class="stress">Ẳ Ẵ Ặ Ẽ Ệ Ỗ Ợ Ữ Ỹ — đường ống, thiết bị, nghiêm trọng, khuyến nghị</p>
+    <p class="statement">Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với yêu cầu tại điều khoản 8.2 của ISO 45001:2018.</p>
+    <table>
+      <tr><th>Mã</th><th>Phân loại</th><th>Đơn vị được đánh giá</th><th>Nơi phát hiện</th><th>Thời hạn</th></tr>
+      <tr><td>F-01</td><td><span class="chip major">Không phù hợp nặng</span></td><td>Phòng Kỹ thuật – Vật tư</td><td>Kho vật tư tầng 1</td><td>03/09/2026</td></tr>
+      <tr><td>F-02</td><td><span class="chip minor">Không phù hợp nhẹ</span></td><td>Xưởng Cơ khí</td><td>Khu vực hàn</td><td>03/10/2026</td></tr>
+    </table>
+    <div class="row"><button class="btn">Chuẩn hoá bằng AI</button><button class="btn ghost">Lưu nháp</button></div>
+  </div>
+
+  <!-- ================= Font mã số ================= -->
+  <div class="card">
+    <div class="head">
+      <span class="name">Font cho mã số</span>
+      <span class="note">Dùng cho mã truy cập 6 số và mã finding</span>
+    </div>
+    <p class="sub" style="font-family:'Inter',sans-serif">
+      Đánh giá viên phải đọc mã 6 số từ tin nhắn rồi gõ lại. Font cần phân biệt rõ số 0 với chữ O, số 1 với chữ l.
+    </p>
+    <div class="mono-card">
+      <div class="mono-box">
+        <div class="lbl">JetBrains Mono — số 0 có gạch chéo</div>
+        <div class="digits m-jb">408316</div>
+        <div class="m-jb" style="font-size:14px;margin-top:10px">F-01 · 0O1lI · IA-2026-01</div>
+      </div>
+      <div class="mono-box">
+        <div class="lbl">IBM Plex Mono — số 0 có chấm giữa</div>
+        <div class="digits m-plex">408316</div>
+        <div class="m-plex" style="font-size:14px;margin-top:10px">F-01 · 0O1lI · IA-2026-01</div>
+      </div>
+      <div class="mono-box">
+        <div class="lbl">Mặc định hệ thống (hiện tại)</div>
+        <div class="digits m-sys">408316</div>
+        <div class="m-sys" style="font-size:14px;margin-top:10px">F-01 · 0O1lI · IA-2026-01</div>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:var(--muted);font-size:13px;font-family:'Inter',sans-serif">
+    Chọn xong, báo tên font — tôi nhúng vào app bằng cơ chế tối ưu font sẵn có của Next.js (tự tải về máy chủ, không gọi Google khi người dùng mở trang).
+  </p>
+
+</div>
+</body>
+</html>

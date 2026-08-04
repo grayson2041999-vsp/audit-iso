@@ -11,7 +11,13 @@ const config: Config = {
           800: '#1c2eb6', 900: '#1d2e8f',
         },
       },
-      fontFamily: { sans: ['var(--font-sans)', 'system-ui', 'sans-serif'] },
+      fontFamily: {
+        // Biến --font-sans / --font-mono do next/font gán ở thẻ <html> (xem layout.tsx).
+        // Luôn kèm font dự phòng: nếu biến chưa có, cả dòng khai báo sẽ hỏng và
+        // trình duyệt rơi về mặc định của nó là serif — đúng lỗi đã gặp trước đây.
+        sans: ['var(--font-sans)', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
     },
   },
   plugins: [],
