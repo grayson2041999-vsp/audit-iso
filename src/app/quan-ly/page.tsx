@@ -4,18 +4,10 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { audits } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
-import { formatDateOnly } from '@/lib/utils';
-import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
+import { AuditList } from '@/components/AuditList';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Quản lý đợt đánh giá' };
-
-const AUDIT_STATUS: Record<string, { label: string; cls: string }> = {
-  PLANNED: { label: 'Đang chuẩn bị', cls: 'bg-slate-100 text-slate-700' },
-  IN_PROGRESS: { label: 'Đang thực hiện', cls: 'bg-emerald-100 text-emerald-800' },
-  REPORTING: { label: 'Đang tổng hợp', cls: 'bg-blue-100 text-blue-800' },
-  CLOSED: { label: 'Đã khoá', cls: 'bg-zinc-200 text-zinc-700' },
-};
 
 export default async function Page() {
   const leader = await getLeader();
@@ -61,33 +53,18 @@ export default async function Page() {
           <Link href="/quan-ly/dot/moi" className="btn-primary mt-4">+ Tạo đợt đánh giá</Link>
         </div>
       ) : (
-        <ul className="grid gap-4 md:grid-cols-2">
-          {rows.map((a) => {
-            const st = AUDIT_STATUS[a.status] ?? AUDIT_STATUS.PLANNED;
-            return (
-              <li key={a.id} className="card p-5 transition hover:border-brand-300 hover:shadow">
-                <Link href={`/quan-ly/dot/${a.id}`} className="block">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className={`chip ring-transparent ${st.cls}`}>{st.label}</span>
-                </div>
-                <p className="text-sm font-medium text-slate-500">{a.organization}</p>
-                <h2 className="font-semibold">{a.title}</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {formatDateOnly(a.startDate)} → {formatDateOnly(a.endDate)}
-                </p>
-                <p className="mt-0.5 text-sm text-slate-500">
-                  Trưởng đoàn: {a.leadAuditor ?? '—'}
-                </p>
-                <p className="mt-2 text-xs text-slate-400">
-                  {a.standards
-                    .map((s) => STANDARD_SHORT[s as StandardCode] ?? s)
-                    .join(' · ')}
-                </p>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <AuditList
+          rows={rows.map((a) => ({
+            id: a.id,
+            organization: a.organization,
+            title: a.title,
+            leadAuditor: a.leadAuditor,
+            startDate: a.startDate ? a.startDate.toISOString() : null,
+            endDate: a.endDate ? a.endDate.toISOString() : null,
+            status: a.status,
+            standards: a.standards,
+          }))}
+        />
       )}
     </div>
   );
