@@ -218,9 +218,6 @@ export function FindingEntry({
 
         <p className="mb-5 rounded-lg bg-slate-50 px-3 py-2.5 text-sm">
           Đơn vị được đánh giá: <strong>{unitName}</strong>
-          <span className="block text-xs text-slate-500">
-            Người ghi nhận: {memberName} — hệ thống tự điền, không cần nhập lại.
-          </span>
         </p>
 
         <div className="mb-4">
@@ -268,23 +265,21 @@ export function FindingEntry({
               <path d="M10 1a6 6 0 0 0-3.4 10.94c.35.24.57.6.63 1l.1.62c.06.37.38.64.75.64h3.84c.37 0 .69-.27.75-.64l.1-.62c.06-.4.28-.76.63-1A6 6 0 0 0 10 1Z" />
               <path d="M7.5 16.5a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75ZM8.5 18.5a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75Z" />
             </svg>
-            <p className="text-sm text-amber-900">
-              <strong>Ghi nhận càng cụ thể, finding càng chặt chẽ.</strong> Nêu rõ: kiểm tra
-              ở đâu, khi nào · đối tượng và số lượng đã xem xét (mã thiết bị, số hiệu tài liệu,
-              số mẫu) · quan sát được điều gì · nếu có liên quan tới quy định hay thủ tục nào
-              thì nêu tên.
-            </p>
+            <div className="text-sm text-amber-900">
+              <p className="font-semibold">Ghi nhận càng cụ thể, finding càng chặt chẽ</p>
+              <ul className="mt-1.5 space-y-1">
+                <li>• Kiểm tra ở đâu, khi nào</li>
+                <li>• Đối tượng và số lượng đã xem xét (mã thiết bị, số hiệu tài liệu, số mẫu)</li>
+                <li>• Quan sát được điều gì</li>
+                <li>• Nếu có liên quan tới quy định hay thủ tục nào thì nêu tên</li>
+              </ul>
+            </div>
           </div>
         </div>
 
         <div className="mb-4">
           <label className="label">Nơi phát hiện</label>
-          <input
-            className="input"
-            value={area}
-            onChange={(e) => setArea(e.target.value)}
-            placeholder="Kho vật tư tầng 1"
-          />
+          <input className="input" value={area} onChange={(e) => setArea(e.target.value)} />
         </div>
 
         <div className="mb-5">
@@ -309,10 +304,6 @@ export function FindingEntry({
           </button>
         </div>
 
-        <p className="mt-2 text-xs text-slate-400">
-          Đang ngoài hiện trường thì bấm <strong>Lưu nháp</strong> để ghi nhanh, về bàn
-          chuẩn hoá sau. Nội dung đang gõ cũng được tự lưu tạm trên máy bạn.
-        </p>
 
         {error && (
           <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
