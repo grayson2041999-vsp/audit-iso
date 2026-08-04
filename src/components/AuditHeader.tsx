@@ -57,7 +57,15 @@ export function AuditHeader({ audit, publicView = false }: { audit: Audit; publi
         </Row>
 
         <Row label="Trưởng đoàn">
-          <span className="font-medium">{audit.leadAuditor ?? '—'}</span>
+          {audit.leadAuditor ? (
+            // Nền tối đặc — giá trị nổi nhất trong khối, tách hẳn khỏi các thẻ
+            // tiêu chuẩn nhiều màu bên dưới nên không bị lẫn.
+            <span className="inline-block rounded-md bg-slate-900 px-2.5 py-1 font-semibold text-white">
+              {audit.leadAuditor}
+            </span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
         </Row>
 
         <Row label="Tiêu chuẩn">

@@ -323,9 +323,6 @@ export function AuditSetup({
               </>
             )}
 
-            <span className="ml-auto text-xs text-slate-400">
-              Rê chuột vào tên viết tắt để xem tên đầy đủ
-            </span>
           </div>
         )}
       </section>
@@ -338,7 +335,6 @@ export function AuditSetup({
           <>
             <p className="mb-4 mt-1 text-sm text-slate-500">
               Sinh mã 6 số cho từng đánh giá viên và chuyển đợt sang <strong>Đang thực hiện</strong>.
-              Trước lúc này đánh giá viên chưa vào được.
             </p>
 
             {unitsWithoutMember.length > 0 && (
