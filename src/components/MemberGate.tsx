@@ -48,9 +48,8 @@ export function MemberGate({ auditId, members }: { auditId: string; members: Mem
   if (!selected) {
     return (
       <div className="card p-5">
-        <h2 className="font-semibold">Bạn là ai?</h2>
-        <p className="mb-4 mt-1 text-sm text-slate-500">
-          Bấm vào tên mình, sau đó nhập mã 6 số trưởng đoàn đã gửi.
+        <p className="mb-4 text-sm text-slate-600">
+          Đánh giá viên vui lòng bấm vào tên mình, sau đó nhập mã 6 số do trưởng đoàn gửi
         </p>
         <ul className="grid gap-2 sm:grid-cols-2">
           {members.map((m) => (
