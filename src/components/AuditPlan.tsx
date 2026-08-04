@@ -134,9 +134,36 @@ export function AuditPlan({
   const minutesPerDay =
     toMinutes(info.amEnd) - toMinutes(info.amStart) + (toMinutes(info.pmEnd) - toMinutes(info.pmStart));
 
+  /**
+   * Thời lượng hai cuộc họp ĐỌC TỪ LỊCH, không phải từ ô nhập riêng.
+   *
+   * Trước đây có hai ô số cho việc này, nhưng khối trên lịch kéo giãn được nên
+   * cùng một sự thật có hai nơi ghi — kéo khối xong thì con số trong ô sai, sửa
+   * con số thì khối không đổi. Bỏ ô đi, lấy khối làm gốc: kéo mép khối họp là
+   * xong. Con số vẫn được lưu xuống database để file Word và lần mở sau dùng.
+   *
+   * Chưa có khối nào thì lấy giá trị đã lưu làm mặc định — lúc đó nó là hạt
+   * giống cho lần xếp lịch đầu tiên chứ chưa phải bản sao của cái gì.
+   */
+  function meetingMinutes(kind: SessionKind, day: string, fallback: number) {
+    const s = sessions.find((x) => x.kind === kind && x.day === day);
+    return s ? Math.max(0, toMinutes(s.endTime) - toMinutes(s.startTime)) : fallback;
+  }
+
+  const hours: Hours = {
+    amStart: info.amStart,
+    amEnd: info.amEnd,
+    pmStart: info.pmStart,
+    pmEnd: info.pmEnd,
+    openingMinutes: meetingMinutes('OPENING', days[0], initialInfo.openingMinutes),
+    closingMinutes: meetingMinutes('CLOSING', days[days.length - 1], initialInfo.closingMinutes),
+  };
+
   const capacity = useMemo(
-    () => computeCapacity({ days, hours: info, units, unitMembers }),
-    [days, info, units, unitMembers],
+    () => computeCapacity({ days, hours, units, unitMembers }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [days, hours.amStart, hours.amEnd, hours.pmStart, hours.pmEnd,
+     hours.openingMinutes, hours.closingMinutes, units, unitMembers],
   );
 
   /** Thời lượng nên dành cho mỗi đơn vị — hệ thống tính, trưởng đoàn đè lên được. */
@@ -296,11 +323,11 @@ export function AuditPlan({
    */
   function addMeeting(day: string, kind: SessionKind) {
     const self = { id: '__moi__', day, kind, unitId: null };
-    const free = freeSpans(blockedSpans({ self, sessions, hours: info, unitMembers }), info);
+    const free = freeSpans(blockedSpans({ self, sessions, hours, unitMembers }), hours);
 
     const widest = free.reduce((mx, f) => Math.max(mx, f.end - f.start), 0);
     const dur = Math.max(MIN_MANUAL, Math.min(60, widest));
-    const start = nearestStart(toMinutes(info.amStart), dur, free);
+    const start = nearestStart(toMinutes(hours.amStart), dur, free);
     if (start === null) {
       setError(`Ngày này không còn chỗ trống cho ${KIND_LABELS[kind].toLowerCase()}.`);
       return;
@@ -321,77 +348,8 @@ export function AuditPlan({
     ]);
   }
 
-  /**
-   * Đưa khung giờ làm việc và thời lượng hai cuộc họp vào lịch, rồi lưu.
-   *
-   * Sửa con số trong ô không tự làm khối trên lịch đổi theo: khối là bản ghi có
-   * giờ riêng, còn con số chỉ là ý định. Nút này nối hai thứ đó lại.
-   *
-   * Hai cuộc họp thì tính lại được vì vị trí của chúng suy ra từ khung giờ.
-   * Phiên đơn vị thì KHÔNG tự dời — nếu thu hẹp giờ làm việc khiến phiên nào
-   * rơi ra ngoài, nó dừng lại và chỉ đích danh, cùng luật với kéo thả và với
-   * đổi ngày.
-   */
-  async function applyHours() {
-    if (hoursBroken) {
-      setError('Khung giờ không hợp lệ: giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.');
-      return;
-    }
-
-    const first = days[0];
-    const last = days[days.length - 1];
-
-    const wanted: { kind: SessionKind; day: string; start: number; end: number }[] = [
-      {
-        kind: 'OPENING',
-        day: first,
-        start: toMinutes(info.amStart),
-        end: toMinutes(info.amStart) + info.openingMinutes,
-      },
-      {
-        kind: 'CLOSING',
-        day: last,
-        start: toMinutes(info.pmEnd) - info.closingMinutes,
-        end: toMinutes(info.pmEnd),
-      },
-    ];
-
-    const blockers = sessions.filter((s) =>
-      wanted.some(
-        (w) =>
-          s.kind !== w.kind &&
-          s.day === w.day &&
-          toMinutes(s.startTime) < w.end &&
-          w.start < toMinutes(s.endTime),
-      ),
-    );
-
-    if (blockers.length > 0) {
-      const names = blockers
-        .map((s) =>
-          s.kind === 'UNIT'
-            ? `${units.find((u) => u.id === s.unitId)?.name ?? 'Phiên'} ${s.startTime}–${s.endTime}`
-            : `${KIND_LABELS[s.kind]} ${s.startTime}–${s.endTime}`,
-        )
-        .join('; ');
-      setError(
-        `Thời lượng mới sẽ đè lên: ${names}. Dời hoặc rút ngắn phiên đó trước, rồi bấm lại.`,
-      );
-      return;
-    }
-
-    const next = sessions.map((s) => {
-      const w = wanted.find((x) => x.kind === s.kind && x.day === s.day);
-      return w ? { ...s, startTime: toHHMM(w.start), endTime: toHHMM(w.end) } : s;
-    });
-
-    snapshot();
-    setSessions(next);
-    await save(next);
-  }
-
-  async function save(override?: PlanSession[]) {
-    const list = override ?? sessions;
+  async function save() {
+    const list = sessions;
 
     /**
      * Không lưu khi còn phiên nằm ngoài giờ làm việc. Chặn ở đây chứ không ở
@@ -419,6 +377,9 @@ export function AuditPlan({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...info,
+          // Ghi con số đọc từ lịch, để file Word và lần mở sau khớp với lưới.
+          openingMinutes: hours.openingMinutes,
+          closingMinutes: hours.closingMinutes,
           sessions: list.map(({ day, startTime, endTime, kind, unitId, note }) => ({
             day, startTime, endTime, kind, unitId, note,
           })),
@@ -523,49 +484,16 @@ export function AuditPlan({
           <TimeInput value={info.pmEnd} disabled={locked} onChange={(v) => setInfo((s) => ({ ...s, pmEnd: v }))} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Thời lượng họp khai mạc (phút)">
-            <input
-              type="number"
-              min={MIN_MANUAL}
-              step={5}
-              className="input"
-              disabled={locked}
-              value={info.openingMinutes}
-              onChange={(e) =>
-                setInfo((v) => ({ ...v, openingMinutes: Number(e.target.value) || MIN_MANUAL }))
-              }
-            />
-          </Field>
-          <Field label="Thời lượng họp kết thúc (phút)">
-            <input
-              type="number"
-              min={MIN_MANUAL}
-              step={5}
-              className="input"
-              disabled={locked}
-              value={info.closingMinutes}
-              onChange={(e) =>
-                setInfo((v) => ({ ...v, closingMinutes: Number(e.target.value) || MIN_MANUAL }))
-              }
-            />
-          </Field>
-        </div>
-
-        {!locked && (
-          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
-            <button onClick={applyHours} disabled={busy || hoursBroken} className="btn-ghost">
-              {busy ? 'Đang lưu…' : 'Lưu & cập nhật lịch'}
-            </button>
-            <span className="text-xs text-slate-500">
-              Đưa khung giờ và thời lượng hai cuộc họp vào lịch bên dưới, rồi lưu cả chương trình.
-            </span>
-            {hoursBroken && (
-              <span className="text-xs text-red-600">
-                Giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.
-              </span>
-            )}
-          </div>
+        {hoursBroken ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
+            Giờ sáng phải trước giờ trưa, giờ trưa trước giờ chiều.
+          </p>
+        ) : (
+          <p className="border-t border-slate-100 pt-4 text-xs text-slate-500">
+            Họp khai mạc <strong>{durationLabel('00:00', toHHMM(hours.openingMinutes))}</strong> ·
+            họp kết thúc <strong>{durationLabel('00:00', toHHMM(hours.closingMinutes))}</strong> —
+            đọc thẳng từ lịch bên dưới. Muốn đổi thì kéo mép khối họp trên lưới.
+          </p>
         )}
       </section>
 
@@ -574,8 +502,8 @@ export function AuditPlan({
         actualDays={days.length}
         actualMembers={members.length}
         minutesPerDay={minutesPerDay}
-        openingMinutes={info.openingMinutes}
-        closingMinutes={info.closingMinutes}
+        openingMinutes={hours.openingMinutes}
+        closingMinutes={hours.closingMinutes}
         busiestRounds={busiestRounds}
       />
 
@@ -677,7 +605,7 @@ export function AuditPlan({
 
         <ScheduleGrid
           days={days}
-          hours={info}
+          hours={hours}
           sessions={sessions}
           units={units}
           members={members.map((m, i) => ({ ...m, short: shortNames[i] }))}
