@@ -4,8 +4,7 @@ import { db } from '@/lib/db';
 import { auditMembers, audits } from '@/lib/schema';
 import { getMember } from '@/lib/member-auth';
 import { MemberGate } from '@/components/MemberGate';
-import { formatDateOnly } from '@/lib/utils';
-import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
+import { AuditHeader } from '@/components/AuditHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,17 +35,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="text-center">
-        <p className="text-sm font-medium text-slate-500">{audit.organization}</p>
-        <h1 className="mt-1 text-2xl font-semibold">{audit.title}</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {formatDateOnly(audit.startDate)} → {formatDateOnly(audit.endDate)} · Trưởng đoàn:{' '}
-          {audit.leadAuditor ?? '—'}
-        </p>
-        <p className="mt-1 text-xs text-slate-400">
-          {audit.standards.map((s) => STANDARD_SHORT[s as StandardCode] ?? s).join(' · ')}
-        </p>
-      </div>
+      <AuditHeader audit={audit} publicView />
 
       {audit.status === 'CLOSED' && (
         <p className="rounded-lg bg-zinc-100 px-4 py-3 text-center text-sm text-zinc-700">

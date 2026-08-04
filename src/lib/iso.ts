@@ -17,6 +17,27 @@ export const STANDARD_SHORT: Record<StandardCode, string> = {
   ISO45001: 'ISO 45001:2018',
 };
 
+/** Màu riêng cho từng tiêu chuẩn — xanh lá cho môi trường, cam cho an toàn. */
+export const STANDARD_STYLE: Record<StandardCode, string> = {
+  ISO9001: 'bg-brand-50 text-brand-700 ring-brand-600/20',
+  ISO14001: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+  ISO45001: 'bg-amber-50 text-amber-800 ring-amber-600/20',
+};
+
+/** Lĩnh vực của từng tiêu chuẩn, hiện kèm mã cho người chưa thuộc số hiệu. */
+export const STANDARD_DOMAIN: Record<StandardCode, string> = {
+  ISO9001: 'Chất lượng',
+  ISO14001: 'Môi trường',
+  ISO45001: 'An toàn & sức khoẻ',
+};
+
+const STANDARD_ORDER: StandardCode[] = ['ISO9001', 'ISO14001', 'ISO45001'];
+
+/** Sắp theo thứ tự quen thuộc 9001 → 14001 → 45001, bỏ mã lạ. */
+export function sortStandards(codes: string[]): StandardCode[] {
+  return STANDARD_ORDER.filter((c) => codes.includes(c));
+}
+
 type Clause = [string, string];
 
 export const ISO_CLAUSES: Record<StandardCode, Clause[]> = {

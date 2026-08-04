@@ -4,8 +4,9 @@ import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { auditMembers, auditUnits, findings } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
-import { getOwnedAudit, AUDIT_STATUS_LABELS, AUDIT_STATUS_STYLE } from '@/lib/audit-access';
+import { getOwnedAudit } from '@/lib/audit-access';
 import { AuditTabs } from '@/components/AuditTabs';
+import { AuditHeader } from '@/components/AuditHeader';
 import { FindingFilters } from '@/components/FindingFilters';
 import { AuditLockButton } from '@/components/AuditLockButton';
 import { SeverityBadge } from '@/components/Badge';
@@ -70,15 +71,7 @@ export default async function Page({
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className={`chip ring-transparent ${AUDIT_STATUS_STYLE[audit.status] ?? ''}`}>
-              {AUDIT_STATUS_LABELS[audit.status] ?? audit.status}
-            </span>
-          </div>
-          <p className="text-sm font-medium text-slate-500">{audit.organization}</p>
-          <h1 className="text-2xl font-semibold">{audit.title}</h1>
-        </div>
+        <AuditHeader audit={audit} />
         <div className="flex flex-wrap items-center gap-2">
           <a
             href={`/api/audits/${id}/xuat-excel${query ? `?${query}` : ''}`}

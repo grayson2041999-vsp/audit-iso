@@ -5,12 +5,11 @@ import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { assignments, auditMembers, auditUnits, findingImages, findings } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
-import { getOwnedAudit, AUDIT_STATUS_LABELS, AUDIT_STATUS_STYLE } from '@/lib/audit-access';
+import { getOwnedAudit } from '@/lib/audit-access';
 import { AuditSetup } from '@/components/AuditSetup';
 import { AuditTabs } from '@/components/AuditTabs';
+import { AuditHeader } from '@/components/AuditHeader';
 import { DeleteAuditBox } from '@/components/DeleteAuditBox';
-import { formatDateOnly } from '@/lib/utils';
-import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,23 +53,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         ← Danh sách đợt đánh giá
       </Link>
 
-      <div>
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span
-            className={`chip ring-transparent ${AUDIT_STATUS_STYLE[audit.status] ?? ''}`}
-          >
-            {AUDIT_STATUS_LABELS[audit.status] ?? audit.status}
-          </span>
-        </div>
-        <p className="text-sm font-medium text-slate-500">{audit.organization}</p>
-        <h1 className="text-2xl font-semibold">{audit.title}</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {formatDateOnly(audit.startDate)} → {formatDateOnly(audit.endDate)} · Trưởng đoàn:{' '}
-          {audit.leadAuditor ?? '—'} ·{' '}
-          {audit.standards.map((s) => STANDARD_SHORT[s as StandardCode] ?? s).join(' · ')}
-        </p>
-        {audit.scope && <p className="mt-2 max-w-3xl text-sm text-slate-600">{audit.scope}</p>}
-      </div>
+      <AuditHeader audit={audit} />
 
       <AuditTabs auditId={audit.id} />
 
