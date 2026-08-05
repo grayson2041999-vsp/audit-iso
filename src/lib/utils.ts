@@ -51,6 +51,24 @@ export function sameUnitName(a?: string | null, b?: string | null) {
   return norm(a) === norm(b);
 }
 
+/**
+ * Chuẩn hoá chuỗi để tìm kiếm: bỏ dấu, bỏ hoa thường, gom khoảng trắng.
+ *
+ * Cần cho ô tìm điều khoản: auditor gõ "van ban" phải ra "Thông tin dạng văn
+ * bản", vì gõ đủ dấu trên điện thoại ngoài hiện trường là việc không ai muốn làm.
+ * Chữ "đ" phải xử lý riêng — NFD không tách được dấu gạch của nó.
+ */
+export function searchNormalize(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // dấu tổ hợp sau NFD
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Chỉ ngày/tháng/năm, dùng cho thời hạn khắc phục. */
 export function formatDateOnly(d: Date | string | null | undefined) {
   if (!d) return '—';

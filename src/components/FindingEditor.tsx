@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { SEVERITY_LABELS } from '@/lib/iso';
 import { suggestDueDate } from '@/lib/types';
 import { SeverityBadge } from './Badge';
-
-type Clause = { standard: string; clause: string; clauseTitle: string };
+import { ClausePicker, type Clause } from './ClausePicker';
 
 type Finding = {
   id: string;
@@ -19,6 +18,8 @@ type Finding = {
   clauses: Clause[];
   rawArea: string | null;
   dueDate: string | null;
+  /** Tiêu chuẩn đã khai báo cho finding — dùng để thu hẹp danh mục điều khoản. */
+  standards?: string[];
 };
 
 const STATUS_FLOW = [
@@ -57,6 +58,7 @@ export function FindingEditor({
     severity: finding.severity ?? 'MINOR',
     statement: finding.statement ?? '',
     evidence: finding.evidence.join('\n'),
+    clauses: finding.clauses,
     rawArea: finding.rawArea ?? '',
     dueDate: finding.dueDate ?? '',
     status: finding.status,
@@ -66,11 +68,21 @@ export function FindingEditor({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * So sánh điều khoản theo nội dung, không theo tham chiếu — thêm rồi xoá đúng
+   * điều khoản vừa thêm phải quay về trạng thái "không có gì thay đổi", nếu không
+   * nút Lưu sẽ sáng lên mời người dùng lưu một thay đổi không tồn tại. Thứ tự có
+   * ý nghĩa (mục đầu là điều khoản phù hợp nhất) nên đảo thứ tự VẪN là thay đổi.
+   */
+  const clauseKey = (cs: Clause[]) =>
+    cs.map((c) => `${c.standard}|${c.clause}`).join('~');
+
   const dirty =
     draft.title !== (finding.title ?? '') ||
     draft.severity !== (finding.severity ?? 'MINOR') ||
     draft.statement !== (finding.statement ?? '') ||
     draft.evidence !== finding.evidence.join('\n') ||
+    clauseKey(draft.clauses) !== clauseKey(finding.clauses) ||
     draft.rawArea !== (finding.rawArea ?? '') ||
     draft.dueDate !== (finding.dueDate ?? '') ||
     (canEditStatus && draft.status !== finding.status);
@@ -87,6 +99,7 @@ export function FindingEditor({
           severity: draft.severity,
           statement: draft.statement,
           evidence: draft.evidence.split('\n').filter(Boolean),
+          clauses: draft.clauses,
           rawArea: draft.rawArea,
           dueDate: draft.dueDate || null,
           ...(canEditStatus ? { status: draft.status } : {}),
@@ -180,6 +193,14 @@ export function FindingEditor({
           className="input"
           value={draft.evidence}
           onChange={(e) => setDraft((d) => ({ ...d, evidence: e.target.value }))}
+        />
+      </Field>
+
+      <Field label="Điều khoản viện dẫn">
+        <ClausePicker
+          value={draft.clauses}
+          onChange={(clauses) => setDraft((d) => ({ ...d, clauses }))}
+          standards={finding.standards}
         />
       </Field>
 

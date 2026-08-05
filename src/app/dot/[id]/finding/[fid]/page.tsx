@@ -42,6 +42,12 @@ export default async function Page({
 
   const isDraft = row.status === 'DRAFT';
   const standardized = Boolean(row.statement);
+  /**
+   * Editor đang mở hay không — quyết định luôn việc có hiện khối điều khoản
+   * chỉ-xem ở cột phải. Editor đã sửa được điều khoản nên hiện thêm một bản
+   * chỉ-xem sẽ thành hai chỗ cùng một dữ liệu, không rõ chỗ nào có tác dụng.
+   */
+  const editing = isDraft && standardized && audit.status !== 'CLOSED';
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -122,6 +128,7 @@ export default async function Page({
                 statement: row.statement,
                 evidence: row.evidence,
                 clauses: row.clauses,
+                standards: row.standards,
                 rawArea: row.rawArea,
                 dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
               }}
@@ -181,22 +188,24 @@ export default async function Page({
         </div>
 
         <div className="space-y-6">
-          <Section title="Điều khoản viện dẫn">
-            <ul className="space-y-2">
-              {row.clauses.length ? (
-                row.clauses.map((c, i) => (
-                  <li key={i} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                    <p className="font-medium text-brand-700">
-                      {c.standard} — {c.clause}
-                    </p>
-                    <p className="text-xs text-slate-600">{c.clauseTitle}</p>
-                  </li>
-                ))
-              ) : (
-                <li className="text-sm text-slate-400">—</li>
-              )}
-            </ul>
-          </Section>
+          {!editing && (
+            <Section title="Điều khoản viện dẫn">
+              <ul className="space-y-2">
+                {row.clauses.length ? (
+                  row.clauses.map((c, i) => (
+                    <li key={i} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                      <p className="font-medium text-brand-700">
+                        {c.standard} — {c.clause}
+                      </p>
+                      <p className="text-xs text-slate-600">{c.clauseTitle}</p>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-sm text-slate-400">—</li>
+                )}
+              </ul>
+            </Section>
+          )}
 
           <Section title="Thời hạn khắc phục">
             {row.dueDate ? (

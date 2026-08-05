@@ -83,6 +83,7 @@ export default async function Page({
               statement: row.statement,
               evidence: row.evidence,
               clauses: row.clauses,
+              standards: row.standards,
               rawArea: row.rawArea,
               dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
             }}
@@ -90,22 +91,30 @@ export default async function Page({
         </div>
 
         <div className="space-y-6">
-          <Section title="Điều khoản viện dẫn">
-            <ul className="space-y-2">
-              {row.clauses.length ? (
-                row.clauses.map((c, i) => (
-                  <li key={i} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                    <p className="font-medium text-brand-700">
-                      {c.standard} — {c.clause}
-                    </p>
-                    <p className="text-xs text-slate-600">{c.clauseTitle}</p>
-                  </li>
-                ))
-              ) : (
-                <li className="text-sm text-slate-400">—</li>
-              )}
-            </ul>
-          </Section>
+          {/*
+            Chỉ hiện bản chỉ-xem khi đợt đã khoá (lúc đó editor không dựng lên).
+            Đợt còn mở thì điều khoản đã sửa được ngay trong editor bên trái —
+            hiện lại ở đây thành hai chỗ cùng một dữ liệu, người dùng phải đoán
+            chỗ nào mới là chỗ có tác dụng.
+          */}
+          {owned.audit.status === 'CLOSED' && (
+            <Section title="Điều khoản viện dẫn">
+              <ul className="space-y-2">
+                {row.clauses.length ? (
+                  row.clauses.map((c, i) => (
+                    <li key={i} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                      <p className="font-medium text-brand-700">
+                        {c.standard} — {c.clause}
+                      </p>
+                      <p className="text-xs text-slate-600">{c.clauseTitle}</p>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-sm text-slate-400">—</li>
+                )}
+              </ul>
+            </Section>
+          )}
 
           {images.length > 0 && (
             <Section title={`Hình ảnh (${images.length})`}>
