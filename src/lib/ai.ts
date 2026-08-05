@@ -49,23 +49,54 @@ async function loadImageBlocks(keys: string[]): Promise<ImageBlock[]> {
 const FINDING_TOOL: Anthropic.Tool = {
   name: 'ghi_nhan_finding',
   description:
-    'Ghi nhận finding đã được chuẩn hoá theo chuẩn ISO. Khuôn phát biểu đổi theo mức độ: ' +
+    'Ghi nhận finding đã được chuẩn hoá theo chuẩn ISO. Điền các trường THEO ĐÚNG THỨ TỰ ' +
+    'khai báo: lập luận phân loại trước, chốt mức độ sau. Khuôn phát biểu đổi theo mức độ: ' +
     'MAJOR/MINOR theo cấu trúc R–N–E, OBS theo hướng dấu hiệu suy giảm, ' +
     'OFI theo hướng tiềm năng cải tiến, CONF theo hướng thực hành tốt.',
   input_schema: {
     type: 'object',
+    /**
+     * THỨ TỰ CÁC TRƯỜNG Ở ĐÂY LÀ CÓ CHỦ ĐÍCH, đừng sắp lại tuỳ tiện.
+     *
+     * Model sinh các trường đúng theo thứ tự khai báo, nên thứ tự này quyết
+     * định hai thứ cùng lúc:
+     *
+     *  1. CHẤT LƯỢNG PHÂN LOẠI. `severityRationale` đứng TRƯỚC `severity` để
+     *     model phải lập luận xong mới chốt mức. Đảo lại thì nó chốt trước rồi
+     *     mới đi hợp lý hoá — đúng cái thói quen nống mọi thứ thành NC mà cả
+     *     nguyên tắc số 1 trong SYSTEM_PROMPT đang chống.
+     *
+     *  2. TRẢI NGHIỆM CHỜ. Khi bật stream, những gì auditor mong nhất phải ra
+     *     trước: mức độ, tiêu đề, rồi phát biểu. Danh mục viện dẫn và bằng
+     *     chứng vừa dài vừa ít cấp bách nên xếp sau. Phần phụ trợ xuống cuối.
+     */
     properties: {
-      title: { type: 'string', description: 'Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề' },
-      severity: {
-        type: 'string',
-        enum: ['MAJOR', 'MINOR', 'OBS', 'OFI', 'CONF'],
-        description: 'Mức độ phân loại finding',
-      },
       severityRationale: {
         type: 'string',
         description:
-          '1–2 câu giải thích vì sao xếp mức này. Nếu ghi nhận không mô tả vi phạm yêu cầu nào ' +
-          'thì phải xếp OBS/OFI/CONF, tuyệt đối không nống lên MINOR cho hợp khuôn',
+          'VIẾT TRƯỜNG NÀY TRƯỚC TIÊN. 1–2 câu lập luận để đi tới mức độ: ghi nhận này có mô tả ' +
+          'việc vi phạm một yêu cầu cụ thể nào không, bằng chứng tới đâu, hệ thống có đổ vỡ ở ' +
+          'diện rộng không. Nếu không có yêu cầu nào bị vi phạm thì phải kết luận OBS/OFI/CONF, ' +
+          'tuyệt đối không nống lên MINOR cho hợp khuôn',
+      },
+      severity: {
+        type: 'string',
+        enum: ['MAJOR', 'MINOR', 'OBS', 'OFI', 'CONF'],
+        description: 'Mức độ, chốt theo đúng lập luận vừa viết ở severityRationale',
+      },
+      title: { type: 'string', description: 'Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề' },
+      statement: {
+        type: 'string',
+        description:
+          'Phát biểu finding hoàn chỉnh dùng trực tiếp trong báo cáo, 3–6 câu. Khuôn viết PHẢI ' +
+          'khớp với mức độ đã chọn: ' +
+          'MAJOR/MINOR = [bằng chứng] → [không phù hợp với yêu cầu nào] → [bản chất sai lệch]. ' +
+          'OBS = [bằng chứng] → [dấu hiệu suy giảm] → [nguy cơ trở thành không phù hợp ở điều ' +
+          'khoản nào nếu không theo dõi]; KHÔNG viết "không phù hợp với yêu cầu". ' +
+          'OFI = [thực hành hiện tại kèm bằng chứng, khẳng định rõ là ĐÃ PHÙ HỢP] → [chỗ còn dư ' +
+          'địa nâng cao hiệu lực/hiệu quả]. ' +
+          'CONF = [thực hành tốt kèm bằng chứng] → [vì sao đáng nhân rộng]. ' +
+          'Với mọi loại: không nêu nguyên nhân gốc, không đề xuất giải pháp cụ thể',
       },
       clauses: {
         type: 'array',
@@ -90,19 +121,6 @@ const FINDING_TOOL: Anthropic.Tool = {
         description:
           'Từng mẩu bằng chứng khách quan riêng biệt, mỗi mẩu kiểm chứng được độc lập ' +
           '(số hiệu tài liệu, mã thiết bị, số lượng mẫu kiểm tra và số sai lỗi, vị trí, ngày tháng)',
-      },
-      statement: {
-        type: 'string',
-        description:
-          'Phát biểu finding hoàn chỉnh dùng trực tiếp trong báo cáo, 3–6 câu. Khuôn viết PHẢI ' +
-          'khớp với mức độ đã chọn: ' +
-          'MAJOR/MINOR = [bằng chứng] → [không phù hợp với yêu cầu nào] → [bản chất sai lệch]. ' +
-          'OBS = [bằng chứng] → [dấu hiệu suy giảm] → [nguy cơ trở thành không phù hợp ở điều ' +
-          'khoản nào nếu không theo dõi]; KHÔNG viết "không phù hợp với yêu cầu". ' +
-          'OFI = [thực hành hiện tại kèm bằng chứng, khẳng định rõ là ĐÃ PHÙ HỢP] → [chỗ còn dư ' +
-          'địa nâng cao hiệu lực/hiệu quả]. ' +
-          'CONF = [thực hành tốt kèm bằng chứng] → [vì sao đáng nhân rộng]. ' +
-          'Với mọi loại: không nêu nguyên nhân gốc, không đề xuất giải pháp cụ thể',
       },
       imageNotes: {
         type: 'array',
