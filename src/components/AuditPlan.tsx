@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { buildShortNames } from '@/lib/utils';
 import { ScheduleGrid } from './ScheduleGrid';
 import { UnitPalette } from './UnitPalette';
+import { WordIcon } from './FileIcons';
 import {
   KIND_LABELS, MIN_MANUAL, blockedSpans, checkWorkingHours, computeCapacity, durationLabel,
   formatDayLong,
@@ -801,7 +802,11 @@ export function AuditPlan({
           <button onClick={() => save()} disabled={busy} className="btn-primary">
             {busy ? 'Đang lưu…' : saved ? 'Đã lưu' : 'Lưu chương trình'}
           </button>
-          <a href={`/api/audits/${auditId}/xuat-word`} className="btn-ghost">
+          <a
+            href={`/api/audits/${auditId}/xuat-word`}
+            className="btn-ghost inline-flex items-center gap-2"
+          >
+            <WordIcon />
             Xuất file Word
           </a>
           {missingFields.length > 0 ? (

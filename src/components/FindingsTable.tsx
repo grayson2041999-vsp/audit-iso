@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { SeverityBadge } from './Badge';
 import { SEVERITY_LABELS } from '@/lib/iso';
+import { ExcelIcon } from './FileIcons';
 import { formatDateOnly, dueStatus, abbreviateName, buildShortNames } from '@/lib/utils';
 
 export type FindingRow = {
@@ -146,8 +147,9 @@ export function FindingsTable({
 
         <a
           href={`/api/audits/${auditId}/xuat-excel${query ? `?${query}` : ''}`}
-          className="btn-ghost ml-auto"
+          className="btn-ghost ml-auto inline-flex items-center gap-2"
         >
+          <ExcelIcon />
           Xuất Excel{hasFilter ? ' (theo bộ lọc)' : ''}
         </a>
       </div>
