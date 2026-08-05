@@ -467,7 +467,7 @@ export function FindingEntry({
               />
             </Field>
 
-            <Field label="Bằng chứng khách quan — mỗi dòng một mẩu">
+            <Field label="Bằng chứng khách quan">
               <textarea
                 rows={4}
                 className="input"
