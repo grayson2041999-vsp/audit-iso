@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ImageUploader, type UploadedImage } from './ImageUploader';
 import { AnalysisProgress } from './AnalysisProgress';
+import { parsePartialJson } from '@/lib/partial-json';
 import { SeverityBadge } from './Badge';
 import { STANDARD_LABELS, SEVERITY_LABELS, type StandardCode } from '@/lib/iso';
 import { suggestDueDate, DUE_DAYS_BY_SEVERITY, type StandardizedFinding } from '@/lib/types';
@@ -38,6 +39,8 @@ export function FindingEntry({
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [result, setResult] = useState<StandardizedFinding | null>(null);
+  /** Bản đang chảy về, chỉ để xem trong lúc chờ. Bản chính thức là `result`. */
+  const [partial, setPartial] = useState<Partial<StandardizedFinding> | null>(null);
 
   // Thời hạn khắc phục: gợi ý theo mức độ, nhưng một khi auditor tự sửa thì
   // không tự tính lại nữa (dueDateTouched) để không ghi đè quyết định của họ.
@@ -111,6 +114,7 @@ export function FindingEntry({
     if (standards.length === 0) return setError('Chọn ít nhất một tiêu chuẩn.');
 
     setLoading(true);
+    setPartial(null);
     try {
       const res = await fetch('/api/standardize', {
         method: 'POST',
@@ -122,15 +126,60 @@ export function FindingEntry({
           imageKeys: images.map((i) => i.key),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Chuẩn hoá thất bại.');
-      setResult(data.result);
-      setWarnings(data.warnings ?? []);
-      if (!dueDateTouched) setDueDate(suggestDueDate(data.result.severity));
+
+      // Lỗi trước lúc bắt đầu truyền vẫn về dạng JSON kèm mã lỗi thật.
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Chuẩn hoá thất bại.');
+      }
+
+      /**
+       * Đọc NDJSON: mỗi dòng một sự kiện. Mẩu cuối cùng của một lần đọc có thể
+       * cụt giữa dòng nên phải giữ lại `rest` để ghép với lần đọc kế tiếp.
+       */
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let rest = '';
+      let json = '';
+      let done: StandardizedFinding | null = null;
+
+      while (true) {
+        const { value, done: finished } = await reader.read();
+        if (finished) break;
+
+        rest += decoder.decode(value, { stream: true });
+        const lines = rest.split('\n');
+        rest = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const ev = JSON.parse(line) as
+            | { type: 'delta'; text: string }
+            | { type: 'done'; result: StandardizedFinding; warnings?: string[] }
+            | { type: 'error'; error: string };
+
+          if (ev.type === 'error') throw new Error(ev.error);
+
+          if (ev.type === 'delta') {
+            json += ev.text;
+            // Vá tạm chỗ còn dở để hiện dần những trường đã xong.
+            setPartial(parsePartialJson<StandardizedFinding>(json));
+            continue;
+          }
+
+          done = ev.result;
+          setResult(ev.result);
+          setWarnings(ev.warnings ?? []);
+          if (!dueDateTouched) setDueDate(suggestDueDate(ev.result.severity));
+        }
+      }
+
+      if (!done) throw new Error('Kết nối tới AI bị ngắt giữa chừng. Vui lòng thử lại.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lỗi không xác định.');
     } finally {
       setLoading(false);
+      setPartial(null);
     }
   }
 
@@ -317,7 +366,7 @@ export function FindingEntry({
           Rà soát và chỉnh sửa trước khi lưu. AI là trợ lý, quyết định cuối cùng thuộc về bạn.
         </p>
 
-        {loading && <AnalysisProgress hasImages={images.length > 0} />}
+        {loading && <AnalysisProgress hasImages={images.length > 0} partial={partial} />}
 
         {!loading && !result && (
           <div className="grid h-64 place-items-center rounded-lg border border-dashed border-slate-300 text-sm text-slate-400">

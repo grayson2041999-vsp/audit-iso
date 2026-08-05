@@ -190,7 +190,17 @@ export async function standardizeFinding(input: {
     );
   }
 
-  const parsed = standardizedFindingSchema.safeParse(toolUse.input);
+  return finalize(toolUse.input, imageKeys.length, images.length);
+}
+
+/**
+ * Kiểm và làm sạch dữ liệu model trả về.
+ *
+ * Dùng chung cho cả đường thường lẫn đường stream — bản hiện dần trên màn hình
+ * chỉ để xem, còn bản đi qua đây mới là bản được lưu.
+ */
+function finalize(toolInput: unknown, imageKeysCount: number, imagesLoaded: number) {
+  const parsed = standardizedFindingSchema.safeParse(toolInput);
 
   if (!parsed.success) {
     throw new Error(
@@ -210,8 +220,8 @@ export async function standardizeFinding(input: {
   if (validClauses.length === 0 && parsed.data.clauses.length > 0) {
     warnings.push('Không có điều khoản viện dẫn nào hợp lệ — auditor cần kiểm tra lại thủ công.');
   }
-  if (imageKeys.length > images.length) {
-    warnings.push(`Có ${imageKeys.length - images.length} ảnh không đọc được và đã bị bỏ qua.`);
+  if (imageKeysCount > imagesLoaded) {
+    warnings.push(`Có ${imageKeysCount - imagesLoaded} ảnh không đọc được và đã bị bỏ qua.`);
   }
 
   return {
@@ -219,4 +229,60 @@ export async function standardizeFinding(input: {
     model: MODEL,
     warnings,
   };
+}
+
+export type StreamEvent =
+  /** Một mẩu chuỗi JSON model vừa sinh ra. Ghép dồn để đọc dần. */
+  | { type: 'delta'; text: string }
+  /** Bản chính thức, đã qua Zod và hậu kiểm điều khoản. */
+  | { type: 'done'; result: StandardizedFinding; model: string; warnings: string[] };
+
+/**
+ * Bản chuẩn hoá có stream.
+ *
+ * Cùng một lời gọi như bản thường, chỉ khác là đẩy từng mẩu JSON về ngay khi
+ * model sinh ra thay vì đợi đủ rồi mới trả. Auditor thấy mức độ và tiêu đề sau
+ * một hai giây thay vì nhìn màn hình đứng im hơn mười giây.
+ *
+ * Thứ tự các trường trong FINDING_TOOL được sắp để phục vụ đúng việc này.
+ */
+export async function* standardizeFindingStream(input: {
+  rawText: string;
+  standards: StandardCode[];
+  area?: string;
+  auditee?: string;
+  auditorName?: string;
+  imageKeys?: string[];
+}): AsyncGenerator<StreamEvent> {
+  if (!isAiConfigured()) {
+    throw new Error('Chưa cấu hình ANTHROPIC_API_KEY trong biến môi trường.');
+  }
+
+  const imageKeys = input.imageKeys ?? [];
+  const images = await loadImageBlocks(imageKeys);
+  const userPrompt = buildUserPrompt({ ...input, imageCount: images.length });
+
+  const stream = anthropic.messages.stream({
+    model: MODEL,
+    max_tokens: 8192,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: [...images, { type: 'text', text: userPrompt }] }],
+    tools: [FINDING_TOOL],
+    tool_choice: { type: 'tool', name: FINDING_TOOL.name },
+  });
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'input_json_delta') {
+      yield { type: 'delta', text: event.delta.partial_json };
+    }
+  }
+
+  const message = await stream.finalMessage();
+  const toolUse = message.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === FINDING_TOOL.name,
+  );
+  if (!toolUse) throw new Error('AI không trả về dữ liệu có cấu trúc. Vui lòng thử lại.');
+
+  const { result, model, warnings } = finalize(toolUse.input, imageKeys.length, images.length);
+  yield { type: 'done', result, model, warnings };
 }
