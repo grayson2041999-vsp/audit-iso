@@ -80,6 +80,21 @@ export const SEVERITY_STYLE: Record<string, string> = {
   CONF: 'bg-slate-100 text-slate-700 ring-slate-600/20',
 };
 
+/**
+ * Cùng hệ màu với SEVERITY_STYLE nhưng nhạt hơn một bậc, dùng cho các ô thống kê.
+ *
+ * Thẻ chip trong bảng nhỏ nên nền -100 vừa mắt; ô thống kê là mảng màu lớn gấp
+ * mấy chục lần, để nguyên -100 thì bốn ô cạnh nhau chói và át cả bảng bên dưới.
+ * Giữ đúng tông màu để nhận ra ngay, chỉ hạ độ đậm.
+ */
+export const SEVERITY_CARD: Record<string, string> = {
+  MAJOR: 'border-red-200 bg-red-50 text-red-900',
+  MINOR: 'border-amber-200 bg-amber-50 text-amber-900',
+  OBS: 'border-sky-200 bg-sky-50 text-sky-900',
+  OFI: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+  CONF: 'border-slate-200 bg-slate-50 text-slate-800',
+};
+
 export const STATUS_STYLE: Record<string, string> = {
   DRAFT: 'bg-slate-100 text-slate-700',
   AI_DRAFTED: 'bg-violet-100 text-violet-800',

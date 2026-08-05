@@ -10,6 +10,7 @@ import { AuditHeader } from '@/components/AuditHeader';
 import { AuditLockButton } from '@/components/AuditLockButton';
 import { FindingsTable, type FindingRow } from '@/components/FindingsTable';
 import { SEVERITY_LABELS } from '@/lib/iso';
+import { SEVERITY_CARD } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,15 +77,26 @@ export default async function Page({
       <AuditTabs auditId={id} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {/* Cùng màu với thẻ phân loại trong bảng bên dưới — nhìn ô là biết ngay loại nào. */}
         {(['MAJOR', 'MINOR', 'OBS', 'OFI'] as const).map((s) => (
-          <div key={s} className="card p-4 text-center">
-            <p className="text-xs text-slate-500">{SEVERITY_LABELS[s]}</p>
-            <p className="mt-1 text-2xl font-semibold">{countBy(s)}</p>
+          <div
+            key={s}
+            className={`rounded-xl border p-4 text-center ${SEVERITY_CARD[s]} ${
+              countBy(s) === 0 ? 'opacity-60' : ''
+            }`}
+          >
+            <p className="text-xs font-medium">{SEVERITY_LABELS[s]}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">{countBy(s)}</p>
           </div>
         ))}
-        <div className="card p-4 text-center">
-          <p className="text-xs text-slate-500">Chưa nộp</p>
-          <p className={`mt-1 text-2xl font-semibold ${drafts > 0 ? 'text-amber-600' : ''}`}>
+        {/* Không phải một mức phân loại nên giữ trung tính, đứng tách khỏi bốn ô kia. */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 text-center">
+          <p className="text-xs font-medium text-slate-500">Chưa nộp</p>
+          <p
+            className={`mt-1 text-2xl font-semibold tabular-nums ${
+              drafts > 0 ? 'text-amber-600' : 'text-slate-400'
+            }`}
+          >
             {drafts}
           </p>
         </div>
