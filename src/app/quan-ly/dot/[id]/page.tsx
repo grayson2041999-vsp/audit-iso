@@ -95,17 +95,6 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         links={links.map((l) => `${l.memberId}:${l.unitId}`)}
         publicUrl={publicUrl}
         leaderName={owned.leader.fullName}
-        startDate={audit.startDate ? audit.startDate.toISOString() : null}
-        endDate={audit.endDate ? audit.endDate.toISOString() : null}
-        hours={{
-          amStart: audit.amStart,
-          amEnd: audit.amEnd,
-          pmStart: audit.pmStart,
-          pmEnd: audit.pmEnd,
-          openingMinutes: audit.openingMinutes,
-          closingMinutes: audit.closingMinutes,
-        }}
-        dayHours={audit.dayHours ?? []}
       />
 
       <DeleteAuditBox
