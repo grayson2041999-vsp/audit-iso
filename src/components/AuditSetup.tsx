@@ -152,6 +152,47 @@ export function AuditSetup({
         </p>
       )}
 
+      {/* ============ Mã truy cập — việc quay lại nhiều nhất sau khi mở đợt ============ */}
+      {opened && (
+        <section className="rounded-xl border-2 border-brand-300 bg-brand-50/50 p-5">
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="text-lg font-semibold text-brand-900">Link và mã truy cập</h2>
+            <span className="text-sm text-brand-700">
+              Gửi link cho cả đoàn, kèm mã riêng của từng người
+            </span>
+          </div>
+
+          <CopyLink url={publicUrl} />
+
+          <ul className="mt-4 divide-y divide-brand-100 overflow-hidden rounded-lg border border-brand-200 bg-white">
+            {members.map((m) => (
+              <li key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                <span className={`flex-1 ${m.fullName === leaderName ? 'font-semibold' : 'font-medium'}`}>
+                  {m.fullName}
+                  {m.fullName === leaderName && (
+                    <span className="ml-2 text-xs font-normal text-slate-500">trưởng đoàn</span>
+                  )}
+                </span>
+                <span className="hidden text-xs text-slate-400 sm:inline">
+                  {units.filter((u) => linkSet.has(`${m.id}:${u.id}`)).length} đơn vị
+                </span>
+                {m.accessCode ? (
+                  <CopyCode code={m.accessCode} memberName={m.fullName} />
+                ) : (
+                  <span className="text-slate-400">—</span>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <p className="mt-3 text-xs text-brand-800">
+            Sửa phân công bên dưới rồi bấm Lưu là đánh giá viên thấy ngay đơn vị mới ở lần mở
+            trang sau — mã giữ nguyên, không phải gửi lại. Thêm người sau khi mở đợt thì họ được
+            cấp mã ngay.
+          </p>
+        </section>
+      )}
+
       {/* ============ 1. Đơn vị được đánh giá ============ */}
       <section className="card p-5">
         <h2 className="mb-4 font-semibold">1. Đơn vị được đánh giá</h2>
@@ -398,64 +439,37 @@ export function AuditSetup({
       </section>
 
       {/* ============ 4. Mở đợt ============ */}
+      {!opened && (
       <section className="card p-5">
-        <h2 className="font-semibold">4. {opened ? 'Mã truy cập' : 'Mở đợt đánh giá'}</h2>
+        <h2 className="font-semibold">4. Mở đợt đánh giá</h2>
 
-        {!opened ? (
-          <>
-            <p className="mb-4 mt-1 text-sm text-slate-500">
-              Sinh mã 6 số cho từng đánh giá viên và chuyển đợt sang <strong>Đang thực hiện</strong>.
-            </p>
+        <p className="mb-4 mt-1 text-sm text-slate-500">
+          Sinh mã 6 số cho từng đánh giá viên và chuyển đợt sang <strong>Đang thực hiện</strong>.
+        </p>
 
-            {unitsWithoutMember.length > 0 && (
-              <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-                Chưa phân công đánh giá viên cho:{' '}
-                <strong>{unitsWithoutMember.map((u) => u.name).join(', ')}</strong>
-              </p>
-            )}
-
-            {dirty && (
-              <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-                Bấm <strong>Lưu phân công</strong> ở bước 3 trước đã — phân công chưa lưu
-                thì đánh giá viên sẽ không thấy đơn vị nào.
-              </p>
-            )}
-
-            <button
-              onClick={() => call(`/api/audits/${auditId}/mo-dot`, { method: 'POST' })}
-              disabled={!canOpen || busy}
-              className="btn-primary"
-            >
-              {busy ? 'Đang xử lý…' : 'Sinh mã & mở đợt'}
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="mb-4 mt-1 text-sm text-slate-500">
-              Gửi đường link dưới đây cho cả đoàn, kèm mã riêng của từng người.
-            </p>
-
-            <CopyLink url={publicUrl} />
-
-            <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {members.map((m) => (
-                <li key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
-                  <span className="flex-1 font-medium">{m.fullName}</span>
-                  {m.accessCode ? (
-                    <CopyCode code={m.accessCode} memberName={m.fullName} />
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-
-            <p className="mt-3 text-xs text-slate-400">
-              Thêm đánh giá viên sau khi đã mở đợt thì họ được cấp mã ngay, không phải mở lại.
-            </p>
-          </>
+        {unitsWithoutMember.length > 0 && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+            Chưa phân công đánh giá viên cho:{' '}
+            <strong>{unitsWithoutMember.map((u) => u.name).join(', ')}</strong>
+          </p>
         )}
+
+        {dirty && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+            Bấm <strong>Lưu phân công</strong> ở bước 3 trước đã — phân công chưa lưu
+            thì đánh giá viên sẽ không thấy đơn vị nào.
+          </p>
+        )}
+
+        <button
+          onClick={() => call(`/api/audits/${auditId}/mo-dot`, { method: 'POST' })}
+          disabled={!canOpen || busy}
+          className="btn-primary"
+        >
+          {busy ? 'Đang xử lý…' : 'Sinh mã & mở đợt'}
+        </button>
       </section>
+      )}
     </div>
   );
 }
