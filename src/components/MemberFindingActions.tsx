@@ -25,7 +25,7 @@ export function MemberFindingActions({
   async function submit() {
     if (
       !confirm(
-        'Nộp finding này cho trưởng đoàn?\n\nSau khi nộp bạn không sửa được nữa — chỉ trưởng đoàn sửa được.',
+        'Lưu ý: Sau khi nộp finding này cho trưởng đoàn, bạn sẽ không thể chỉnh sửa nó được nữa.',
       )
     ) {
       return;
