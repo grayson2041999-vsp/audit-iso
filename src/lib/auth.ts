@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
@@ -104,8 +105,27 @@ export async function endSession() {
   jar.delete(COOKIE_NAME);
 }
 
-/** Trả về trưởng đoàn đang đăng nhập, hoặc null. Không ném lỗi. */
-export async function getLeader(): Promise<Leader | null> {
+/**
+ * Trả về trưởng đoàn đang đăng nhập, hoặc null. Không ném lỗi.
+ *
+ * ĐƯỢC BỌC BẰNG `cache()` CỦA REACT — phạm vi chỉ MỘT request.
+ *
+ * Một lần tải trang gọi hàm này ba lần ở ba chỗ khác nhau: thanh menu trong
+ * `layout.tsx` cần tên để hiển thị, bản thân trang cần biết đã đăng nhập chưa,
+ * rồi `getOwnedAudit()` cần lại để kiểm tra quyền sở hữu đợt. Driver Neon dùng
+ * HTTP nên mỗi truy vấn là một request HTTPS riêng — ba lần hỏi cùng một câu
+ * là ~200ms màn hình trắng trước khi bắt đầu lấy dữ liệu thật.
+ *
+ * ⚠️ PHẢI là `cache` của 'react', TUYỆT ĐỐI KHÔNG dùng `unstable_cache` của
+ * Next.js hay bất kỳ biến toàn cục nào ở đây. `cache` sống trong phạm vi một
+ * request rồi bị bỏ đi; cache ở phạm vi rộng hơn sẽ khiến phiên đăng nhập của
+ * người này rò sang người khác.
+ *
+ * Lưu ý nhỏ: trong cùng một request, nếu gọi getLeader() → endSession() →
+ * getLeader() thì lần sau vẫn nhận bản cũ. Hiện không có đường nào làm vậy
+ * (route đăng xuất chỉ gọi endSession), nhưng nếu sau này thêm thì phải biết.
+ */
+export const getLeader = cache(async (): Promise<Leader | null> => {
   if (!isAuthConfigured()) return null;
   try {
     const jar = await cookies();
@@ -120,4 +140,4 @@ export async function getLeader(): Promise<Leader | null> {
   } catch {
     return null;
   }
-}
+});

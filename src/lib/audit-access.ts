@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
 import { audits, type Audit, type Leader } from './schema';
@@ -7,23 +8,27 @@ import { getLeader } from './auth';
  * Lấy đợt đánh giá và kiểm tra quyền sở hữu trong một bước.
  * Trả về `null` nếu chưa đăng nhập hoặc đợt không thuộc về người này —
  * cố tình không phân biệt hai trường hợp để không lộ sự tồn tại của đợt.
+ *
+ * Bọc `cache()` (phạm vi một request, xem cảnh báo trong `auth.ts`): các trang
+ * quản lý gọi hàm này sau khi đã tự gọi `getLeader()` để kiểm đăng nhập, nên
+ * lượt tra bảng `leaders` bên trong đây giờ dùng lại kết quả đã có.
  */
-export async function getOwnedAudit(
-  auditId: string,
-): Promise<{ leader: Leader; audit: Audit } | null> {
-  const leader = await getLeader();
-  if (!leader) return null;
+export const getOwnedAudit = cache(
+  async (auditId: string): Promise<{ leader: Leader; audit: Audit } | null> => {
+    const leader = await getLeader();
+    if (!leader) return null;
 
-  try {
-    const [audit] = await db
-      .select()
-      .from(audits)
-      .where(and(eq(audits.id, auditId), eq(audits.leaderId, leader.id)));
-    return audit ? { leader, audit } : null;
-  } catch {
-    return null;
-  }
-}
+    try {
+      const [audit] = await db
+        .select()
+        .from(audits)
+        .where(and(eq(audits.id, auditId), eq(audits.leaderId, leader.id)));
+      return audit ? { leader, audit } : null;
+    } catch {
+      return null;
+    }
+  },
+);
 
 export const AUDIT_STATUS_LABELS: Record<string, string> = {
   PLANNED: 'Đang chuẩn bị',

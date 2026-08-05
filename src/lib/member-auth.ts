@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
@@ -59,53 +60,64 @@ function readToken(token: string): string | null {
   return memberId;
 }
 
-/** Đánh giá viên đang đăng nhập vào đợt này, kèm đợt. Không ném lỗi. */
-export async function getMember(
-  auditId: string,
-): Promise<{ member: AuditMember; audit: Audit } | null> {
-  try {
-    const jar = await cookies();
-    const token = jar.get(cookieName(auditId))?.value;
-    if (!token) return null;
+/**
+ * Đánh giá viên đang đăng nhập vào đợt này, kèm đợt. Không ném lỗi.
+ *
+ * MỘT truy vấn JOIN, không phải hai lần nối tiếp. Trước đây hàm này lấy thành
+ * viên xong mới lấy đợt — hai request HTTPS xuống Neon xếp hàng chờ nhau, trong
+ * khi cả hai bảng đều tra theo khoá chính và ghép được trong một câu.
+ *
+ * ĐƯỢC BỌC BẰNG `cache()` CỦA REACT — phạm vi chỉ MỘT request. Mọi trang và
+ * mọi route phía đánh giá viên đều mở đầu bằng `getMember(id)`, và các trang
+ * còn gọi thêm `memberOwnsUnit` bên dưới, nên dedupe ở đây có lợi ở khắp nơi.
+ *
+ * ⚠️ Cùng cảnh báo như `getLeader`: phải là `cache` của 'react', không được
+ * dùng `unstable_cache` hay biến toàn cục — sẽ rò phiên giữa những người dùng.
+ */
+export const getMember = cache(
+  async (auditId: string): Promise<{ member: AuditMember; audit: Audit } | null> => {
+    try {
+      const jar = await cookies();
+      const token = jar.get(cookieName(auditId))?.value;
+      if (!token) return null;
 
-    const memberId = readToken(token);
-    if (!memberId) return null;
+      const memberId = readToken(token);
+      if (!memberId) return null;
 
-    const [member] = await db
-      .select()
-      .from(auditMembers)
-      .where(and(eq(auditMembers.id, memberId), eq(auditMembers.auditId, auditId)));
-    if (!member) return null;
+      const [row] = await db
+        .select({ member: auditMembers, audit: audits })
+        .from(auditMembers)
+        .innerJoin(audits, eq(audits.id, auditMembers.auditId))
+        .where(and(eq(auditMembers.id, memberId), eq(auditMembers.auditId, auditId)));
 
-    const [audit] = await db.select().from(audits).where(eq(audits.id, auditId));
-    if (!audit) return null;
+      return row ?? null;
+    } catch {
+      return null;
+    }
+  },
+);
 
-    return { member, audit };
-  } catch {
-    return null;
-  }
-}
-
-/** Các đơn vị đã phân công cho đánh giá viên này. */
-export async function getMemberUnitIds(auditId: string, memberId: string) {
+/**
+ * Các đơn vị đã phân công cho đánh giá viên này.
+ *
+ * Cũng bọc `cache()`: `memberOwnsUnit` bên dưới đọc lại chính danh sách này,
+ * nên trang đơn vị chỉ tốn một truy vấn cho cả việc kiểm quyền lẫn việc liệt kê.
+ */
+export const getMemberUnitIds = cache(async (auditId: string, memberId: string) => {
   const rows = await db
     .select({ unitId: assignments.unitId })
     .from(assignments)
     .where(and(eq(assignments.auditId, auditId), eq(assignments.memberId, memberId)));
   return rows.map((r) => r.unitId);
-}
+});
 
-/** Kiểm tra đánh giá viên có được giao đơn vị này không. */
+/**
+ * Kiểm tra đánh giá viên có được giao đơn vị này không.
+ *
+ * Đọc từ danh sách đã cache thay vì bắn riêng một truy vấn đếm. Một đánh giá
+ * viên được giao vài đơn vị trong một đợt nên danh sách này luôn rất ngắn.
+ */
 export async function memberOwnsUnit(auditId: string, memberId: string, unitId: string) {
-  const [row] = await db
-    .select({ id: assignments.id })
-    .from(assignments)
-    .where(
-      and(
-        eq(assignments.auditId, auditId),
-        eq(assignments.memberId, memberId),
-        eq(assignments.unitId, unitId),
-      ),
-    );
-  return Boolean(row);
+  const unitIds = await getMemberUnitIds(auditId, memberId);
+  return unitIds.includes(unitId);
 }
