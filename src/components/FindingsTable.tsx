@@ -180,13 +180,13 @@ export function FindingsTable({
               const st = FINDING_STATUS[f.status] ?? FINDING_STATUS.DRAFT;
               return (
                 <tr key={f.id} className="align-top hover:bg-slate-50">
-                  <td className="whitespace-nowrap px-3 py-3 text-center font-mono text-xs text-slate-500">
+                  <td className="whitespace-nowrap px-3 py-3 text-center font-mono text-xs text-slate-600">
                     {f.code}
                   </td>
                   <td className="px-3 py-3"><SeverityBadge value={f.severity} short /></td>
                   <td className="px-3 py-3 text-slate-700">{f.auditee ?? '—'}</td>
                   <td className="px-3 py-3 text-slate-700">{f.rawArea ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-slate-600">
+                  <td className="px-3 py-3 text-xs text-slate-700">
                     {f.clauses.length === 0
                       ? '—'
                       : f.clauses.map((c, i) => (
@@ -195,14 +195,25 @@ export function FindingsTable({
                           </span>
                         ))}
                   </td>
-                  <td className="max-w-lg px-3 py-3">
+                  {/**
+                   * Phát biểu hiện ĐẦY ĐỦ, không cắt.
+                   *
+                   * Trước đây cắt còn hai dòng (`line-clamp-2`) cho bảng gọn, nhưng
+                   * trưởng đoàn rà soát cả đợt thì thứ cần đọc chính là phát biểu —
+                   * cắt đi thành ra phải mở từng finding một mới đọc được.
+                   *
+                   * Kèm theo là `whitespace-pre-wrap` để giữ xuống dòng auditor đã gõ,
+                   * và `align-top` ở hàng (đã có sẵn) để các cột ngắn không bị đẩy
+                   * xuống giữa ô khi hàng cao lên.
+                   */}
+                  <td className="max-w-xl px-3 py-3">
                     <Link
                       href={`/quan-ly/dot/${auditId}/finding/${f.id}`}
                       className="font-medium text-brand-700 hover:underline"
                     >
                       {f.title ?? f.rawText.slice(0, 70) + '…'}
                     </Link>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                       {f.statement ?? f.rawText}
                     </p>
                   </td>
