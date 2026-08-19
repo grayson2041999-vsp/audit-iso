@@ -44,7 +44,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       </Link>
 
       <AuditHeader audit={audit} />
-      <AuditTabs auditId={id} />
+      <AuditTabs auditId={id} issued={Boolean(audit.issuedAt)} />
 
       <AuditPlan
         auditId={id}

@@ -3,13 +3,20 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-export function AuditTabs({ auditId }: { auditId: string }) {
+/**
+ * Tab "Khắc phục" chỉ hiện sau khi đã phát hành báo cáo (`issued`). Trước đó
+ * nó rỗng, hiện ra chỉ khiến người dùng bấm vào rồi thắc mắc.
+ */
+export function AuditTabs({ auditId, issued = false }: { auditId: string; issued?: boolean }) {
   const pathname = usePathname();
 
   const tabs = [
     { href: `/quan-ly/dot/${auditId}`, label: 'Chuẩn bị đợt', exact: true },
     { href: `/quan-ly/dot/${auditId}/chuong-trinh`, label: 'Chương trình đánh giá', exact: false },
     { href: `/quan-ly/dot/${auditId}/tong-hop`, label: 'Tổng hợp finding', exact: false },
+    ...(issued
+      ? [{ href: `/quan-ly/dot/${auditId}/khac-phuc`, label: 'Khắc phục', exact: false }]
+      : []),
   ];
 
   return (

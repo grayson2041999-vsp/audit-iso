@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, uuid, integer, jsonb, pgEnum, index, uniqueIndex,
+  pgTable, text, timestamp, uuid, integer, jsonb, pgEnum, index, uniqueIndex, boolean,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -51,6 +51,31 @@ export const sessionKindEnum = pgEnum('session_kind', ['OPENING', 'UNIT', 'INTER
  */
 export const auditStatusEnum = pgEnum('audit_status', [
   'PLANNED', 'IN_PROGRESS', 'REPORTING', 'CLOSED',
+]);
+
+/**
+ * Vòng đời gói khắc phục của một đơn vị. HAI mốc duyệt, không phải một:
+ *
+ *   PLAN_DRAFT         đơn vị đang soạn kế hoạch
+ *   PLAN_SUBMITTED     đã trình kế hoạch, chờ trưởng đoàn duyệt
+ *   PLAN_REJECTED      trả lại, đơn vị sửa rồi trình lại
+ *   PLAN_APPROVED      kế hoạch được duyệt — đơn vị đi làm
+ *   EVIDENCE_SUBMITTED đã nộp bằng chứng hoàn thành, chờ xác nhận
+ *   EVIDENCE_REJECTED  bằng chứng chưa đạt, làm lại
+ *   CLOSED             trưởng đoàn xác nhận hiệu lực, đóng
+ *
+ * Mốc 2 tồn tại vì ISO 9001 §10.2.1 e) đòi "xem xét hiệu lực của mọi hành động
+ * khắc phục ĐÃ THỰC HIỆN" — duyệt kế hoạch mới là đồng ý cách làm, chưa phải
+ * xác nhận nó có tác dụng.
+ */
+export const capaStatusEnum = pgEnum('capa_status', [
+  'PLAN_DRAFT',
+  'PLAN_SUBMITTED',
+  'PLAN_REJECTED',
+  'PLAN_APPROVED',
+  'EVIDENCE_SUBMITTED',
+  'EVIDENCE_REJECTED',
+  'CLOSED',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -120,6 +145,17 @@ export const audits = pgTable('audits', {
    * — thao tác nguyên tử, hai người lưu cùng lúc không bao giờ nhận trùng số.
    */
   findingSeq: integer('finding_seq').default(0).notNull(),
+
+  /**
+   * Đã gửi báo cáo cho các đơn vị được đánh giá chưa. NULL = chưa.
+   *
+   * Cố tình KHÔNG thêm giá trị vào `audit_status`: cùng cách nghĩ với phần còn
+   * lại của app — trạng thái là hệ quả của hành động, không phải một nút riêng.
+   */
+  issuedAt: timestamp('issued_at', { withTimezone: true }),
+  /** Số bản báo cáo đã phát hành. 0 = chưa lần nào. */
+  reportVersion: integer('report_version').default(0).notNull(),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -137,6 +173,14 @@ export const auditUnits = pgTable(
       .notNull(),
     name: text('name').notNull(),
     note: text('note'),
+    /**
+     * Mã 8 số để đơn vị vào xem báo cáo và nộp hồ sơ khắc phục. Chỉ có sau khi
+     * trưởng đoàn bấm "Gửi báo cáo cho đơn vị".
+     *
+     * Lưu dạng đọc được, giống mã 6 số của đánh giá viên — trưởng đoàn phải tra
+     * lại được cho đơn vị quên mã.
+     */
+    accessCode: text('access_code'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({ auditIdx: index('audit_units_audit_idx').on(t.auditId) }),
@@ -355,6 +399,207 @@ export const aiUsage = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
+/* report_releases — mỗi lần phát hành báo cáo cho đơn vị              */
+/* ------------------------------------------------------------------ */
+
+/** Một finding như nó được nhìn thấy tại thời điểm phát hành. */
+export type ReleasedFinding = {
+  id: string;
+  code: string | null;
+  unitId: string | null;
+  unitName: string | null;
+  severity: string | null;
+  title: string | null;
+  statement: string | null;
+  evidence: string[];
+  clauses: { standard: string; clause: string; clauseTitle: string }[];
+  rawArea: string | null;
+  auditorName: string | null;
+  dueDate: string | null;
+  observedAt: string | null;
+};
+
+/**
+ * ĐƠN VỊ ĐỌC ẢNH CHỤP, KHÔNG ĐỌC DỮ LIỆU SỐNG — điểm mấu chốt của thiết kế.
+ *
+ * Trưởng đoàn có mở đợt ra sửa gì thì bên đơn vị vẫn thấy đúng bản đã gửi, cho
+ * tới khi bấm phát hành bản mới kèm lý do. Nhờ vậy vừa không khoá chết báo cáo
+ * (còn sửa được lỗi chính tả, rút một finding sai), vừa không ai sửa lén được
+ * thứ đã gửi đi — đúng tinh thần ISO 9001 §7.5.3 về kiểm soát thông tin dạng
+ * văn bản, và chặt hơn kiểu khoá chết vì khoá chết chỉ đẩy người ta ra ngoài
+ * hệ thống.
+ */
+export const reportReleases = pgTable(
+  'report_releases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    version: integer('version').notNull(),
+    /** Bắt buộc từ bản 2 trở đi — kiểm ở tầng ứng dụng, bản 1 không cần. */
+    reason: text('reason'),
+    releasedBy: text('released_by'),
+    snapshot: jsonb('snapshot').$type<ReleasedFinding[]>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ versionIdx: uniqueIndex('report_releases_version_idx').on(t.auditId, t.version) }),
+);
+
+/* ------------------------------------------------------------------ */
+/* corrective_reports — một gói khắc phục cho một đơn vị               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Đơn vị nộp CẢ GÓI một lần, không nộp lẻ từng finding.
+ *
+ * Đổi lại, trưởng đoàn vẫn chấm được TỪNG FINDING qua cột `verdict` ở
+ * `corrective_items` — trả lại cả gói nhưng đơn vị biết chính xác mục nào chưa
+ * đạt, không phải làm lại từ đầu.
+ */
+export const correctiveReports = pgTable(
+  'corrective_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    unitId: uuid('unit_id')
+      .references(() => auditUnits.id, { onDelete: 'cascade' })
+      .notNull(),
+    status: capaStatusEnum('status').default('PLAN_DRAFT').notNull(),
+
+    /**
+     * Lãnh đạo phòng đứng tên chịu trách nhiệm. Mã 8 số dùng chung cả đơn vị
+     * nên đây là chỗ DUY NHẤT ghi được ai đứng ra cam kết — mà ISO 9001
+     * §10.2.2 lại yêu cầu lưu hồ sơ hành động đã thực hiện.
+     */
+    responsibleName: text('responsible_name'),
+    responsibleTitle: text('responsible_title'),
+
+    /** Lần nộp thứ mấy; tăng mỗi khi trưởng đoàn trả lại. */
+    round: integer('round').default(1).notNull(),
+
+    planSubmittedAt: timestamp('plan_submitted_at', { withTimezone: true }),
+    planReviewedAt: timestamp('plan_reviewed_at', { withTimezone: true }),
+    evidenceSubmittedAt: timestamp('evidence_submitted_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+
+    /** Ghi chú lần duyệt gần nhất — lý do trả lại, hoặc nhận xét khi duyệt. */
+    reviewNote: text('review_note'),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ pairIdx: uniqueIndex('corrective_reports_pair_idx').on(t.auditId, t.unitId) }),
+);
+
+/* ------------------------------------------------------------------ */
+/* corrective_items — mỗi sự không phù hợp một dòng                    */
+/* ------------------------------------------------------------------ */
+
+export type CapaAttachment = {
+  key: string;
+  fileName: string | null;
+  contentType: string | null;
+  size: number | null;
+};
+
+/**
+ * Chỉ tạo cho finding mức MAJOR và MINOR — xem `NEEDS_CAPA` trong `lib/capa.ts`.
+ * OBS / OFI / CONF không bắt buộc khắc phục; bắt đơn vị làm hồ sơ CAPA cho một
+ * cơ hội cải tiến là cách nhanh nhất khiến họ ghét cả công cụ lẫn việc đánh giá.
+ */
+export const correctiveItems = pgTable(
+  'corrective_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reportId: uuid('report_id')
+      .references(() => correctiveReports.id, { onDelete: 'cascade' })
+      .notNull(),
+    findingId: uuid('finding_id')
+      .references(() => findings.id, { onDelete: 'cascade' })
+      .notNull(),
+    /**
+     * Phát hành bản mới có thể làm một finding thôi không còn là NC (bị hạ mức
+     * hoặc rút). KHÔNG xoá dòng — đơn vị đã gõ nội dung vào đó — mà tắt đi, để
+     * lịch sử còn nguyên và bật lại được nếu bản sau đảo ngược quyết định.
+     */
+    isActive: boolean('is_active').default(true).notNull(),
+
+    /* --- Mốc 1: kế hoạch --- */
+    immediateAction: text('immediate_action'),
+    rootCause: text('root_cause'),
+    actionPlan: text('action_plan'),
+    targetDate: timestamp('target_date', { withTimezone: true }),
+
+    /* --- Mốc 2: bằng chứng đã thực hiện --- */
+    completionNote: text('completion_note'),
+    attachments: jsonb('attachments').$type<CapaAttachment[]>().default([]).notNull(),
+
+    /** Trưởng đoàn chấm từng mục: null chưa chấm · 'OK' đạt · 'NG' chưa đạt. */
+    verdict: text('verdict').$type<'OK' | 'NG' | null>(),
+    leaderNote: text('leader_note'),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ pairIdx: uniqueIndex('corrective_items_pair_idx').on(t.reportId, t.findingId) }),
+);
+
+/* ------------------------------------------------------------------ */
+/* corrective_events — nhật ký nộp / duyệt / trả lại                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Mỗi lần nộp hoặc duyệt ghi một dòng kèm ảnh chụp toàn bộ gói. Bản bị trả lại
+ * KHÔNG bị ghi đè, nên sau này đọc lại được vì sao đơn vị phải làm tới lần ba.
+ */
+export const correctiveEvents = pgTable(
+  'corrective_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reportId: uuid('report_id')
+      .references(() => correctiveReports.id, { onDelete: 'cascade' })
+      .notNull(),
+    round: integer('round').notNull(),
+    /** 'plan' | 'evidence' */
+    phase: text('phase').notNull(),
+    /** 'submit' | 'approve' | 'reject' */
+    action: text('action').notNull(),
+    actor: text('actor'),
+    note: text('note'),
+    snapshot: jsonb('snapshot'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ reportIdx: index('corrective_events_report_idx').on(t.reportId, t.createdAt) }),
+);
+
+/* ------------------------------------------------------------------ */
+/* audit_events — nhật ký hành động cấp đợt                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Chỗ ghi những việc phải truy được về sau: khoá đợt, mở lại sau khi đã phát
+ * hành, phát hành bản mới. Mở khoá một đợt ĐÃ GỬI cho đơn vị là hành động nhạy
+ * cảm nhất trong app — bắt buộc kèm lý do và phải để lại dấu.
+ */
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    actor: text('actor'),
+    action: text('action').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({ auditIdx: index('audit_events_audit_idx').on(t.auditId, t.createdAt) }),
+);
+
+/* ------------------------------------------------------------------ */
 /* Relations                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -379,6 +624,33 @@ export const auditSessionsRelations = relations(auditSessions, ({ one }) => ({
 export const auditUnitsRelations = relations(auditUnits, ({ one, many }) => ({
   audit: one(audits, { fields: [auditUnits.auditId], references: [audits.id] }),
   assignments: many(assignments),
+  correctiveReports: many(correctiveReports),
+}));
+
+export const correctiveReportsRelations = relations(correctiveReports, ({ one, many }) => ({
+  audit: one(audits, { fields: [correctiveReports.auditId], references: [audits.id] }),
+  unit: one(auditUnits, { fields: [correctiveReports.unitId], references: [auditUnits.id] }),
+  items: many(correctiveItems),
+  events: many(correctiveEvents),
+}));
+
+export const correctiveItemsRelations = relations(correctiveItems, ({ one }) => ({
+  report: one(correctiveReports, {
+    fields: [correctiveItems.reportId],
+    references: [correctiveReports.id],
+  }),
+  finding: one(findings, { fields: [correctiveItems.findingId], references: [findings.id] }),
+}));
+
+export const correctiveEventsRelations = relations(correctiveEvents, ({ one }) => ({
+  report: one(correctiveReports, {
+    fields: [correctiveEvents.reportId],
+    references: [correctiveReports.id],
+  }),
+}));
+
+export const reportReleasesRelations = relations(reportReleases, ({ one }) => ({
+  audit: one(audits, { fields: [reportReleases.auditId], references: [audits.id] }),
 }));
 
 export const auditMembersRelations = relations(auditMembers, ({ one, many }) => ({
@@ -417,3 +689,7 @@ export type AuditSession = typeof auditSessions.$inferSelect;
 export type Finding = typeof findings.$inferSelect;
 export type FindingImage = typeof findingImages.$inferSelect;
 export type AiUsage = typeof aiUsage.$inferSelect;
+export type ReportRelease = typeof reportReleases.$inferSelect;
+export type CorrectiveReport = typeof correctiveReports.$inferSelect;
+export type CorrectiveItem = typeof correctiveItems.$inferSelect;
+export type CorrectiveEvent = typeof correctiveEvents.$inferSelect;

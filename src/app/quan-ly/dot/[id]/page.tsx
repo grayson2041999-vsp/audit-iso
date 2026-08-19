@@ -85,7 +85,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         />
       )}
 
-      <AuditTabs auditId={audit.id} />
+      <AuditTabs auditId={audit.id} issued={Boolean(audit.issuedAt)} />
 
       <AuditSetup
         auditId={audit.id}
