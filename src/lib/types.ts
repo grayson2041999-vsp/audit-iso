@@ -42,6 +42,17 @@ export type StandardizedFinding = z.infer<typeof standardizedFindingSchema>;
 export type ClauseRef = z.infer<typeof clauseRefSchema>;
 
 export const standardizeRequestSchema = z.object({
+  /**
+   * BẮT BUỘC — dùng để XÁC THỰC người gọi, không phải để ghi dữ liệu.
+   *
+   * Cookie của đánh giá viên đặt riêng theo từng đợt (`am_<auditId>`), nên máy
+   * chủ phải biết đợt nào mới tra được đúng cookie. Thiếu trường này thì route
+   * không có cách nào biết người gọi là ai. Xem `lib/ai-quota.ts`.
+   *
+   * (`createFindingSchema` bên dưới ghi đè thành không bắt buộc, vì ở đó đợt
+   * đã nằm trong đường dẫn `/api/dot/[id]/findings` rồi.)
+   */
+  auditId: z.string().uuid('Thiếu mã đợt đánh giá'),
   rawText: z.string().min(10, 'Nội dung ghi nhận cần tối thiểu 10 ký tự'),
   standards: z.array(standardCodeSchema).min(1, 'Chọn ít nhất một tiêu chuẩn'),
   area: z.string().optional(),

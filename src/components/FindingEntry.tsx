@@ -120,6 +120,9 @@ export function FindingEntry({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Máy chủ cần `auditId` để tra cookie của đúng đợt rồi mới biết người
+          // gọi là ai — không phải để ghi dữ liệu. Xem `lib/ai-quota.ts`.
+          auditId,
           rawText, standards, area,
           auditee: unitName,
           auditorName: memberName,
@@ -155,7 +158,13 @@ export function FindingEntry({
           if (!line.trim()) continue;
           const ev = JSON.parse(line) as
             | { type: 'delta'; text: string }
-            | { type: 'done'; result: StandardizedFinding; warnings?: string[] }
+            | {
+                type: 'done';
+                result: StandardizedFinding;
+                warnings?: string[];
+                /** Hạn mức lượt chuẩn hoá còn lại trong giờ, xem `lib/ai-quota.ts`. */
+                quota?: { remaining: number; limit: number };
+              }
             | { type: 'error'; error: string };
 
           if (ev.type === 'error') throw new Error(ev.error);
@@ -169,7 +178,17 @@ export function FindingEntry({
 
           done = ev.result;
           setResult(ev.result);
-          setWarnings(ev.warnings ?? []);
+
+          /**
+           * Báo trước khi sắp hết lượt, thay vì để auditor đang làm dở thì bị
+           * chặn đột ngột. Ngưỡng 5 đủ để họ kịp gom các ghi nhận còn lại.
+           */
+          const quotaWarning =
+            ev.quota && ev.quota.remaining <= 5
+              ? [`Còn ${ev.quota.remaining}/${ev.quota.limit} lượt chuẩn hoá trong giờ này.`]
+              : [];
+          setWarnings([...(ev.warnings ?? []), ...quotaWarning]);
+
           if (!dueDateTouched) setDueDate(suggestDueDate(ev.result.severity));
         }
       }

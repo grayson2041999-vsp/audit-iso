@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { findingImages, findings } from '@/lib/schema';
 import { getMember } from '@/lib/member-auth';
 import { standardizeFinding, isAiConfigured } from '@/lib/ai';
+import { checkAiQuota, recordAiUsage } from '@/lib/ai-quota';
 import type { StandardCode } from '@/lib/iso';
 
 export const runtime = 'nodejs';
@@ -16,6 +17,10 @@ type Ctx = { params: Promise<{ id: string; fid: string }> };
  *
  * Toàn bộ việc gọi AI và ghi kết quả làm ở phía máy chủ trong một lượt, để
  * trình duyệt không phải tự điều phối hai lời gọi rồi lỡ mất kết quả giữa chừng.
+ *
+ * Route này vốn đã hỏi danh tính (khác `/api/standardize` trước đây), nhưng vẫn
+ * phải chia CHUNG hạn mức giờ với nó — nếu không, chặn cửa trước mà để ngỏ cửa
+ * sau: bấm "chuẩn hoá lại" liên tục cũng tốn đúng chừng ấy tiền API.
  */
 export async function POST(_req: Request, { params }: Ctx) {
   const { id, fid } = await params;
@@ -42,6 +47,26 @@ export async function POST(_req: Request, { params }: Ctx) {
     return NextResponse.json({ error: 'Finding đã nộp, không chuẩn hoá lại được.' }, { status: 409 });
   }
 
+  /**
+   * Kiểm hạn mức SAU các bước kiểm quyền và tìm bản ghi, nhưng TRƯỚC khi gọi
+   * AI. Đặt sau để lỗi "không phải finding của bạn" hiện ra trước lỗi hạn mức —
+   * báo đúng nguyên nhân thật thì người dùng mới sửa được.
+   */
+  const actor = {
+    key: `member:${session.member.id}`,
+    name: session.member.fullName,
+    auditId: id,
+    auditClosed: false,
+  };
+
+  const quota = await checkAiQuota(actor.key);
+  if (!quota.ok) {
+    return NextResponse.json(
+      { error: quota.message },
+      { status: 429, headers: { 'Retry-After': String(quota.retryAfterSeconds) } },
+    );
+  }
+
   try {
     const imgs = await db.select().from(findingImages).where(eq(findingImages.findingId, fid));
 
@@ -53,6 +78,9 @@ export async function POST(_req: Request, { params }: Ctx) {
       auditorName: row.auditorName ?? undefined,
       imageKeys: imgs.map((i) => i.key),
     });
+
+    // Gọi được tới đây nghĩa là AI đã trả kết quả — lúc này mới tính một lượt.
+    await recordAiUsage(actor, 'restandardize');
 
     const [updated] = await db
       .update(findings)

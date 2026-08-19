@@ -89,3 +89,18 @@ CREATE TABLE IF NOT EXISTS finding_revisions (
   snapshot    jsonb NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+
+-- Nhật ký lượt gọi AI — dùng để giới hạn tần suất và theo dõi chi phí.
+-- Cố tình không có khoá ngoại: nhật ký phải sống sót khi đợt hoặc đánh giá
+-- viên bị xoá. Xem db/migration-011-ai-usage.sql.
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_key   text NOT NULL,
+  actor_name  text,
+  audit_id    uuid,
+  kind        text NOT NULL DEFAULT 'standardize',
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ai_usage_actor_time_idx ON ai_usage (actor_key, created_at DESC);
+CREATE INDEX IF NOT EXISTS ai_usage_audit_idx      ON ai_usage (audit_id, created_at DESC);

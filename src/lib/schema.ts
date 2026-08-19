@@ -321,6 +321,40 @@ export const findingRevisions = pgTable('finding_revisions', {
 });
 
 /* ------------------------------------------------------------------ */
+/* ai_usage — nhật ký lượt gọi AI                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Mỗi lượt gọi Claude ghi một dòng. Phục vụ hai việc:
+ *
+ *  1. GIỚI HẠN TẦN SUẤT — đếm số dòng của một người trong một giờ gần nhất
+ *     (xem `lib/ai-quota.ts`). Không cần Redis: một câu COUNT có chỉ mục là đủ
+ *     nhanh ở quy mô vài chục đánh giá viên.
+ *  2. THEO DÕI CHI PHÍ — tháng vừa rồi tốn bao nhiêu lượt, đợt nào, ai dùng nhiều.
+ *
+ * CỐ TÌNH KHÔNG ĐẶT KHOÁ NGOẠI. Đây là nhật ký, không phải dữ liệu nghiệp vụ:
+ * nó phải còn nguyên kể cả khi đánh giá viên bị xoá khỏi đợt hoặc cả đợt bị xoá.
+ * Gắn khoá ngoại kèm ON DELETE CASCADE sẽ làm số liệu chi phí bốc hơi theo.
+ */
+export const aiUsage = pgTable(
+  'ai_usage',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** "member:<uuid>" hoặc "leader:<uuid>" — xem `actorKey()` trong ai-quota.ts. */
+    actorKey: text('actor_key').notNull(),
+    actorName: text('actor_name'),
+    auditId: uuid('audit_id'),
+    /** 'standardize' (từ màn hình ghi nhận) hoặc 'restandardize' (finding đã lưu). */
+    kind: text('kind').default('standardize').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    actorIdx: index('ai_usage_actor_time_idx').on(t.actorKey, t.createdAt),
+    auditIdx: index('ai_usage_audit_idx').on(t.auditId, t.createdAt),
+  }),
+);
+
+/* ------------------------------------------------------------------ */
 /* Relations                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -382,3 +416,4 @@ export type Assignment = typeof assignments.$inferSelect;
 export type AuditSession = typeof auditSessions.$inferSelect;
 export type Finding = typeof findings.$inferSelect;
 export type FindingImage = typeof findingImages.$inferSelect;
+export type AiUsage = typeof aiUsage.$inferSelect;
