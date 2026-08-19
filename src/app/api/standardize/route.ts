@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { standardizeRequestSchema } from '@/lib/types';
 import { standardizeFindingStream, isAiConfigured } from '@/lib/ai';
-import {
-  AI_HOURLY_LIMIT, checkAiQuota, recordAiUsage, resolveAiActor,
-} from '@/lib/ai-quota';
+import { AI_HOURLY_LIMIT, checkAiQuota, recordAiUsage } from '@/lib/ai-quota';
+import { resolveActor } from '@/lib/actor';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -54,7 +53,7 @@ export async function POST(req: Request) {
   const { auditId, ...input } = parsed.data;
 
   /* --- Cửa 2: anh là ai --- */
-  const actor = await resolveAiActor(auditId);
+  const actor = await resolveActor(auditId);
   if (!actor) {
     return NextResponse.json(
       { error: 'Chưa đăng nhập vào đợt đánh giá. Vui lòng mở lại link đợt và nhập mã.' },

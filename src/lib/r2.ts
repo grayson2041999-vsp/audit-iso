@@ -25,18 +25,55 @@ export function isR2Configured() {
   );
 }
 
-/** Sinh object key an toàn: findings/<yyyy>/<mm>/<uuid>.<ext> */
-export function buildObjectKey(fileName: string) {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
+/**
+ * Sinh object key: audits/<auditId>/<uploaderId>/<uuid>.<ext>
+ *
+ * Format cũ là `findings/<yyyy>/<mm>/<uuid>.<ext>` — nhìn tên object không biết
+ * nó thuộc đợt nào, ai tải lên. Hệ quả là không dọn được rác: auditor chọn ảnh
+ * rồi bỏ dở không lưu finding thì ảnh nằm lại trên R2 vĩnh viễn, và xoá cả một
+ * đợt cũng không xoá được ảnh của đợt đó.
+ *
+ * Có tiền tố định danh thì làm được hai việc:
+ *   · Xoá đợt  → xoá theo tiền tố `audits/<auditId>/`
+ *   · Dọn rác  → liệt kê key trong bucket, đối chiếu bảng `finding_images`,
+ *                cái nào không khớp và cũ hơn vài ngày thì bỏ
+ *
+ * Chỉ tới được mức `uploaderId` chứ không phải `findingId`: lúc xin presign thì
+ * finding CHƯA tồn tại — ảnh lên trước, bản ghi lưu sau.
+ *
+ * Ảnh cũ giữ nguyên key cũ và vẫn đọc được bình thường, vì mỗi dòng
+ * `finding_images` tự lưu key của nó. Không cần migration.
+ */
+export function buildObjectKey(auditId: string, uploaderId: string, fileName: string) {
   const ext = (fileName.split('.').pop() ?? 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
-  return `findings/${y}/${m}/${crypto.randomUUID()}.${ext}`;
+  return `audits/${auditId}/${uploaderId}/${crypto.randomUUID()}.${ext}`;
 }
 
-/** URL presigned để trình duyệt PUT thẳng file lên R2 (không qua server). */
-export async function presignUpload(key: string, contentType: string, expiresIn = 600) {
-  const cmd = new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, ContentType: contentType });
+/**
+ * URL presigned để trình duyệt PUT thẳng file lên R2 (không qua server).
+ *
+ * `contentLength` PHẢI được truyền vào và PHẢI đúng bằng số byte trình duyệt
+ * sắp gửi. Lý do: R2 chỉ ép được những gì nằm TRONG chữ ký. Trước đây route
+ * kiểm tra dung lượng bằng con số người gọi tự khai trong JSON — kiểm ở
+ * JavaScript rồi ký một tờ giấy phép không nhắc gì tới dung lượng, nên khai
+ * 100 byte xong PUT lên 5 GB vẫn trót lọt. Đưa vào đây thì chính R2 từ chối.
+ *
+ * ⚠️ Nếu sau này thêm bước xử lý ảnh phía trình duyệt (nén, xoay, cắt), phải
+ * làm XONG rồi mới xin presign — đổi file sau khi ký là lệch số byte và R2 sẽ
+ * trả 403 với thông báo khá tối nghĩa.
+ */
+export async function presignUpload(
+  key: string,
+  contentType: string,
+  contentLength: number,
+  expiresIn = 600,
+) {
+  const cmd = new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+    ContentType: contentType,
+    ContentLength: contentLength,
+  });
   return getSignedUrl(r2, cmd, { expiresIn });
 }
 

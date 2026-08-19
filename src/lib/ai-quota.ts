@@ -1,74 +1,20 @@
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from './db';
 import { aiUsage } from './schema';
-import { getMember } from './member-auth';
-import { getLeader } from './auth';
-import { getOwnedAudit } from './audit-access';
+import type { Actor } from './actor';
 
 /**
- * Ai được gọi AI, và được gọi bao nhiêu lần.
+ * Giới hạn số lượt gọi AI của một người trong một giờ.
  *
- * Hai lớp bảo vệ tách bạch:
- *
- *  1. `resolveAiActor()` — CHẶN NGƯỜI LẠ. Trước đây `/api/standardize` không hỏi
- *     gì cả: ai biết URL cũng POST được và tiêu tiền API không giới hạn.
- *  2. `takeAiQuota()`    — CHẶN DÙNG QUÁ TAY. Người hợp lệ nhưng bấm chuẩn hoá
- *     hàng trăm lần (hoặc mã 6 số lọt ra ngoài) vẫn tốn tiền như thường.
+ * Đây là lớp bảo vệ THỨ HAI. Lớp thứ nhất — "anh là ai" — nằm ở `actor.ts` và
+ * chặn người lạ; lớp này chặn người hợp lệ dùng quá tay (bấm chuẩn hoá hàng
+ * trăm lần, hoặc mã 6 số lọt ra ngoài). Thiếu một trong hai đều không đủ.
  */
 
 /** Số lượt chuẩn hoá tối đa của MỘT người trong MỘT giờ. */
 export const AI_HOURLY_LIMIT = Number(process.env.AI_HOURLY_LIMIT ?? 20);
 
 const WINDOW_MS = 60 * 60 * 1000;
-
-export type AiActor = {
-  /** Khoá định danh dùng để đếm lượt: "member:<uuid>" hoặc "leader:<uuid>". */
-  key: string;
-  name: string;
-  auditId: string;
-  /** Đợt đang khoá thì không cho gọi AI nữa. */
-  auditClosed: boolean;
-};
-
-/* ------------------------------------------------------------------ */
-/* 1. Anh là ai?                                                       */
-/* ------------------------------------------------------------------ */
-
-/**
- * Xác định người gọi, hoặc `null` nếu không phải ai cả.
- *
- * Thử theo thứ tự đánh giá viên trước, trưởng đoàn sau — vì đường dùng chính
- * là đánh giá viên ghi nhận tại hiện trường. Trưởng đoàn được chấp nhận để
- * còn thử nghiệm và xử lý giúp khi cần.
- *
- * PHẢI có `auditId` mới tra được: cookie của đánh giá viên đặt riêng cho từng
- * đợt (`am_<auditId>`), không có một cookie chung cho mọi đợt.
- */
-export async function resolveAiActor(auditId: string): Promise<AiActor | null> {
-  const session = await getMember(auditId);
-  if (session) {
-    return {
-      key: `member:${session.member.id}`,
-      name: session.member.fullName,
-      auditId,
-      auditClosed: session.audit.status === 'CLOSED',
-    };
-  }
-
-  const leader = await getLeader();
-  if (!leader) return null;
-
-  // Trưởng đoàn chỉ được gọi AI trong đợt của chính mình.
-  const owned = await getOwnedAudit(auditId);
-  if (!owned) return null;
-
-  return {
-    key: `leader:${leader.id}`,
-    name: leader.fullName,
-    auditId,
-    auditClosed: owned.audit.status === 'CLOSED',
-  };
-}
 
 /* ------------------------------------------------------------------ */
 /* 2. Còn lượt không?                                                  */
@@ -147,7 +93,7 @@ export async function checkAiQuota(actorKey: string): Promise<QuotaResult> {
  * tay rồi, ném lỗi ở đây là ném đi công việc vừa làm xong.
  */
 export async function recordAiUsage(
-  actor: AiActor,
+  actor: Actor,
   kind: 'standardize' | 'restandardize' = 'standardize',
 ) {
   try {

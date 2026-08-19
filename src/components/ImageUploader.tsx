@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { compressImage } from '@/lib/image-compress';
 
 export type UploadedImage = {
   key: string;
@@ -11,27 +12,42 @@ export type UploadedImage = {
 };
 
 export function ImageUploader({
+  auditId,
   images,
   onChange,
 }: {
+  /** Cần để máy chủ tra cookie của đúng đợt rồi mới cấp quyền upload. */
+  auditId: string;
   images: UploadedImage[];
   onChange: (imgs: UploadedImage[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<'nen' | 'tai' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList?.length) return;
     setError(null);
     setBusy(true);
-    const files = Array.from(fileList);
 
     try {
+      /**
+       * NÉN TRƯỚC, XIN GIẤY PHÉP SAU — thứ tự này bắt buộc, không đảo được.
+       *
+       * Giấy phép upload giờ ký kèm số byte chính xác (xem `lib/r2.ts`), nên
+       * con số khai với máy chủ phải là con số của file CUỐI CÙNG sẽ gửi đi.
+       * Nén sau khi ký là lệch byte và R2 trả 403 với thông báo tối nghĩa.
+       */
+      setPhase('nen');
+      const files = await Promise.all(Array.from(fileList).map(compressImage));
+
+      setPhase('tai');
       const res = await fetch('/api/uploads/presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          auditId,
           files: files.map((f) => ({ fileName: f.name, contentType: f.type, size: f.size })),
         }),
       });
@@ -47,7 +63,19 @@ export function ImageUploader({
           headers: { 'Content-Type': f.type },
           body: f,
         });
-        if (!put.ok) throw new Error(`Tải ảnh "${f.name}" lên R2 thất bại.`);
+        if (!put.ok) {
+          /**
+           * 403 ở đây gần như luôn là lệch số byte giữa lúc ký và lúc gửi. Nói
+           * thẳng ra để người sửa code sau không phải mò, vì thông báo gốc của
+           * R2 (`SignatureDoesNotMatch`) chẳng gợi ý gì về nguyên nhân.
+           */
+          throw new Error(
+            put.status === 403
+              ? `Tải ảnh "${f.name}" thất bại: giấy phép không khớp file. ` +
+                'Thử chọn lại ảnh; nếu vẫn lỗi thì báo người quản trị.'
+              : `Tải ảnh "${f.name}" lên R2 thất bại.`,
+          );
+        }
         uploaded.push({
           key: u.key,
           fileName: f.name,
@@ -61,9 +89,17 @@ export function ImageUploader({
       setError(e instanceof Error ? e.message : 'Lỗi tải ảnh.');
     } finally {
       setBusy(false);
+      setPhase(null);
       if (inputRef.current) inputRef.current.value = '';
     }
   }
+
+  const hint =
+    phase === 'nen'
+      ? 'Đang thu nhỏ ảnh…'
+      : phase === 'tai'
+        ? 'Đang tải ảnh lên…'
+        : 'Kéo thả ảnh vào đây hoặc bấm để chọn (JPG/PNG/WebP, ≤ 10 MB)';
 
   return (
     <div>
@@ -75,12 +111,16 @@ export function ImageUploader({
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
-          handleFiles(e.dataTransfer.files);
+          if (!busy) handleFiles(e.dataTransfer.files);
         }}
-        onClick={() => inputRef.current?.click()}
-        className="cursor-pointer rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500 hover:border-brand-400 hover:bg-brand-50/40"
+        onClick={() => !busy && inputRef.current?.click()}
+        className={`rounded-lg border-2 border-dashed px-4 py-6 text-center text-sm ${
+          busy
+            ? 'cursor-wait border-slate-300 bg-slate-100 text-slate-400'
+            : 'cursor-pointer border-slate-300 bg-slate-50 text-slate-500 hover:border-brand-400 hover:bg-brand-50/40'
+        }`}
       >
-        {busy ? 'Đang tải ảnh lên Cloudflare R2…' : 'Kéo thả ảnh vào đây hoặc bấm để chọn (JPG/PNG/WebP, ≤ 10 MB)'}
+        {hint}
       </div>
 
       <input

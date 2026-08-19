@@ -351,7 +351,7 @@ export function FindingEntry({
         </div>
 
         <div className="mb-5">
-          <ImageUploader images={images} onChange={setImages} />
+          <ImageUploader auditId={auditId} images={images} onChange={setImages} />
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">

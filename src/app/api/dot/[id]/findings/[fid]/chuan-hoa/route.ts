@@ -5,6 +5,7 @@ import { findingImages, findings } from '@/lib/schema';
 import { getMember } from '@/lib/member-auth';
 import { standardizeFinding, isAiConfigured } from '@/lib/ai';
 import { checkAiQuota, recordAiUsage } from '@/lib/ai-quota';
+import type { Actor } from '@/lib/actor';
 import type { StandardCode } from '@/lib/iso';
 
 export const runtime = 'nodejs';
@@ -52,10 +53,13 @@ export async function POST(_req: Request, { params }: Ctx) {
    * AI. Đặt sau để lỗi "không phải finding của bạn" hiện ra trước lỗi hạn mức —
    * báo đúng nguyên nhân thật thì người dùng mới sửa được.
    */
-  const actor = {
+  const actor: Actor = {
+    kind: 'member',
+    id: session.member.id,
     key: `member:${session.member.id}`,
     name: session.member.fullName,
     auditId: id,
+    // Đã kiểm ở trên rồi, tới được đây nghĩa là đợt còn mở.
     auditClosed: false,
   };
 
