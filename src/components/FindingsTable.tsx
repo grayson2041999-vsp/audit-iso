@@ -160,19 +160,30 @@ export function FindingsTable({
         </p>
       )}
 
+      {/**
+       * BỐN CỘT, KHÔNG PHẢI CHÍN.
+       *
+       * Bản trước có chín cột, mà bảy trong số đó chỉ chứa vài chữ — chúng chia
+       * nhau gần hết bề ngang và ép cột Mô tả xuống còn một dải hẹp, khiến mỗi
+       * hàng cao mười mấy dòng. Gộp những mẩu ngắn lại theo NHÓM Ý NGHĨA:
+       *
+       *   1. Định danh & phân loại  — mã, mức độ, trạng thái
+       *   2. Ai & ở đâu             — đơn vị, đánh giá viên, nơi phát hiện
+       *   3. Nội dung               — tiêu đề, phát biểu, điều khoản viện dẫn
+       *   4. Thời hạn               — đứng riêng vì đây là cột người ta lướt mắt
+       *                               tìm màu đỏ/vàng, gộp vào là mất tác dụng
+       *
+       * Điều khoản chuyển xuống dưới phát biểu và gom theo tiêu chuẩn
+       * ("ISO 45001:2018 — 6.1.1, 6.1.2.1, 6.1.2.2") thay vì mỗi mã một dòng.
+       */}
       <div className="card overflow-x-auto">
-        <table className="w-full min-w-[1150px] border-collapse text-sm [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-200">
+        <table className="w-full min-w-[900px] border-collapse text-sm [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-200">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="w-16 whitespace-nowrap px-3 py-3 text-center">Mã</th>
-              <th className="whitespace-nowrap px-3 py-3">Phân loại</th>
-              <th className="px-3 py-3">Đơn vị được đánh giá</th>
-              <th className="px-3 py-3">Nơi phát hiện</th>
-              <th className="px-3 py-3">Điều khoản</th>
-              <th className="px-3 py-3">Mô tả phát hiện</th>
-              <th className="whitespace-nowrap px-3 py-3">Thời hạn</th>
-              <th className="whitespace-nowrap px-3 py-3">Đánh giá viên</th>
-              <th className="px-3 py-3">Trạng thái</th>
+              <th className="w-32 px-3 py-3">Mã · Phân loại</th>
+              <th className="w-48 px-3 py-3">Đơn vị · Đánh giá viên</th>
+              <th className="px-3 py-3">Nội dung phát hiện</th>
+              <th className="w-32 px-3 py-3">Thời hạn</th>
             </tr>
           </thead>
           <tbody>
@@ -180,33 +191,36 @@ export function FindingsTable({
               const st = FINDING_STATUS[f.status] ?? FINDING_STATUS.DRAFT;
               return (
                 <tr key={f.id} className="align-top hover:bg-slate-50">
-                  <td className="whitespace-nowrap px-3 py-3 text-center font-mono text-xs text-slate-600">
-                    {f.code}
+                  {/* 1. Định danh & phân loại — ba mẩu ngắn, xếp chồng thay vì ba cột */}
+                  <td className="px-3 py-3">
+                    <span className="font-mono text-xs text-slate-600">{f.code}</span>
+                    <div className="mt-1.5 flex flex-col items-start gap-1">
+                      <SeverityBadge value={f.severity} short />
+                      <span className={`chip whitespace-nowrap ring-transparent ${st.cls}`}>
+                        {st.label}
+                      </span>
+                    </div>
                   </td>
-                  <td className="px-3 py-3"><SeverityBadge value={f.severity} short /></td>
-                  <td className="px-3 py-3 text-slate-700">{f.auditee ?? '—'}</td>
-                  <td className="px-3 py-3 text-slate-700">{f.rawArea ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-slate-700">
-                    {f.clauses.length === 0
-                      ? '—'
-                      : f.clauses.map((c, i) => (
-                          <span key={i} className="block whitespace-nowrap">
-                            {c.standard} {c.clause}
-                          </span>
-                        ))}
+
+                  {/* 2. Ai & ở đâu. "Nơi phát hiện" thường để trống nên chỉ hiện khi có. */}
+                  <td className="px-3 py-3">
+                    <p className="text-slate-800">{f.auditee ?? '—'}</p>
+                    <p className="mt-0.5 text-xs text-slate-500" title={f.auditorName ?? undefined}>
+                      {auditorLabel(f)}
+                    </p>
+                    {f.rawArea && (
+                      <p className="mt-1.5 text-xs text-slate-500">Nơi phát hiện: {f.rawArea}</p>
+                    )}
                   </td>
+
                   {/**
-                   * Phát biểu hiện ĐẦY ĐỦ, không cắt.
+                   * 3. Nội dung — cột duy nhất được co giãn, nên phát biểu hiện ĐẦY ĐỦ
+                   * mà hàng vẫn không cao quá.
                    *
-                   * Trước đây cắt còn hai dòng (`line-clamp-2`) cho bảng gọn, nhưng
-                   * trưởng đoàn rà soát cả đợt thì thứ cần đọc chính là phát biểu —
-                   * cắt đi thành ra phải mở từng finding một mới đọc được.
-                   *
-                   * Kèm theo là `whitespace-pre-wrap` để giữ xuống dòng auditor đã gõ,
-                   * và `align-top` ở hàng (đã có sẵn) để các cột ngắn không bị đẩy
-                   * xuống giữa ô khi hàng cao lên.
+                   * `whitespace-pre-wrap` giữ xuống dòng auditor đã gõ; `align-top` ở
+                   * hàng giữ các cột ngắn dính mép trên thay vì trôi xuống giữa ô.
                    */}
-                  <td className="max-w-xl px-3 py-3">
+                  <td className="px-3 py-3">
                     <Link
                       href={`/quan-ly/dot/${auditId}/finding/${f.id}`}
                       className="font-medium text-brand-700 hover:underline"
@@ -216,27 +230,27 @@ export function FindingsTable({
                     <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                       {f.statement ?? f.rawText}
                     </p>
+                    {f.clauses.length > 0 && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        {clauseSummary(f.clauses).map((line) => (
+                          <span key={line} className="mr-3 inline-block whitespace-nowrap">
+                            {line}
+                          </span>
+                        ))}
+                      </p>
+                    )}
                   </td>
+
+                  {/* 4. Thời hạn đứng riêng: đây là cột người ta lướt tìm màu đỏ/vàng. */}
                   <td className="whitespace-nowrap px-3 py-3">
                     <DueCell dueDate={f.dueDate} closed={f.status === 'CLOSED'} />
-                  </td>
-                  <td
-                    className="whitespace-nowrap px-3 py-3 text-slate-700"
-                    title={f.auditorName ?? undefined}
-                  >
-                    {auditorLabel(f)}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`chip whitespace-nowrap ring-transparent ${st.cls}`}>
-                      {st.label}
-                    </span>
                   </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-12 text-center text-slate-500">
+                <td colSpan={4} className="px-3 py-12 text-center text-slate-500">
                   {rows.length === 0
                     ? 'Chưa có finding nào trong đợt này.'
                     : 'Không có finding nào khớp bộ lọc.'}
@@ -248,6 +262,37 @@ export function FindingsTable({
       </div>
     </div>
   );
+}
+
+/**
+ * Gom điều khoản theo tiêu chuẩn: ba dòng "ISO 45001:2018 6.1.2.1 / 6.1.2.2 / 6.1.1"
+ * rút thành một dòng "ISO 45001:2018 — 6.1.1, 6.1.2.1, 6.1.2.2".
+ *
+ * Sắp lại mã theo thứ tự số để đọc thuận mắt: 6.1.1 phải đứng trước 6.1.2.1, mà
+ * so sánh chuỗi thì "6.1.10" lại chen lên trước "6.1.2" — nên tách từng đoạn ra
+ * so bằng số.
+ */
+function clauseSummary(clauses: { standard: string; clause: string }[]): string[] {
+  const byStandard = new Map<string, string[]>();
+  for (const c of clauses) {
+    const list = byStandard.get(c.standard) ?? [];
+    if (!list.includes(c.clause)) list.push(c.clause);
+    byStandard.set(c.standard, list);
+  }
+  return [...byStandard].map(([standard, list]) => {
+    const sorted = [...list].sort(compareClause);
+    return `${standard} — ${sorted.join(', ')}`;
+  });
+}
+
+function compareClause(a: string, b: string) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 
 function Select({
