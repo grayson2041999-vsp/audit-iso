@@ -175,7 +175,7 @@ export function IssueReportBox({
 
       <table className="mt-4 w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+          <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase text-slate-700">
             <th className="pb-2">Đơn vị</th>
             <th className="pb-2 text-center">NC</th>
             <th className="pb-2">Mã 8 số</th>

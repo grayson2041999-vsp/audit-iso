@@ -178,7 +178,7 @@ export function FindingsTable({
        */}
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[900px] border-collapse text-sm [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-200">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-700">
             <tr>
               <th className="w-32 px-3 py-3">Mã · Phân loại</th>
               <th className="w-48 px-3 py-3">Đơn vị · Đánh giá viên</th>

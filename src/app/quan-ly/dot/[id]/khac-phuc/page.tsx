@@ -72,7 +72,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-700">
             <tr>
               <th className="px-4 py-3">Đơn vị</th>
               <th className="px-4 py-3 text-center">Số NC</th>
