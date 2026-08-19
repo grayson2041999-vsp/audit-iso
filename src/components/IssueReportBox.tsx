@@ -204,9 +204,6 @@ export function IssueReportBox({
         </tbody>
       </table>
 
-      <p className="mt-3 text-xs text-slate-400">
-        Mã không đổi khi phát hành lại — không phải báo mã mới cho đơn vị mỗi lần sửa.
-      </p>
     </div>
   );
 }
