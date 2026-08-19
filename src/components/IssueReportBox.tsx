@@ -166,7 +166,7 @@ export function IssueReportBox({
       <div className="mt-4 rounded-lg bg-slate-50 p-3">
         <p className="text-xs font-medium text-slate-500">Link chung cho mọi đơn vị</p>
         <div className="mt-1 flex items-center gap-2">
-          <code className="flex-1 truncate text-sm">{link}</code>
+          <code className="flex-1 truncate text-sm font-semibold text-slate-900">{link}</code>
           <button onClick={() => copy(link, 'link')} className="btn-ghost px-2 py-1 text-xs">
             {copied === 'link' ? 'Đã chép' : 'Chép'}
           </button>
@@ -192,15 +192,11 @@ export function IssueReportBox({
               <td className="py-2 font-mono tracking-widest">{u.code ?? '—'}</td>
               <td className="py-2 text-right">
                 <button
-                  onClick={() =>
-                    copy(
-                      `Báo cáo đánh giá nội bộ — ${u.name}\n${link}\nMã: ${u.code ?? ''}`,
-                      u.id,
-                    )
-                  }
+                  onClick={() => copy(u.code ?? '', u.id)}
+                  disabled={!u.code}
                   className="btn-ghost px-2 py-1 text-xs"
                 >
-                  {copied === u.id ? 'Đã chép' : 'Chép link + mã'}
+                  {copied === u.id ? 'Đã chép' : 'Chép mã'}
                 </button>
               </td>
             </tr>
