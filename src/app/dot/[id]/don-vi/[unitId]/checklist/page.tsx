@@ -40,13 +40,7 @@ export default async function Page({
         ← {unit.name}
       </Link>
 
-      <div>
-        <h1 className="text-2xl font-semibold">Checklist đánh giá</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Danh mục công việc để mang theo khi làm việc với đơn vị. Xuất ra file Word, xem
-          trên máy hoặc in ra. Không lưu trong hệ thống — tải xong là xong.
-        </p>
-      </div>
+      <h1 className="text-2xl font-semibold">Checklist đánh giá</h1>
 
       <ChecklistBuilder auditId={id} unitId={unitId} unitName={unit.name} />
     </div>

@@ -250,9 +250,8 @@ export function ChecklistBuilder({
         <div>
           <h2 className="font-medium">Chức năng, nhiệm vụ của {unitName}</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Gõ tóm tắt hoặc dán quy chế hoạt động đơn vị cung cấp. Mô tả càng cụ thể —
-            các quá trình chính, thiết bị, hoá chất, kho, nhà thầu, hồ sơ đang dùng — thì
-            danh mục càng bám sát đơn vị này thay vì chung chung.
+            Hãy nhập tóm tắt quy chế hoạt động của {unitName}. Thông tin càng cụ thể thì
+            danh mục đề xuất càng sát với thực tế.
           </p>
         </div>
 
