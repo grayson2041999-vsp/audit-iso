@@ -7,7 +7,8 @@ import { generateChecklistStream, isAiConfigured } from '@/lib/ai';
 import { AI_HOURLY_LIMIT, checkAiQuota, recordAiUsage } from '@/lib/ai-quota';
 import { resolveActor } from '@/lib/actor';
 import { memberOwnsUnit } from '@/lib/member-auth';
-import { sortStandards } from '@/lib/iso';
+import { STANDARD_SHORT, sortStandards } from '@/lib/iso';
+import { checklistSize, groupsFor } from '@/lib/checklist-prompt';
 import { toMinutes } from '@/lib/plan';
 
 export const runtime = 'nodejs';
@@ -89,16 +90,38 @@ export async function POST(req: Request, { params }: Ctx) {
   const audit = await loadAudit(id);
   const sessionMinutes = await unitSessionMinutes(id, unitId);
 
+  const standards = sortStandards(audit.standards);
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+
+      /**
+       * DÀN Ý GỬI TRƯỚC KHI GỌI AI — dòng này là thứ quyết định màn hình chờ.
+       *
+       * Máy chủ đã biết chắc sẽ có những nhóm nào (suy từ tiêu chuẩn của đợt) và
+       * cần khoảng bao nhiêu dòng (suy từ thời lượng phiên) TRƯỚC KHI model viết
+       * chữ đầu tiên. Gửi ngay xuống thì đánh giá viên thấy đủ dàn ý từ giây 0 và
+       * xem nó điền dần, thay vì nhìn một vòng tròn quay không biết còn bao lâu.
+       *
+       * Rẻ hơn nhiều so với việc đoán tiến độ: đây là kế hoạch thật, không phải
+       * thanh chạy giả.
+       */
+      send({
+        type: 'meta',
+        groups: groupsFor(standards),
+        target: checklistSize(sessionMinutes),
+        standards: standards.map((s) => STANDARD_SHORT[s]),
+        sessionMinutes,
+      });
+
       try {
         for await (const event of generateChecklistStream({
           unitName: unit.name,
           unitNote: unit.note,
           description: parsed.data.description,
-          standards: sortStandards(audit.standards),
+          standards,
           organization: audit.organization,
           objectives: audit.objectives,
           criteria: audit.criteria,

@@ -217,6 +217,33 @@ Font Times New Roman 12pt, dùng lại nguyên `p()`, `cell()`, `bullets()` tron
 
 ---
 
+## 6b. Màn hình chờ
+
+Soạn xong ba mươi dòng mất 30–60 giây — đủ lâu để người dùng nghi trang bị treo. Cách chữa
+KHÔNG phải thanh chạy giả hay mấy câu "bạn có biết…" nhảy vòng; đánh giá viên đọc ra ngay
+đó là đồ trang trí rồi mất tin vào phần còn lại của app.
+
+Mọi thứ hiện trên màn hình chờ đều là việc thật:
+
+| Hiện gì | Lấy từ đâu |
+|---|---|
+| **Dàn ý đủ bảy nhóm, ngay từ giây 0** | Sự kiện `meta` máy chủ gửi TRƯỚC khi gọi AI — nhóm suy từ `audits.standards`, số dòng suy từ thời lượng phiên |
+| **Thanh tiến độ** | Số dòng đã viết ÷ trần số dòng. Tỉ lệ có thật, không phải hàm thời gian |
+| **Nhóm đang viết, số dòng từng nhóm** | Đếm trực tiếp từ JSON đang chảy về |
+| **Bản tóm tắt "AI hiểu đơn vị này như sau"** | `unitSummary` — trường model viết đầu tiên |
+| **Câu vừa soạn xong, nguyên văn** | Phần tử cuối của nhóm cuối |
+
+Thanh chốt ở **95%** cho tới khi thật sự xong: model hay viết lệch trần một hai dòng, và một
+thanh đứng im ở 100% trong lúc vòng tròn vẫn quay là thứ khiến người dùng nghĩ nó hỏng.
+
+Có nút **Huỷ** (`AbortController`). Chờ một phút mà không bỏ ngang được thì rất bí, và huỷ
+giữa chừng không bị trừ lượt AI vì lượt chỉ ghi khi sự kiện `done` về tới.
+
+Ô nhập mờ đi trong lúc chờ nhưng vẫn đọc được — cần thiết, vì nếu tóm tắt của AI cho thấy nó
+hiểu sai thì đánh giá viên phải nhìn lại đúng chỗ mình viết thiếu.
+
+---
+
 ## 7. Chạm vào những đâu trong mã nguồn
 
 | File | Việc |
@@ -229,7 +256,7 @@ Font Times New Roman 12pt, dùng lại nguyên `p()`, `cell()`, `bullets()` tron
 | `src/lib/ai-quota.ts` | **sửa** — thêm loại `checklist`, bảng `WEIGHT` để một lần sinh tính bằng 3 lượt |
 | `src/app/api/dot/[id]/don-vi/[unitId]/checklist/route.ts` | **mới** — NDJSON chảy dần, 5 cửa |
 | `.../checklist/xuat-word/route.ts` | **mới** — kiểm quyền, đọc dữ liệu, gọi `buildChecklistDoc` |
-| `src/components/ChecklistBuilder.tsx` | **mới** — ô nhập, tiến trình, bảng xem trước sửa được, nút tải |
+| `src/components/ChecklistBuilder.tsx` | **mới** — ô nhập, màn hình chờ (mục 6b), bảng xem trước sửa được, nút tải |
 | `src/app/dot/[id]/don-vi/[unitId]/checklist/page.tsx` | **mới** — trang chứa, kèm `loading.tsx` |
 | `src/app/dot/[id]/don-vi/[unitId]/page.tsx` | **sửa** — thêm nút "Checklist đánh giá" |
 
