@@ -242,8 +242,8 @@ export function ChecklistBuilder({
           <h2 className="font-medium">Chức năng, nhiệm vụ của {unitName}</h2>
           <p className="mt-1 text-sm text-slate-500">
             Hãy mô tả {unitName}: chức năng nhiệm vụ, các quá trình chính, nhân sự, cơ sở
-            vật chất và thiết bị. Có quy chế hoạt động thì dán thẳng nội dung vào đây.
-            Thông tin càng cụ thể thì danh mục đề xuất càng sát với thực tế.
+            vật chất và thiết bị. Thông tin càng cụ thể thì danh mục đề xuất càng sát với
+            thực tế.
           </p>
         </div>
 
