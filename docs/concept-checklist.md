@@ -176,7 +176,7 @@ Mã điều khoản không thành cột riêng — đặt trong ngoặc cuối m
 |---|---|---|
 | STT | 720 twip (7%) | Đánh số liên tục qua các nhóm |
 | Công việc cần làm | 4450 twip (44%) | Câu hành động + mã điều khoản trong ngoặc |
-| Đánh tích | 1010 twip (10%) | Để trống, ô vuông ☐ căn giữa |
+| *(không tên)* | 1010 twip (10%) | Cột đánh tích — ô vuông ☐ căn giữa. Không đặt tên cột: ô vuông đã tự nói lên công dụng, còn chữ "Đánh tích" không lọt một dòng trong 10% bề rộng nên làm hàng tiêu đề cao gấp đôi |
 | Ghi chú | 3926 twip (39%) | Để trống, viết tay tại chỗ |
 
 Chiều cao dòng tối thiểu ~1,2 cm để viết tay được, và **không cho một dòng bị cắt ngang
@@ -204,8 +204,7 @@ Ngày: ......../......../20......
 **Một dòng ghi chú in nghiêng ngay dưới đầu trang, trước bảng:**
 
 > *Danh mục này do hệ thống gợi ý để đánh giá viên tham khảo. Không bắt buộc thực hiện hết
-> các mục, và không giới hạn phạm vi đánh giá — mọi phát hiện ngoài danh mục vẫn được ghi
-> nhận bình thường.*
+> các mục, và không giới hạn phạm vi đánh giá.*
 
 Câu này không phải thủ tục thừa. Nó đúng tinh thần của tính năng, và trả lời sẵn cho người
 sau này cầm tờ giấy lên hỏi tại sao có dòng bỏ trống.

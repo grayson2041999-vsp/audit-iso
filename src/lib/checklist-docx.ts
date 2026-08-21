@@ -185,8 +185,7 @@ export function buildChecklistDoc(input: ChecklistDocInput): Document {
   body.push(
     p(
       'Danh mục này do hệ thống gợi ý để đánh giá viên tham khảo. Không bắt buộc thực hiện hết ' +
-        'các mục, và không giới hạn phạm vi đánh giá — mọi phát hiện ngoài danh mục vẫn được ' +
-        'ghi nhận bình thường.',
+        'các mục, và không giới hạn phạm vi đánh giá.',
       { italics: true, size: 20, after: 160 },
     ),
   );
@@ -199,7 +198,15 @@ export function buildChecklistDoc(input: ChecklistDocInput): Document {
       children: [
         textCell('STT', { bold: true, width: COL.stt, shade: HEAD_SHADE, align: AlignmentType.CENTER }),
         textCell('Công việc cần làm', { bold: true, width: COL.task, shade: HEAD_SHADE }),
-        textCell('Đánh tích', { bold: true, width: COL.tick, shade: HEAD_SHADE, align: AlignmentType.CENTER }),
+        /**
+         * Cột đánh tích CỐ TÌNH KHÔNG CÓ TÊN.
+         *
+         * Ô vuông ☐ nằm ngay dưới đã tự nói lên công dụng, mà chữ "Đánh tích" ở
+         * cỡ 11pt lại không lọt một dòng trong bề rộng 10% nên bị xuống hai dòng
+         * và làm cả hàng tiêu đề cao gấp đôi cần thiết. Bỏ chữ đi thì hàng tiêu
+         * đề gọn lại và cột vẫn hiểu được ngay.
+         */
+        textCell('', { width: COL.tick, shade: HEAD_SHADE }),
         textCell('Ghi chú', { bold: true, width: COL.note, shade: HEAD_SHADE }),
       ],
     }),
@@ -250,7 +257,7 @@ export function buildChecklistDoc(input: ChecklistDocInput): Document {
   rows.push(
     new TableRow({
       children: [
-        textCell('PHÁT HIỆN NGOÀI DANH MỤC', { bold: true, shade: GROUP_SHADE, span: 4 }),
+        textCell('NGOÀI DANH MỤC', { bold: true, shade: GROUP_SHADE, span: 4 }),
       ],
     }),
   );
