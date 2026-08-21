@@ -5,15 +5,6 @@ import { parsePartialJson } from '@/lib/partial-json';
 import { formatClauseRefs } from '@/lib/iso';
 import type { Checklist, ChecklistGroup } from '@/lib/types';
 
-const PLACEHOLDER = `Ví dụ:
-
-Phòng Kỹ thuật, 12 người. Chức năng: quản lý và bảo dưỡng toàn bộ thiết bị sản xuất
-của xí nghiệp; lập kế hoạch bảo dưỡng định kỳ; sửa chữa đột xuất; quản lý kho vật tư
-phụ tùng; theo dõi hiệu chuẩn thiết bị đo.
-
-Đơn vị có xưởng cơ khí riêng (máy tiện, máy hàn), có sử dụng dầu mỡ và dung môi tẩy
-rửa, phát sinh giẻ lau nhiễm dầu. Thuê nhà thầu ngoài khi sửa chữa hệ thống điện
-cao thế. Đang dùng phần mềm quản lý bảo dưỡng và sổ tay ghi chép giấy song song.`;
 
 /** Dàn ý máy chủ gửi trước khi model viết chữ đầu tiên. Xem route sinh checklist. */
 export type ChecklistMeta = {
@@ -250,14 +241,14 @@ export function ChecklistBuilder({
         <div>
           <h2 className="font-medium">Chức năng, nhiệm vụ của {unitName}</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Hãy nhập tóm tắt quy chế hoạt động của {unitName}. Thông tin càng cụ thể thì
-            danh mục đề xuất càng sát với thực tế.
+            Hãy mô tả {unitName}: chức năng nhiệm vụ, các quá trình chính, nhân sự, cơ sở
+            vật chất và thiết bị. Có quy chế hoạt động thì dán thẳng nội dung vào đây.
+            Thông tin càng cụ thể thì danh mục đề xuất càng sát với thực tế.
           </p>
         </div>
 
         <textarea
           className="input min-h-[220px] font-normal leading-relaxed"
-          placeholder={PLACEHOLDER}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           disabled={loading}
