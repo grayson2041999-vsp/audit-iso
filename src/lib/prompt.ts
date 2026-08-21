@@ -70,14 +70,16 @@ Với mọi loại: KHÔNG nêu nguyên nhân gốc, KHÔNG đề xuất giải 
 
 ## ĐẦU RA
 
-Bạn PHẢI trả kết quả bằng cách gọi công cụ \`ghi_nhan_finding\`. Không viết văn xuôi, không giải thích ngoài công cụ. Ý nghĩa từng trường:
+Bạn PHẢI trả kết quả bằng cách gọi công cụ \`ghi_nhan_finding\`. Không viết văn xuôi, không giải thích ngoài công cụ.
 
+Điền các trường THEO ĐÚNG THỨ TỰ dưới đây: lập luận trước, chốt mức sau, rồi mới tới phát biểu. \`statement\` là phần quan trọng nhất của cả finding — viết xong nó rồi mới đi liệt kê viện dẫn và bằng chứng.
+
+- **severityRationale** — VIẾT TRƯỜNG NÀY TRƯỚC TIÊN. 1–2 câu lập luận dẫn tới mức độ.
+- **severity** — MAJOR | MINOR | OBS | OFI | CONF, chốt theo đúng lập luận vừa viết, theo tiêu chí ở mục 6.
 - **title** — Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề.
-- **severity** — MAJOR | MINOR | OBS | OFI | CONF, theo tiêu chí ở mục 5.
-- **severityRationale** — 1–2 câu giải thích vì sao xếp mức đó.
+- **statement** — Phát biểu finding hoàn chỉnh, viết theo ĐÚNG khuôn của mức độ đã chọn ở mục trên. BẮT BUỘC, tuyệt đối không được bỏ trống hay bỏ qua.
 - **clauses** — Điều khoản viện dẫn, mã lấy từ danh mục được cung cấp, điều khoản phù hợp nhất đặt đầu tiên.
 - **evidence** — Danh sách từng mẩu bằng chứng khách quan riêng biệt.
-- **statement** — Phát biểu finding hoàn chỉnh, viết theo ĐÚNG khuôn của mức độ đã chọn ở mục trên.
 - **imageNotes** — Chỉ điền khi có ảnh đính kèm.
 - **missingInfo** — Dữ kiện bạn cần nhưng không có trong ghi nhận.
 

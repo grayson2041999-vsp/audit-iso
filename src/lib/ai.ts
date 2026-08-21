@@ -11,6 +11,37 @@ import { getObjectBase64, isR2Configured } from './r2';
 export const MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
 const MAX_IMAGES = 6;
 
+/**
+ * Trần token cho một lượt gọi.
+ *
+ * Đây chỉ là TRẦN — tiền API tính theo số token thực sinh ra, không tính theo
+ * trần. Để chật không tiết kiệm được gì, mà lại gây hỏng.
+ *
+ * Trước đây đặt 8192 và đã gây lỗi thật: model chạm trần giữa chừng, JSON của
+ * tool bị cắt cụt, những trường sinh sau cùng biến mất, Zod báo
+ * "statement: Required" và auditor mất trắng kết quả đã chờ cả chục giây.
+ * Ghi nhận có ảnh kèm ca phân loại khó (MAJOR hay MINOR) là lúc dễ chạm nhất.
+ */
+const MAX_TOKENS = 16384;
+
+/**
+ * Chặn sớm trường hợp model bị cắt giữa chừng.
+ *
+ * Phải gọi TRƯỚC khi đụng tới `toolUse.input`: khi `stop_reason` là
+ * `max_tokens`, SDK vẫn vá cho ra một object trông hợp lệ nhưng thiếu các
+ * trường ở đuôi. Không kiểm ở đây thì lỗi rơi xuống tận Zod rồi hiện ra dưới
+ * dạng "thiếu trường X" — đúng triệu chứng nhưng sai nguyên nhân, người đọc
+ * log không thể lần ngược ra được.
+ */
+function assertNotTruncated(stopReason: string | null) {
+  if (stopReason === 'max_tokens') {
+    throw new Error(
+      'AI viết dài quá mức cho phép nên bị cắt giữa chừng, kết quả không dùng được. ' +
+        'Thử rút gọn ghi nhận thô hoặc bớt ảnh đính kèm rồi chuẩn hoá lại.',
+    );
+  }
+}
+
 export function isAiConfigured() {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
@@ -142,7 +173,20 @@ const FINDING_TOOL: Anthropic.Tool = {
           'thì đưa vào đây thay vì tự bịa',
       },
     },
-    required: ['title', 'severity', 'severityRationale', 'clauses', 'evidence', 'statement'],
+    /**
+     * THỨ TỰ Ở ĐÂY PHẢI KHỚP VỚI `properties` BÊN TRÊN.
+     *
+     * Model bám theo danh sách này (và theo mục "ĐẦU RA" trong SYSTEM_PROMPT)
+     * để quyết định viết trường nào trước, chứ không chỉ nhìn thứ tự khai báo
+     * `properties`. Bản cũ để `statement` ở cuối danh sách này trong khi
+     * `properties` đặt nó thứ tư — hai chỗ nói hai đằng, và trên thực tế model
+     * nghe theo chỗ này. Hậu quả: trường quan trọng nhất của cả finding nằm ở
+     * mép vực, cứ bị cắt là nó đi đầu tiên.
+     *
+     * Sửa gì ở `properties` thì sửa luôn ở đây và ở mục "ĐẦU RA" của
+     * SYSTEM_PROMPT — ba chỗ phải cùng một thứ tự.
+     */
+    required: ['severityRationale', 'severity', 'title', 'statement', 'clauses', 'evidence'],
   },
 };
 
@@ -165,7 +209,7 @@ export async function standardizeFinding(input: {
 
   const message = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 8192,
+    max_tokens: MAX_TOKENS,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -177,6 +221,8 @@ export async function standardizeFinding(input: {
     // Ép model bắt buộc gọi công cụ — không được trả lời bằng văn xuôi.
     tool_choice: { type: 'tool', name: FINDING_TOOL.name },
   });
+
+  assertNotTruncated(message.stop_reason);
 
   const toolUse = message.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === FINDING_TOOL.name,
@@ -204,9 +250,43 @@ export async function standardizeFinding(input: {
  * chỉ để xem, còn bản đi qua đây mới là bản được lưu.
  */
 function finalize(toolInput: unknown, imageKeysCount: number, imagesLoaded: number) {
-  const parsed = standardizedFindingSchema.safeParse(toolInput);
+  const warnings: string[] = [];
+
+  let parsed = standardizedFindingSchema.safeParse(toolInput);
+
+  /**
+   * CỨU LẤY PHẦN CÒN LẠI KHI CHỈ THIẾU MỖI `statement`.
+   *
+   * Auditor vừa ngồi nhìn mức độ, tiêu đề và bằng chứng chảy dần ra màn hình.
+   * Ném hết đi vì thiếu một trường — dù trường đó là ô văn bản họ sửa được
+   * bằng tay ngay bên dưới — là đổi thứ đáng giá lấy sự sạch sẽ của dữ liệu.
+   * Cột `statement` trong DB vốn cho phép để trống, và màn hình kết quả hiện
+   * nó dưới dạng textarea sửa được, nên bỏ trống là an toàn.
+   *
+   * Chỉ cứu đúng trường hợp này. Thiếu `severity` hay `clauses` thì kết quả
+   * không còn là một finding nữa — vẫn phải hỏng cho ra hỏng.
+   */
+  if (!parsed.success) {
+    const onlyStatementMissing = parsed.error.issues.every(
+      (i) => i.path.length === 1 && i.path[0] === 'statement',
+    );
+
+    if (onlyStatementMissing) {
+      parsed = standardizedFindingSchema.safeParse({
+        ...(toolInput as Record<string, unknown>),
+        statement: '',
+      });
+      warnings.push(
+        'AI không trả về phần phát biểu finding. Các trường còn lại vẫn dùng được — ' +
+          'mời tự viết phát biểu ở ô bên dưới, hoặc bấm chuẩn hoá lại.',
+      );
+    }
+  }
 
   if (!parsed.success) {
+    // In cả dữ liệu thô ra log: không có nó thì về sau không cách nào biết
+    // model đã trả về cái gì, chỉ còn mỗi tên trường bị thiếu để mà đoán.
+    console.error('[ai] Tool input không qua được Zod:', JSON.stringify(toolInput));
     throw new Error(
       'AI trả về dữ liệu không đúng cấu trúc: ' +
         parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
@@ -214,7 +294,6 @@ function finalize(toolInput: unknown, imageKeysCount: number, imagesLoaded: numb
   }
 
   // Hậu kiểm: loại bỏ điều khoản không tồn tại trong danh mục.
-  const warnings: string[] = [];
   const validClauses = parsed.data.clauses.filter((c) => {
     const ok = isValidClause(c.standard, c.clause);
     if (!ok) warnings.push(`Bỏ qua viện dẫn không hợp lệ: ${c.standard} ${c.clause}`);
@@ -268,7 +347,7 @@ export async function* standardizeFindingStream(input: {
 
   const stream = anthropic.messages.stream({
     model: MODEL,
-    max_tokens: 8192,
+    max_tokens: MAX_TOKENS,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: [...images, { type: 'text', text: userPrompt }] }],
     tools: [FINDING_TOOL],
@@ -282,6 +361,8 @@ export async function* standardizeFindingStream(input: {
   }
 
   const message = await stream.finalMessage();
+  assertNotTruncated(message.stop_reason);
+
   const toolUse = message.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === FINDING_TOOL.name,
   );
@@ -390,6 +471,7 @@ export type ChecklistStreamEvent =
 function finalizeChecklist(toolInput: unknown) {
   const parsed = checklistSchema.safeParse(toolInput);
   if (!parsed.success) {
+    console.error('[ai] Checklist tool input không qua được Zod:', JSON.stringify(toolInput));
     throw new Error(
       'AI trả về dữ liệu không đúng cấu trúc: ' +
         parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
@@ -451,7 +533,7 @@ export async function* generateChecklistStream(
 
   const stream = anthropic.messages.stream({
     model: MODEL,
-    max_tokens: 8192,
+    max_tokens: MAX_TOKENS,
     system: CHECKLIST_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: buildChecklistPrompt(input) }],
     tools: [CHECKLIST_TOOL],
@@ -465,6 +547,8 @@ export async function* generateChecklistStream(
   }
 
   const message = await stream.finalMessage();
+  assertNotTruncated(message.stop_reason);
+
   const toolUse = message.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === CHECKLIST_TOOL.name,
   );
