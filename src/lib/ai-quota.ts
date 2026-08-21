@@ -11,6 +11,25 @@ import type { Actor } from './actor';
  * trăm lần, hoặc mã 6 số lọt ra ngoài). Thiếu một trong hai đều không đủ.
  */
 
+export type AiUsageKind = 'standardize' | 'restandardize' | 'checklist';
+
+/**
+ * Một lời gọi tính bằng mấy lượt.
+ *
+ * Sinh checklist đắt hơn chuẩn hoá một finding nhiều lần: đầu vào là cả danh
+ * mục điều khoản hai tầng của tối đa ba tiêu chuẩn, đầu ra là ba mươi dòng
+ * công việc kèm viện dẫn. Tính bằng một lượt như finding thì trần 20 lượt/giờ
+ * không còn phản ánh chi phí thật.
+ *
+ * Ba lượt vẫn rộng rãi cho việc thật: 6 checklist một giờ, trong khi một đánh
+ * giá viên hiếm khi phụ trách quá 3–4 đơn vị trong cả đợt.
+ */
+const WEIGHT: Record<AiUsageKind, number> = {
+  standardize: 1,
+  restandardize: 1,
+  checklist: 3,
+};
+
 /** Số lượt chuẩn hoá tối đa của MỘT người trong MỘT giờ. */
 export const AI_HOURLY_LIMIT = Number(process.env.AI_HOURLY_LIMIT ?? 20);
 
@@ -94,15 +113,17 @@ export async function checkAiQuota(actorKey: string): Promise<QuotaResult> {
  */
 export async function recordAiUsage(
   actor: Actor,
-  kind: 'standardize' | 'restandardize' = 'standardize',
+  kind: AiUsageKind = 'standardize',
+  weight = WEIGHT[kind],
 ) {
   try {
-    await db.insert(aiUsage).values({
+    const row = {
       actorKey: actor.key,
       actorName: actor.name,
       auditId: actor.auditId,
       kind,
-    });
+    };
+    await db.insert(aiUsage).values(Array.from({ length: Math.max(1, weight) }, () => row));
   } catch (e) {
     console.error('[ai-quota] Không ghi được nhật ký lượt gọi:', e);
   }

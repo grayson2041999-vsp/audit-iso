@@ -1,6 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT, buildUserPrompt } from './prompt';
-import { standardizedFindingSchema, type StandardizedFinding } from './types';
+import { CHECKLIST_SYSTEM_PROMPT, buildChecklistPrompt } from './checklist-prompt';
+import {
+  standardizedFindingSchema, checklistSchema,
+  type StandardizedFinding, type Checklist,
+} from './types';
 import { isValidClause, type StandardCode } from './iso';
 import { getObjectBase64, isR2Configured } from './r2';
 
@@ -284,5 +288,188 @@ export async function* standardizeFindingStream(input: {
   if (!toolUse) throw new Error('AI không trả về dữ liệu có cấu trúc. Vui lòng thử lại.');
 
   const { result, model, warnings } = finalize(toolUse.input, imageKeys.length, images.length);
+  yield { type: 'done', result, model, warnings };
+}
+
+/* ------------------------------------------------------------------ */
+/* Checklist đánh giá                                                  */
+/* ------------------------------------------------------------------ */
+
+const CHECKLIST_TOOL: Anthropic.Tool = {
+  name: 'soan_checklist',
+  description:
+    'Trả về danh mục công việc cần làm khi đánh giá một đơn vị. Mỗi dòng là một việc ' +
+    'đánh giá viên thực hiện được ngay (xin hồ sơ, chọn mẫu, đối chiếu, quan sát tại chỗ), ' +
+    'KHÔNG phải một câu hỏi có/không.',
+  input_schema: {
+    type: 'object',
+    /**
+     * `unitSummary` đứng đầu là có chủ đích, giống cách `severityRationale` đứng
+     * trước `severity` ở FINDING_TOOL: model phải phát biểu xong nó hiểu đơn vị
+     * này làm gì rồi mới đi soạn việc. Đảo lại thì nó soạn việc chung chung
+     * trước, rồi tóm tắt cho khớp với thứ vừa soạn.
+     *
+     * Kèm lợi ích về trải nghiệm chờ: dòng đầu tiên hiện ra sau một hai giây
+     * cho đánh giá viên biết ngay model có hiểu đúng không, thay vì đợi đủ ba
+     * mươi dòng mới phát hiện nó hiểu nhầm.
+     */
+    properties: {
+      unitSummary: {
+        type: 'string',
+        description:
+          'VIẾT TRƯỜNG NÀY TRƯỚC TIÊN. 1–2 câu nêu bạn hiểu đơn vị này làm gì, có những quá ' +
+          'trình chính nào, và đặc thù nào ảnh hưởng tới việc đánh giá (vận hành thiết bị, ' +
+          'dùng hoá chất, có kho, có nhà thầu, có tiếp xúc khách hàng...). Chỉ dựa trên thông ' +
+          'tin đầu vào, không suy diễn thêm',
+      },
+      groups: {
+        type: 'array',
+        description:
+          'Các nhóm chủ đề, đúng thứ tự và đúng tên đã cho trong yêu cầu. Bỏ nhóm nào không ' +
+          'có việc gì đáng làm với đơn vị này',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Tên nhóm, chép đúng từ danh sách đã cho' },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  task: {
+                    type: 'string',
+                    description:
+                      'Một việc cần làm, mở đầu bằng động từ (xin, yêu cầu xuất trình, chọn ' +
+                      'ngẫu nhiên, đối chiếu, quan sát tại chỗ, hỏi người trực tiếp làm). Nêu ' +
+                      'rõ xem hồ sơ nào và đối chiếu với yêu cầu nào; có cỡ mẫu cụ thể nếu là ' +
+                      'việc đối chiếu hồ sơ. Tối đa khoảng 45 từ. KHÔNG viết dạng câu hỏi ' +
+                      'có/không, KHÔNG bịa số hiệu tài liệu hay tên biểu mẫu',
+                  },
+                  clauses: {
+                    type: 'array',
+                    description:
+                      'Điều khoản liên quan tới việc này. GỘP các tiêu chuẩn có cùng nội dung ' +
+                      'vào MỘT dòng thay vì tách thành nhiều dòng gần giống nhau. Tối đa 4 ' +
+                      'viện dẫn một dòng',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        standard: { type: 'string', description: 'VD: ISO 45001:2018' },
+                        clause: { type: 'string', description: 'Mã điều khoản, VD: 7.2' },
+                        clauseTitle: { type: 'string', description: 'Tên điều khoản' },
+                      },
+                      required: ['standard', 'clause', 'clauseTitle'],
+                    },
+                  },
+                },
+                required: ['task', 'clauses'],
+              },
+            },
+          },
+          required: ['name', 'items'],
+        },
+      },
+    },
+    required: ['unitSummary', 'groups'],
+  },
+};
+
+export type ChecklistStreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'done'; result: Checklist; model: string; warnings: string[] };
+
+/**
+ * Kiểm và làm sạch checklist model trả về.
+ *
+ * Khác `finalize` của finding ở một chỗ quan trọng: viện dẫn sai thì BỎ VIỆN
+ * DẪN, giữ lại dòng công việc. Với finding, mất hết điều khoản là mất luôn ý
+ * nghĩa nên phải cảnh báo gắt; với checklist, phần có giá trị là câu chữ trong
+ * cột "Công việc cần làm" — mã điều khoản chỉ là chú thích trong ngoặc. Vứt cả
+ * dòng đi vì một mã sai là đổi thứ đáng giá lấy thứ không đáng.
+ */
+function finalizeChecklist(toolInput: unknown) {
+  const parsed = checklistSchema.safeParse(toolInput);
+  if (!parsed.success) {
+    throw new Error(
+      'AI trả về dữ liệu không đúng cấu trúc: ' +
+        parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+    );
+  }
+
+  const warnings: string[] = [];
+  let dropped = 0;
+
+  const groups = parsed.data.groups
+    .map((g) => ({
+      name: g.name,
+      items: g.items
+        .filter((it) => it.task.trim().length > 0)
+        .map((it) => {
+          const clauses = it.clauses.filter((c) => {
+            const ok = isValidClause(c.standard, c.clause);
+            if (!ok) dropped++;
+            return ok;
+          });
+          return { ...it, clauses };
+        }),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  if (dropped > 0) {
+    warnings.push(
+      `Đã bỏ ${dropped} viện dẫn điều khoản không có trong danh mục. Nội dung công việc giữ nguyên.`,
+    );
+  }
+  if (groups.length === 0) {
+    throw new Error('AI không soạn được dòng công việc nào. Thử mô tả đơn vị chi tiết hơn.');
+  }
+
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  if (total < 8) {
+    warnings.push(
+      `Chỉ soạn được ${total} dòng — thường là do mô tả đơn vị còn sơ sài. Bổ sung các quá trình ` +
+        'chính, thiết bị và hồ sơ đơn vị đang dùng rồi sinh lại sẽ khá hơn nhiều.',
+    );
+  }
+
+  return { result: { ...parsed.data, groups }, model: MODEL, warnings };
+}
+
+/**
+ * Sinh checklist, trả kết quả chảy dần.
+ *
+ * Không có bản không-stream đi kèm như `standardizeFinding`, vì đường dùng duy
+ * nhất là màn hình soạn checklist và đầu ra dài hơn một finding nhiều lần —
+ * ngồi nhìn màn hình đứng im ba mươi giây là quá lâu.
+ */
+export async function* generateChecklistStream(
+  input: Parameters<typeof buildChecklistPrompt>[0],
+): AsyncGenerator<ChecklistStreamEvent> {
+  if (!isAiConfigured()) {
+    throw new Error('Chưa cấu hình ANTHROPIC_API_KEY trong biến môi trường.');
+  }
+
+  const stream = anthropic.messages.stream({
+    model: MODEL,
+    max_tokens: 8192,
+    system: CHECKLIST_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: buildChecklistPrompt(input) }],
+    tools: [CHECKLIST_TOOL],
+    tool_choice: { type: 'tool', name: CHECKLIST_TOOL.name },
+  });
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'input_json_delta') {
+      yield { type: 'delta', text: event.delta.partial_json };
+    }
+  }
+
+  const message = await stream.finalMessage();
+  const toolUse = message.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === CHECKLIST_TOOL.name,
+  );
+  if (!toolUse) throw new Error('AI không trả về dữ liệu có cấu trúc. Vui lòng thử lại.');
+
+  const { result, model, warnings } = finalizeChecklist(toolUse.input);
   yield { type: 'done', result, model, warnings };
 }

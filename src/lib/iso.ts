@@ -206,3 +206,111 @@ export const STATUS_LABELS: Record<string, string> = {
   ISSUED: 'Đã phát hành',
   CLOSED: 'Đã đóng',
 };
+
+/* ------------------------------------------------------------------ */
+/* Phân tầng điều khoản — dùng khi sinh checklist đánh giá cho đơn vị   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Những điều khoản mà MỘT PHÒNG/BAN/XƯỞNG trực tiếp chịu trách nhiệm thực hiện,
+ * nên hỏi được ngay tại buổi làm việc với đơn vị.
+ *
+ * Phần còn lại của danh mục là điều khoản CẤP HỆ THỐNG — bối cảnh tổ chức, sự
+ * lãnh đạo, chính sách, mục tiêu, xem xét của lãnh đạo. Hỏi trưởng một phân
+ * xưởng về "bối cảnh của tổ chức" chỉ nhận được câu trả lời thuộc lòng, không
+ * kiểm chứng được gì; những điều khoản đó thuộc buổi làm việc với lãnh đạo
+ * hoặc với bộ phận giữ hệ thống.
+ *
+ * Đây là danh sách MỀM. Prompt vẫn cho model thấy trọn danh mục, chỉ đánh dấu
+ * nhóm nào nên ưu tiên. Lọc cứng sẽ hỏng đúng vào lúc đơn vị được đánh giá
+ * chính là ban ISO — khi đó điều khoản cấp hệ thống mới là phần chính.
+ */
+export const UNIT_LEVEL_CLAUSES: Record<StandardCode, string[]> = {
+  ISO9001: [
+    '7.1.3', '7.1.4', '7.1.5', '7.1.6', '7.2', '7.3', '7.4', '7.5.2', '7.5.3',
+    '8.1', '8.2.1', '8.2.2', '8.2.3', '8.2.4', '8.3',
+    '8.4.1', '8.4.2', '8.4.3',
+    '8.5.1', '8.5.2', '8.5.3', '8.5.4', '8.5.5', '8.5.6',
+    '8.6', '8.7', '9.1.1', '9.1.2', '9.1.3', '10.2',
+  ],
+  ISO14001: [
+    '6.1.2', '6.1.3', '7.2', '7.3', '7.4.2', '7.4.3', '7.5.2', '7.5.3',
+    '8.1', '8.2', '9.1.1', '9.1.2', '10.2',
+  ],
+  ISO45001: [
+    '5.4', '6.1.2.1', '6.1.2.2', '6.1.3', '7.2', '7.3', '7.4', '7.5',
+    '8.1.1', '8.1.2', '8.1.3', '8.1.4.1', '8.1.4.2', '8.1.4.3', '8.2',
+    '9.1.1', '9.1.2', '10.2',
+  ],
+};
+
+/**
+ * Danh mục điều khoản chia hai tầng, dùng cho prompt sinh checklist.
+ *
+ * Khác `clauseListForPrompt` ở chỗ có gắn nhãn tầng — model cần biết nhóm nào
+ * hỏi được ở đơn vị, nhóm nào để dành cho buổi làm việc với lãnh đạo.
+ */
+export function clauseListByTier(standards: StandardCode[]) {
+  return standards
+    .map((s) => {
+      const unitLevel = UNIT_LEVEL_CLAUSES[s];
+      const rows = (isUnitLevel: boolean) =>
+        ISO_CLAUSES[s]
+          .filter(([c]) => unitLevel.includes(c) === isUnitLevel)
+          .map(([c, t]) => `  ${c} — ${t}`)
+          .join('\n') || '  (không có)';
+
+      return [
+        `### ${STANDARD_SHORT[s]}`,
+        '',
+        'CẤP ĐƠN VỊ — ưu tiên lấy từ nhóm này:',
+        rows(true),
+        '',
+        'CẤP HỆ THỐNG — chỉ dùng khi đơn vị được đánh giá chính là bộ phận giữ hệ thống:',
+        rows(false),
+      ].join('\n');
+    })
+    .join('\n\n');
+}
+
+/**
+ * Nhãn ba chữ của từng tiêu chuẩn, chỉ dùng trong checklist in ra giấy.
+ *
+ * Trên tờ A4 mỗi dòng chỉ có 44% bề rộng cho phần chữ, nên viết đủ
+ * "ISO 9001:2015 điều 7.2" ba lần là hết chỗ. QMS/EMS/OHS là ký hiệu quen
+ * thuộc với người làm hệ thống quản lý và ngắn hơn bốn lần.
+ */
+export const STANDARD_TAG: Record<StandardCode, string> = {
+  ISO9001: 'QMS',
+  ISO14001: 'EMS',
+  ISO45001: 'OHS',
+};
+
+function tagOf(standard: string): string {
+  const code = (Object.keys(STANDARD_SHORT) as StandardCode[]).find(
+    (k) => STANDARD_SHORT[k] === standard || k === standard,
+  );
+  return code ? STANDARD_TAG[code] : standard;
+}
+
+/**
+ * Gom các viện dẫn của một dòng checklist thành một chuỗi ngắn:
+ *
+ *     [{9001, 7.2}, {14001, 7.2}, {45001, 7.2}]  →  "7.2 QMS/EMS/OHS"
+ *     [{9001, 8.5.1}, {45001, 8.1.2}]            →  "8.5.1 QMS · 8.1.2 OHS"
+ *
+ * Gộp theo MÃ chứ không theo tiêu chuẩn, vì phần lớn điều khoản của mục 7 và
+ * mục 10 trùng số hiệu ở cả ba tiêu chuẩn — đó chính là chỗ đánh giá tích hợp
+ * tiết kiệm được công.
+ */
+export function formatClauseRefs(refs: { standard: string; clause: string }[]): string {
+  const byClause = new Map<string, string[]>();
+  for (const r of refs) {
+    if (!r?.clause) continue;
+    const tags = byClause.get(r.clause) ?? [];
+    const tag = tagOf(r.standard ?? '');
+    if (!tags.includes(tag)) tags.push(tag);
+    byClause.set(r.clause, tags);
+  }
+  return [...byClause.entries()].map(([c, tags]) => `${c} ${tags.join('/')}`).join(' · ');
+}

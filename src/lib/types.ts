@@ -120,3 +120,56 @@ export function suggestDueDate(severity: string, from = new Date()): string {
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/* ------------------------------------------------------------------ */
+/* Checklist đánh giá — danh mục công việc AI soạn cho một đơn vị       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Một dòng trên tờ giấy. `clauses` dùng lại `clauseRefSchema` để đi qua đúng
+ * hàm hậu kiểm mã điều khoản đang dùng cho finding — không có danh mục viện
+ * dẫn thứ hai trong app.
+ */
+export const checklistItemSchema = z.object({
+  task: z.string().min(1),
+  clauses: z.array(clauseRefSchema).optional().default([]),
+});
+
+export const checklistGroupSchema = z.object({
+  name: z.string().min(1),
+  items: z.array(checklistItemSchema),
+});
+
+export const checklistSchema = z.object({
+  /**
+   * Một hai câu model tóm tắt lại nó hiểu đơn vị này làm gì.
+   *
+   * Không in ra file Word. Tồn tại chỉ để đánh giá viên liếc qua là biết model
+   * có hiểu đúng đầu vào không — hiểu sai thì sửa mô tả rồi sinh lại, rẻ hơn
+   * nhiều so với phát hiện ra giữa buổi làm việc.
+   */
+  unitSummary: z.string(),
+  groups: z.array(checklistGroupSchema),
+});
+
+export type ChecklistItem = z.infer<typeof checklistItemSchema>;
+export type ChecklistGroup = z.infer<typeof checklistGroupSchema>;
+export type Checklist = z.infer<typeof checklistSchema>;
+
+export const checklistRequestSchema = z.object({
+  description: z
+    .string()
+    .min(30, 'Cần ít nhất 30 ký tự mô tả chức năng, nhiệm vụ của đơn vị'),
+});
+
+/**
+ * Thân request khi tải file Word.
+ *
+ * Client gửi lên các dòng ĐÃ SỬA chứ không phải bản model trả về, vì đánh giá
+ * viên được phép sửa chữ, xoá dòng và thêm dòng tự viết ở màn hình xem trước.
+ * Máy chủ không giữ bản nào để đối chiếu — checklist không lưu vào cơ sở dữ
+ * liệu, xem `docs/concept-checklist.md` mục 8.
+ */
+export const checklistExportSchema = z.object({
+  groups: z.array(checklistGroupSchema).min(1, 'Checklist rỗng'),
+});

@@ -6,3 +6,6 @@ out
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+
+# Thư mục rác tạm — file build thử, snapshot. Không thuộc mã nguồn.
+_to_delete

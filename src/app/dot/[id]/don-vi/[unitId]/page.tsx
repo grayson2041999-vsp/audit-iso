@@ -56,9 +56,14 @@ export default async function Page({
           </p>
         </div>
         {!closed && (
-          <Link href={`/dot/${id}/don-vi/${unitId}/moi`} className="btn-primary">
-            + Ghi nhận mới
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/dot/${id}/don-vi/${unitId}/checklist`} className="btn-ghost">
+              Checklist đánh giá
+            </Link>
+            <Link href={`/dot/${id}/don-vi/${unitId}/moi`} className="btn-primary">
+              + Ghi nhận mới
+            </Link>
+          </div>
         )}
       </div>
 
