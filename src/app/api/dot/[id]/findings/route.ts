@@ -81,7 +81,7 @@ export async function POST(req: Request, { params }: Ctx) {
             standard: c.standard, clause: c.clause, clauseTitle: c.clauseTitle,
           })) ?? [],
         missingInfo: ai?.missingInfo ?? [],
-        aiModel: ai ? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5' : null,
+        aiModel: ai ? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5-5' : null,
         aiRaw: ai ?? null,
       })
       .returning();

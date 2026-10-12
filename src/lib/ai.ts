@@ -8,7 +8,7 @@ import {
 import { isValidClause, type StandardCode } from './iso';
 import { getObjectBase64, isR2Configured } from './r2';
 
-export const MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
+export const MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5-5';
 const MAX_IMAGES = 6;
 
 /**
