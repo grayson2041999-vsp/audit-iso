@@ -265,7 +265,7 @@ export function FindingEntry({
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {/* ---------------- Cột trái: nhập liệu ---------------- */}
-      <section className="card p-5">
+      <section className="card p-6 sm:p-7">
         <h2 className="mb-1 text-lg font-semibold">1. Ghi nhận tại hiện trường</h2>
         {restored && (
           <p className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900">
@@ -379,7 +379,7 @@ export function FindingEntry({
       </section>
 
       {/* ---------------- Cột phải: kết quả ---------------- */}
-      <section className="card p-5">
+      <section className="card p-6 sm:p-7">
         <h2 className="mb-1 text-lg font-semibold">2. Finding đã chuẩn hoá</h2>
         <p className="mb-5 text-sm text-slate-500">
           Rà soát và chỉnh sửa trước khi lưu. AI là trợ lý, quyết định cuối cùng thuộc về bạn.
@@ -447,7 +447,7 @@ export function FindingEntry({
                       setDueDateTouched(false);
                       setDueDate(suggestDueDate(result.severity));
                     }}
-                    className="shrink-0 whitespace-nowrap text-xs text-brand-600 hover:underline"
+                    className="shrink-0 whitespace-nowrap text-xs text-brand-700 hover:underline"
                   >
                     Về mặc định
                   </button>

@@ -176,8 +176,8 @@ export default async function Page({
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="card p-5">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <section className="card p-6 sm:p-7">
+      <h2 className="mb-3 text-sm font-semibold text-slate-500">
         {title}
       </h2>
       {children}

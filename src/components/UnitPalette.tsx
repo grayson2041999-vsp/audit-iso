@@ -45,9 +45,9 @@ export function UnitPalette({
   if (units.length === 0) return null;
 
   return (
-    <section className="card p-5">
+    <section className="card p-6 sm:p-7">
       <div className="mb-3">
-        <h2 className="font-semibold">Kho đơn vị</h2>
+        <h2 className="text-lg font-semibold">Kho đơn vị</h2>
         <p className="mt-1 text-sm text-slate-500">
           {locked ? (
             'Đợt đã khoá, không sửa lịch được nữa.'

@@ -92,7 +92,7 @@ export function CapaReview({
 
   return (
     <div className="space-y-4">
-      <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+      <div className="card flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
         <div>
           <span className={cn('chip', CAPA_STYLE[status])}>{CAPA_LABEL_LEADER[status]}</span>
           <span className="ml-3 text-sm text-slate-500">
@@ -109,13 +109,13 @@ export function CapaReview({
       </div>
 
       {items.length === 0 && (
-        <div className="card p-6 text-sm text-slate-500">
+        <div className="card p-7 sm:p-8 text-sm text-slate-500">
           Không còn mục nào cần khắc phục — có thể các finding đã được hạ mức ở bản phát hành mới.
         </div>
       )}
 
       {items.map((it, i) => (
-        <div key={it.id} className="card p-5">
+        <div key={it.id} className="card p-6 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <span className="font-mono text-sm text-slate-400">{it.code ?? `#${i + 1}`}</span>
@@ -140,7 +140,7 @@ export function CapaReview({
                 <Field label="Kết quả đã thực hiện" value={it.completionNote} />
                 {it.attachments.length > 0 && (
                   <div>
-                    <dt className="text-xs font-medium uppercase text-slate-400">Tệp đính kèm</dt>
+                    <dt className="text-xs font-medium text-slate-500">Tệp đính kèm</dt>
                     <dd className="mt-1 text-slate-700">
                       {it.attachments.map((a) => a.fileName ?? a.key).join(' · ')}
                     </dd>
@@ -190,7 +190,7 @@ export function CapaReview({
       ))}
 
       {canAct && (
-        <div className="card space-y-3 p-5">
+        <div className="card space-y-3 p-6 sm:p-7">
           <label className="label">
             Ý kiến gửi đơn vị{' '}
             <span className="font-normal text-slate-400">(bắt buộc nếu trả lại)</span>
@@ -236,7 +236,7 @@ export function CapaReview({
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
-      <dt className="text-xs font-medium uppercase text-slate-400">{label}</dt>
+      <dt className="text-xs font-medium text-slate-500">{label}</dt>
       <dd className="mt-0.5 whitespace-pre-wrap text-slate-700">{value?.trim() || '—'}</dd>
     </div>
   );

@@ -108,15 +108,15 @@ export function AuditEdit({
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="text-sm text-brand-600 hover:underline">
+      <button onClick={() => setOpen(true)} className="text-sm text-brand-700 hover:underline">
         Sửa thông tin đợt
       </button>
     );
   }
 
   return (
-    <section className="card space-y-5 p-5">
-      <h2 className="font-semibold">Sửa thông tin đợt</h2>
+    <section className="card space-y-5 p-6 sm:p-7">
+      <h2 className="text-lg font-semibold">Sửa thông tin đợt</h2>
 
       <div>
         <label className="label">Tổ chức được đánh giá</label>

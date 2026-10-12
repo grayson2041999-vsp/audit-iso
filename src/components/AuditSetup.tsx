@@ -118,17 +118,17 @@ export function AuditSetup({
 
       {/* ============ Mã truy cập — việc quay lại nhiều nhất sau khi mở đợt ============ */}
       {opened && (
-        <section className="rounded-xl border-2 border-brand-300 bg-brand-50/50 p-5">
+        <section className="card p-6 sm:p-7">
           <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="text-lg font-semibold text-brand-900">Link và mã truy cập</h2>
-            <span className="text-sm text-brand-700">
+            <h2 className="text-lg font-semibold text-ink">Link và mã truy cập</h2>
+            <span className="text-sm text-slate-500">
               Gửi link cho cả đoàn, kèm mã riêng của từng người
             </span>
           </div>
 
           <CopyLink url={publicUrl} />
 
-          <ul className="mt-4 divide-y divide-brand-100 overflow-hidden rounded-lg border border-brand-200 bg-white">
+          <ul className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-2xl bg-slate-50">
             {members.map((m) => (
               <li key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
                 <span className={`flex-1 ${m.fullName === leaderName ? 'font-semibold' : 'font-medium'}`}>
@@ -152,8 +152,8 @@ export function AuditSetup({
       )}
 
       {/* ============ 1. Đơn vị được đánh giá ============ */}
-      <section className="card p-5">
-        <h2 className="mb-4 font-semibold">1. Đơn vị được đánh giá</h2>
+      <section className="card p-6 sm:p-7">
+        <h2 className="mb-4 text-lg font-semibold">1. Đơn vị được đánh giá</h2>
 
         {!locked && (
           <AddRow
@@ -206,8 +206,8 @@ export function AuditSetup({
       </section>
 
       {/* ============ 2. Đánh giá viên ============ */}
-      <section className="card p-5">
-        <h2 className="mb-4 font-semibold">2. Đánh giá viên</h2>
+      <section className="card p-6 sm:p-7">
+        <h2 className="mb-4 text-lg font-semibold">2. Đánh giá viên</h2>
 
         {!locked && (
           <>
@@ -230,7 +230,7 @@ export function AuditSetup({
                   })
                 }
                 disabled={busy}
-                className="mt-2 text-sm text-brand-600 hover:underline"
+                className="mt-2 text-sm text-brand-700 hover:underline"
               >
                 + Thêm tôi ({leaderName}) vào đoàn đánh giá
               </button>
@@ -277,8 +277,8 @@ export function AuditSetup({
       </section>
 
       {/* ============ 3. Phân công ============ */}
-      <section className="card p-5">
-        <h2 className="mb-4 font-semibold">3. Phân công</h2>
+      <section className="card p-6 sm:p-7">
+        <h2 className="mb-4 text-lg font-semibold">3. Phân công</h2>
 
         {units.length > 0 && members.length > 0 && !locked && (
           <AutoAssignRow
@@ -378,8 +378,8 @@ export function AuditSetup({
 
       {/* ============ 4. Mở đợt ============ */}
       {!opened && (
-      <section className="card p-5">
-        <h2 className="font-semibold">4. Mở đợt đánh giá</h2>
+      <section className="card p-6 sm:p-7">
+        <h2 className="text-lg font-semibold">4. Mở đợt đánh giá</h2>
 
         <p className="mb-4 mt-1 text-sm text-slate-500">
           Sinh mã 6 số cho từng đánh giá viên và chuyển đợt sang <strong>Đang thực hiện</strong>.

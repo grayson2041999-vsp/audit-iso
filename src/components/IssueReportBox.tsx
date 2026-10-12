@@ -107,8 +107,8 @@ export function IssueReportBox({
   /* ---------- Chưa khoá ---------- */
   if (!closed && !issued) {
     return (
-      <div className="card p-5">
-        <h3 className="font-semibold">Gửi báo cáo cho đơn vị</h3>
+      <div className="card p-6 sm:p-7">
+        <h3 className="text-lg font-semibold">Gửi báo cáo cho đơn vị</h3>
         <p className="mt-1.5 text-sm text-slate-500">
           Khoá đợt trước đã. Gửi một báo cáo mà đánh giá viên còn đang nhập dở là gửi một
           thứ chưa xong.
@@ -120,8 +120,8 @@ export function IssueReportBox({
   /* ---------- Đã khoá, chưa gửi ---------- */
   if (!issued) {
     return (
-      <div className="card p-5">
-        <h3 className="font-semibold">Gửi báo cáo cho đơn vị</h3>
+      <div className="card p-6 sm:p-7">
+        <h3 className="text-lg font-semibold">Gửi báo cáo cho đơn vị</h3>
         <p className="mt-1.5 text-sm text-slate-600">
           Tạo bản phát hành và cấp mã 8 số cho {units.length} đơn vị.{' '}
           {unitsWithNc > 0 ? (
@@ -143,10 +143,10 @@ export function IssueReportBox({
 
   /* ---------- Đã gửi ---------- */
   return (
-    <div className="card p-5">
+    <div className="card p-6 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">Đã gửi cho đơn vị — bản {version}</h3>
+          <h3 className="text-lg font-semibold">Đã gửi cho đơn vị — bản {version}</h3>
           <p className="mt-1 text-sm text-slate-500">
             Đơn vị đang xem bản {version}. Sửa finding thì phải phát hành bản mới họ mới thấy.
           </p>
@@ -175,7 +175,7 @@ export function IssueReportBox({
 
       <table className="mt-4 w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase text-slate-700">
+          <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
             <th className="pb-2">Đơn vị</th>
             <th className="pb-2 text-center">NC</th>
             <th className="pb-2">Mã 8 số</th>

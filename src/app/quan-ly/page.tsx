@@ -26,11 +26,11 @@ export default async function Page() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Đợt đánh giá</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="page-title">Đợt đánh giá</h1>
+          <p className="mt-2 text-sm text-slate-500">
             Xin chào {leader.fullName} · {rows.length} đợt
           </p>
         </div>
@@ -38,19 +38,19 @@ export default async function Page() {
       </div>
 
       {dbError && (
-        <div className="card border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="card bg-amber-50 px-6 py-4 text-sm text-amber-900">
           Chưa truy vấn được cơ sở dữ liệu. Nếu vừa cập nhật, kiểm tra đã chạy
           <code> db/migration-003-leaders-audits.sql</code> trên Neon chưa.
         </div>
       )}
 
       {rows.length === 0 && !dbError ? (
-        <div className="card grid place-items-center px-6 py-16 text-center">
-          <p className="text-slate-600">Chưa có đợt đánh giá nào.</p>
-          <p className="mt-1 text-sm text-slate-400">
+        <div className="card grid place-items-center px-6 py-20 text-center">
+          <p className="font-display text-2xl font-semibold text-ink">Chưa có đợt đánh giá nào.</p>
+          <p className="mt-2 text-sm text-slate-500">
             Tạo đợt đầu tiên để bắt đầu khai báo đơn vị và đánh giá viên.
           </p>
-          <Link href="/quan-ly/dot/moi" className="btn-primary mt-4">+ Tạo đợt đánh giá</Link>
+          <Link href="/quan-ly/dot/moi" className="btn-primary mt-6">+ Tạo đợt đánh giá</Link>
         </div>
       ) : (
         <AuditList

@@ -9,7 +9,7 @@ export default function Loading() {
         <Bar className="h-4 w-32" />
       </div>
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="card space-y-3 p-5">
+        <div key={i} className="card space-y-3 p-6 sm:p-7">
           <Bar className="h-4 w-48" />
           <Bar className="h-3 w-72 max-w-full" />
           <Block className="h-24" />

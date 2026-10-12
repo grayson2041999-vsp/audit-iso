@@ -54,7 +54,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           units={units.filter((u) => u.accessCode).map((u) => ({ id: u.id, name: u.name }))}
         />
       ) : (
-        <div className="card p-6 text-center text-sm text-slate-500">
+        <div className="card p-7 sm:p-8 text-center text-sm text-slate-500">
           Báo cáo của đợt này chưa được phát hành.
         </div>
       )}

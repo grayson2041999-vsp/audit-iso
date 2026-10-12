@@ -38,10 +38,10 @@ export const AUDIT_STATUS_LABELS: Record<string, string> = {
 };
 
 export const AUDIT_STATUS_STYLE: Record<string, string> = {
-  PLANNED: 'bg-slate-100 text-slate-700',
-  IN_PROGRESS: 'bg-emerald-100 text-emerald-800',
-  REPORTING: 'bg-blue-100 text-blue-800',
-  CLOSED: 'bg-zinc-200 text-zinc-700',
+  PLANNED: 'text-slate-500',
+  IN_PROGRESS: 'text-launch',
+  REPORTING: 'text-brand-700',
+  CLOSED: 'text-slate-400',
 };
 
 /**

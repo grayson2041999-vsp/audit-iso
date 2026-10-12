@@ -532,7 +532,7 @@ export function AuditPlan({
 
   if (days.length === 0) {
     return (
-      <p className="card p-6 text-sm text-slate-500">
+      <p className="card p-7 sm:p-8 text-sm text-slate-500">
         Đợt chưa có khoảng thời gian. Quay lại bước tạo đợt để nhập ngày bắt đầu và kết thúc.
       </p>
     );
@@ -543,8 +543,8 @@ export function AuditPlan({
       {error && <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</p>}
 
       {/* ============ Thông tin chương trình ============ */}
-      <section className="card space-y-4 p-5">
-        <h2 className="font-semibold">Thông tin chương trình</h2>
+      <section className="card space-y-4 p-6 sm:p-7">
+        <h2 className="text-lg font-semibold">Thông tin chương trình</h2>
 
         <Field label="Mục tiêu đánh giá" required missing={!info.objectives.trim()}>
           <textarea
@@ -600,8 +600,8 @@ export function AuditPlan({
       </section>
 
       {/* ============ Khung giờ làm việc ============ */}
-      <section className="card space-y-4 p-5">
-        <h2 className="font-semibold">Khung giờ làm việc</h2>
+      <section className="card space-y-4 p-6 sm:p-7">
+        <h2 className="text-lg font-semibold">Khung giờ làm việc</h2>
 
         <div className="space-y-3">
           {days.map((day, i) => (
@@ -642,7 +642,7 @@ export function AuditPlan({
               />
 
               {!locked && i === 0 && days.length > 1 && (
-                <button onClick={applyToAllDays} className="ml-2 text-xs text-brand-600 hover:underline">
+                <button onClick={applyToAllDays} className="ml-2 text-xs text-brand-700 hover:underline">
                   Áp dụng cho mọi ngày
                 </button>
               )}
@@ -677,9 +677,9 @@ export function AuditPlan({
       />
 
       {/* ============ Lịch đánh giá ============ */}
-      <section className="card p-5">
+      <section className="card p-6 sm:p-7">
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <h2 className="font-semibold">Lịch đánh giá</h2>
+          <h2 className="text-lg font-semibold">Lịch đánh giá</h2>
 
           {!locked && (
             <span className="flex items-center gap-1" data-history={tick}>
@@ -717,7 +717,7 @@ export function AuditPlan({
               {targetOverride !== null && (
                 <button
                   onClick={() => setTargetOverride(null)}
-                  className="text-xs text-brand-600 hover:underline"
+                  className="text-xs text-brand-700 hover:underline"
                 >
                   về mức tự tính
                 </button>

@@ -19,24 +19,27 @@ export function AuditTabs({ auditId, issued = false }: { auditId: string; issued
       : []),
   ];
 
+  // Điều khiển phân đoạn: rãnh Control Gray, mục đang chọn là viên trắng có viền 1px.
   return (
-    <nav className="flex gap-1 border-b border-slate-200">
-      {tabs.map((t) => {
-        const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);
-        return (
-          <Link
-            key={t.href}
-            href={t.href}
-            className={`-mb-px border-b-2 px-4 py-2.5 text-sm ${
-              active
-                ? 'border-brand-600 font-medium text-brand-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
+    <nav className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <div className="inline-flex gap-1 rounded-full bg-slate-200/70 p-1">
+        {tabs.map((t) => {
+          const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);
+          return (
+            <Link
+              key={t.href}
+              href={t.href}
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-white font-medium text-ink shadow-subtle'
+                  : 'text-slate-600 hover:text-ink'
+              }`}
+            >
+              {t.label}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }

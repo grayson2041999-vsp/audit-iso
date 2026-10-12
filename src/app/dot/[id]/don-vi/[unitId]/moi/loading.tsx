@@ -8,7 +8,7 @@ export default function Loading() {
       <Bar className="h-7 w-80 max-w-full" />
       <div className="grid gap-6 lg:grid-cols-2">
         {[0, 1].map((i) => (
-          <div key={i} className="card space-y-4 p-5">
+          <div key={i} className="card space-y-4 p-6 sm:p-7">
             <Bar className="h-5 w-48" />
             <Bar className="h-3 w-full" />
             <Block className="h-40" />

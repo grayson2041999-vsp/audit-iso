@@ -20,13 +20,13 @@ export function MemberBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-slate-100 px-4 py-2.5 text-sm">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-white px-5 py-2.5 text-sm">
       <Link href={`/dot/${auditId}/toi`} className="font-medium hover:underline">
         {auditTitle}
       </Link>
       <span className="text-slate-400">·</span>
       <span className="text-slate-600">{memberName}</span>
-      <button onClick={leave} className="ml-auto text-xs text-slate-500 hover:underline">
+      <button onClick={leave} className="ml-auto text-sm text-brand-700 hover:underline">
         Thoát
       </button>
     </div>

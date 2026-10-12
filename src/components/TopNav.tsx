@@ -21,41 +21,47 @@ export function TopNav({ leaderName }: { leaderName: string | null }) {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
-        <Link href={leaderName ? '/quan-ly' : '/'} className="flex items-center gap-2 font-semibold">
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-brand-600 text-xs font-bold text-white">
+    // Global nav theo DESIGN.md: cao 44px, nền trắng mờ kính, viền 1px Control Gray.
+    <header className="sticky top-0 z-30 border-b border-control bg-white/80 backdrop-blur-xl backdrop-saturate-150">
+      <div className="mx-auto flex h-11 max-w-7xl items-center gap-6 px-4 sm:px-6">
+        <Link
+          href={leaderName ? '/quan-ly' : '/'}
+          className="flex items-center gap-2 text-ink"
+        >
+          <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-ink text-[9px] font-semibold tracking-tight text-white">
             ISO
           </span>
-          <span className="hidden sm:inline">Đánh giá nội bộ</span>
+          <span className="hidden font-display text-[15px] font-semibold tracking-tight sm:inline">
+            Đánh giá nội bộ
+          </span>
         </Link>
 
-        <nav className="flex items-center gap-1 text-sm">
+        <nav className="flex items-center gap-5 text-xs">
           {links.map((n) => (
             <Link
               key={n.href}
               href={n.href}
-              className={`rounded-md px-3 py-1.5 ${
+              className={
                 pathname.startsWith(n.href)
-                  ? 'bg-slate-100 font-medium text-slate-900'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
+                  ? 'text-ink'
+                  : 'text-ink/60 transition-colors hover:text-ink'
+              }
             >
               {n.label}
             </Link>
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2 text-sm">
+        <div className="ml-auto flex items-center gap-3 text-xs">
           {leaderName ? (
             <>
-              <span className="hidden text-slate-500 sm:inline">{leaderName}</span>
-              <button onClick={logout} className="btn-ghost !py-1.5">Đăng xuất</button>
+              <span className="hidden text-ink/60 sm:inline">{leaderName}</span>
+              <button onClick={logout} className="btn-ghost btn-sm">Đăng xuất</button>
             </>
           ) : (
             <>
-              <Link href="/dang-nhap" className="btn-ghost !py-1.5">Đăng nhập</Link>
-              <Link href="/dang-ky" className="btn-primary !py-1.5">Đăng ký</Link>
+              <Link href="/dang-nhap" className="btn-ghost btn-sm">Đăng nhập</Link>
+              <Link href="/dang-ky" className="btn-primary btn-sm">Đăng ký</Link>
             </>
           )}
         </div>

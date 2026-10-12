@@ -165,7 +165,7 @@ export function UnitPortal({
       {tab === 'unit' && (
         <section className="space-y-3">
           {mine.length === 0 ? (
-            <div className="card p-6 text-sm text-slate-500">
+            <div className="card p-7 sm:p-8 text-sm text-slate-500">
               Đợt này không ghi nhận phát hiện nào tại đơn vị của bạn.
             </div>
           ) : (
@@ -188,7 +188,7 @@ export function UnitPortal({
 
       {tab === 'capa' && hasReport && (
         <section className="space-y-4">
-          <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="card flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
             <div>
               <span className={cn('chip', CAPA_STYLE[status])}>{CAPA_LABEL_UNIT[status]}</span>
               {round > 1 && <span className="ml-2 text-xs text-slate-400">lần {round}</span>}
@@ -209,7 +209,7 @@ export function UnitPortal({
           )}
 
           {phase === 'plan' && (
-            <div className="card grid gap-4 p-5 sm:grid-cols-2">
+            <div className="card grid gap-4 p-6 sm:p-7 sm:grid-cols-2">
               <div>
                 <label className="label">Lãnh đạo đơn vị chịu trách nhiệm</label>
                 <input
@@ -307,7 +307,7 @@ function TabButton({
 
 function FindingCard({ f, showUnit = false }: { f: ReleasedFinding; showUnit?: boolean }) {
   return (
-    <div className="card p-5">
+    <div className="card p-6 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <span className="font-mono text-sm text-slate-400">{f.code}</span>
@@ -355,7 +355,7 @@ function CapaCard({
   const planLocked = phase !== 'plan';
 
   return (
-    <div className="card p-5">
+    <div className="card p-6 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <span className="font-mono text-sm text-slate-400">{item.code ?? `#${index + 1}`}</span>

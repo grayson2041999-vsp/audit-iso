@@ -109,7 +109,7 @@ export function AnalysisProgress({
 function Line({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mb-0.5 text-xs font-medium text-slate-400">{label}</p>
       <p className="text-sm leading-relaxed text-slate-700">
         {children}
         <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-brand-500" />

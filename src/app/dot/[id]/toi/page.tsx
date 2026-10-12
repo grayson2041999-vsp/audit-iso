@@ -43,7 +43,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       </div>
 
       {units.length === 0 ? (
-        <div className="card p-6 text-sm text-slate-500">
+        <div className="card p-7 sm:p-8 text-sm text-slate-500">
           Bạn chưa được phân công đơn vị nào. Liên hệ trưởng đoàn.
         </div>
       ) : (
@@ -54,7 +54,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
               <li key={u.id}>
                 <Link
                   href={`/dot/${id}/don-vi/${u.id}`}
-                  className="card flex items-center gap-4 p-5 transition hover:border-brand-300 hover:shadow"
+                  className="card flex items-center gap-4 p-6 sm:p-7 transition hover:border-hairline"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{u.name}</p>

@@ -38,7 +38,7 @@ export default async function Page({
     return (
       <div className="space-y-6">
         <Back id={id} />
-        <div className="card p-6 text-sm text-slate-500">
+        <div className="card p-7 sm:p-8 text-sm text-slate-500">
           {unit.name} không có sự không phù hợp nào nên không phải nộp hồ sơ khắc phục.
         </div>
       </div>
@@ -103,8 +103,8 @@ export default async function Page({
       />
 
       {events.length > 0 && (
-        <div className="card p-5">
-          <h3 className="font-semibold">Nhật ký</h3>
+        <div className="card p-6 sm:p-7">
+          <h3 className="text-lg font-semibold">Nhật ký</h3>
           <ul className="mt-3 space-y-2 text-sm">
             {events.map((e) => (
               <li key={e.id} className="flex gap-3 border-l-2 border-slate-200 pl-3">

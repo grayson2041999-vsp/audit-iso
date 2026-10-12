@@ -38,15 +38,15 @@ export function StandardizeLater({
 
   if (busy) {
     return (
-      <div className="card p-5">
+      <div className="card p-6 sm:p-7">
         <AnalysisProgress hasImages={hasImages} />
       </div>
     );
   }
 
   return (
-    <div className="card p-5">
-      <h2 className="font-semibold">Chưa chuẩn hoá</h2>
+    <div className="card p-6 sm:p-7">
+      <h2 className="text-lg font-semibold">Chưa chuẩn hoá</h2>
       <p className="mb-4 mt-1 text-sm text-slate-500">
         Finding này mới lưu phần ghi nhận thô. Chạy AI để chuẩn hoá theo cấu trúc
         Yêu cầu – Sự không phù hợp – Bằng chứng khách quan của ISO.

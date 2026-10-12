@@ -310,7 +310,7 @@ export function ScheduleGrid({
 
   if (rows.length === 0) {
     return (
-      <p className="card p-6 text-sm text-slate-500">
+      <p className="card p-7 sm:p-8 text-sm text-slate-500">
         Chưa có đánh giá viên nào. Quay lại bước Chuẩn bị đợt để khai báo.
       </p>
     );

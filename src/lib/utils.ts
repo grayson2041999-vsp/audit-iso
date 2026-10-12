@@ -99,18 +99,21 @@ export const SEVERITY_STYLE: Record<string, string> = {
 };
 
 /**
- * Cùng hệ màu với SEVERITY_STYLE nhưng nhạt hơn một bậc, dùng cho các ô thống kê.
+ * Ô thống kê theo DESIGN.md: thẻ trắng trên nền Mist, màu chỉ nằm ở chữ/số —
+ * mảng màu lớn bị bỏ để màu sắc làm dấu chấm câu, không làm nền.
+ *
+ * (Ghi chú cũ) Cùng hệ màu với SEVERITY_STYLE nhưng nhạt hơn một bậc, dùng cho các ô thống kê.
  *
  * Thẻ chip trong bảng nhỏ nên nền -100 vừa mắt; ô thống kê là mảng màu lớn gấp
  * mấy chục lần, để nguyên -100 thì bốn ô cạnh nhau chói và át cả bảng bên dưới.
  * Giữ đúng tông màu để nhận ra ngay, chỉ hạ độ đậm.
  */
 export const SEVERITY_CARD: Record<string, string> = {
-  MAJOR: 'border-red-200 bg-red-50 text-red-900',
-  MINOR: 'border-amber-200 bg-amber-50 text-amber-900',
-  OBS: 'border-sky-200 bg-sky-50 text-sky-900',
-  OFI: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  CONF: 'border-slate-200 bg-slate-50 text-slate-800',
+  MAJOR: 'border-transparent bg-white text-red-700',
+  MINOR: 'border-transparent bg-white text-amber-700',
+  OBS: 'border-transparent bg-white text-sky-700',
+  OFI: 'border-transparent bg-white text-emerald-700',
+  CONF: 'border-transparent bg-white text-slate-700',
 };
 
 export const STATUS_STYLE: Record<string, string> = {

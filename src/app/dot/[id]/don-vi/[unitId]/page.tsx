@@ -77,7 +77,7 @@ export default async function Page({
             <li key={f.id}>
               <Link
                 href={`/dot/${id}/finding/${f.id}`}
-                className="card block p-4 transition hover:border-brand-300 hover:shadow"
+                className="card block p-5 sm:p-6 transition hover:border-hairline"
               >
                 <div className="mb-1.5 flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-slate-500">{f.code}</span>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Be_Vietnam_Pro, IBM_Plex_Mono } from 'next/font/google';
+import { Inter, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { TopNav } from '@/components/TopNav';
 import { getLeader } from '@/lib/auth';
@@ -8,13 +8,13 @@ import { getLeader } from '@/lib/auth';
  * Font được tải về máy chủ lúc build và phục vụ từ cùng tên miền — người dùng
  * mở trang không phải gọi sang Google, nên nhanh hơn và không lộ dữ liệu truy cập.
  *
- * Be Vietnam Pro do người Việt thiết kế riêng cho tiếng Việt: các tổ hợp dấu
- * chồng (ệ, ộ, ữ, ẳ…) được vẽ riêng thay vì ghép máy móc — thấy rõ nhất ở cỡ
- * chữ nhỏ trong bảng tổng hợp.
+ * Theo DESIGN.md: chữ chính là SF Pro (có sẵn trên Mac/iPhone, xem fontFamily
+ * trong tailwind.config.ts). Inter là bản thay thế cho Windows/Android — có bộ
+ * dấu tiếng Việt đầy đủ và cùng tinh thần chữ gọn, tracking âm.
  */
-const sans = Be_Vietnam_Pro({
+const sans = Inter({
   subsets: ['vietnamese', 'latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600'],
   variable: '--font-sans',
   display: 'swap',
 });
@@ -41,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <div className="min-h-screen">
           <TopNav leaderName={leader?.fullName ?? null} />
-          <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+          <main className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-12">{children}</main>
         </div>
       </body>
     </html>

@@ -17,10 +17,10 @@ type Row = {
 };
 
 const AUDIT_STATUS: Record<string, { label: string; cls: string }> = {
-  PLANNED: { label: 'Đang chuẩn bị', cls: 'bg-slate-100 text-slate-700' },
-  IN_PROGRESS: { label: 'Đang thực hiện', cls: 'bg-emerald-100 text-emerald-800' },
-  REPORTING: { label: 'Đang tổng hợp', cls: 'bg-blue-100 text-blue-800' },
-  CLOSED: { label: 'Đã khoá', cls: 'bg-zinc-200 text-zinc-700' },
+  PLANNED: { label: 'Đang chuẩn bị', cls: 'text-slate-500' },
+  IN_PROGRESS: { label: 'Đang thực hiện', cls: 'text-launch' },
+  REPORTING: { label: 'Đang tổng hợp', cls: 'text-brand-700' },
+  CLOSED: { label: 'Đã khoá', cls: 'text-slate-400' },
 };
 
 /**
@@ -61,7 +61,7 @@ export function AuditList({ rows }: { rows: Row[] }) {
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
         >
           <path
             fillRule="evenodd"
@@ -73,13 +73,13 @@ export function AuditList({ rows }: { rows: Row[] }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Tìm theo tên đợt, tổ chức, trưởng đoàn…"
-          className="input !pl-9"
+          className="input !pl-10"
         />
         {q && (
           <button
             onClick={() => setQ('')}
             aria-label="Xoá từ khoá"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 hover:text-slate-600"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400 hover:text-slate-600"
           >
             ✕
           </button>
@@ -87,7 +87,7 @@ export function AuditList({ rows }: { rows: Row[] }) {
       </div>
 
       {shown.length === 0 ? (
-        <p className="card px-6 py-10 text-center text-sm text-slate-500">
+        <p className="card px-6 py-12 text-center text-sm text-slate-500">
           Không có đợt nào khớp <strong>{q}</strong>.
         </p>
       ) : (
@@ -98,25 +98,27 @@ export function AuditList({ rows }: { rows: Row[] }) {
             </p>
           )}
 
-          <ul className="grid gap-4 md:grid-cols-2">
+          <ul className="grid gap-5 md:grid-cols-2">
             {shown.map((a) => {
               const st = AUDIT_STATUS[a.status] ?? AUDIT_STATUS.PLANNED;
               return (
-                <li key={a.id} className="card p-5 transition hover:border-brand-300 hover:shadow">
-                  <Link href={`/quan-ly/dot/${a.id}`} className="block">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className={`chip ring-transparent ${st.cls}`}>{st.label}</span>
-                    </div>
-                    <p className="text-sm font-medium text-slate-500">{a.organization}</p>
-                    <h2 className="font-semibold">{a.title}</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                <li key={a.id} className="card group transition-colors hover:border-hairline">
+                  <Link href={`/quan-ly/dot/${a.id}`} className="block p-7">
+                    {/* Launch Status Label: chữ trần 12px/600, không nền, không viền. */}
+                    <p className={`text-xs font-semibold ${st.cls}`}>{st.label}</p>
+                    <p className="mt-3 text-sm text-slate-500">{a.organization}</p>
+                    <h2 className="mt-0.5 font-display text-xl font-semibold text-ink">{a.title}</h2>
+                    <p className="mt-3 text-sm text-slate-500">
                       {formatDateOnly(a.startDate)} → {formatDateOnly(a.endDate)}
                     </p>
                     <p className="mt-0.5 text-sm text-slate-500">
                       Trưởng đoàn: {a.leadAuditor ?? '—'}
                     </p>
-                    <p className="mt-2 text-xs text-slate-400">
+                    <p className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-400">
+                      <span>
                       {a.standards.map((s) => STANDARD_SHORT[s as StandardCode] ?? s).join(' · ')}
+                      </span>
+                      <span className="text-sm text-brand-700 group-hover:underline">Mở ›</span>
                     </p>
                   </Link>
                 </li>

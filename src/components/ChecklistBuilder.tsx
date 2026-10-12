@@ -354,10 +354,10 @@ export function ChecklistBuilder({
     <div className="space-y-6">
       {/* Bước 1 — mô tả đơn vị. Mờ đi trong lúc chờ để mắt dồn xuống phần kết quả. */}
       <div
-        className={`card space-y-4 p-5 transition-opacity ${loading ? 'pointer-events-none opacity-50' : ''}`}
+        className={`card space-y-4 p-6 sm:p-7 transition-opacity ${loading ? 'pointer-events-none opacity-50' : ''}`}
       >
         <div>
-          <h2 className="font-medium">Chức năng, nhiệm vụ của {unitName}</h2>
+          <h2 className="text-lg font-semibold">Chức năng, nhiệm vụ của {unitName}</h2>
           <p className="mt-1 text-sm text-slate-500">
             Hãy mô tả {unitName}: chức năng nhiệm vụ, các quá trình chính, nhân sự, cơ sở
             vật chất và thiết bị. Thông tin càng cụ thể thì danh mục đề xuất càng sát với
@@ -395,7 +395,7 @@ export function ChecklistBuilder({
 
         {summary && (
           <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+            <p className="mb-1 text-xs font-medium text-slate-400">
               AI hiểu đơn vị này như sau
             </p>
             <p className="text-sm leading-relaxed text-slate-700">{summary}</p>
@@ -444,7 +444,7 @@ export function ChecklistBuilder({
         {(groups ?? []).map((g, gi) => (
           <div key={gi} className="card overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              <h3 className="text-sm font-semibold text-slate-600">
                 {g.name}
               </h3>
             </div>
@@ -502,7 +502,7 @@ export function ChecklistBuilder({
             {finished && (
               <div className="border-t border-slate-100 px-3 py-2">
                 <button
-                  className="text-xs font-medium text-brand-600 hover:underline"
+                  className="text-xs font-medium text-brand-700 hover:underline"
                   onClick={() => addItem(gi)}
                 >
                   + Thêm dòng tự viết
@@ -516,7 +516,7 @@ export function ChecklistBuilder({
         {inFlight && !(groups ?? []).some((g) => g.name === inFlight.groupName) && (
           <div className="card overflow-hidden opacity-70">
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+              <h3 className="text-sm font-semibold text-slate-600">
                 {inFlight.groupName}
               </h3>
             </div>
@@ -678,7 +678,7 @@ function Progress({
 
         {partial?.unitSummary ? (
           <div>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+            <p className="mb-1 text-xs font-medium text-slate-400">
               AI hiểu đơn vị này như sau
             </p>
             <p className="text-sm leading-relaxed text-slate-700">

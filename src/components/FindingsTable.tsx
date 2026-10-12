@@ -177,22 +177,22 @@ export function FindingsTable({
        * ("ISO 45001:2018 — 6.1.1, 6.1.2.1, 6.1.2.2") thay vì mỗi mã một dòng.
        */}
       <div className="card overflow-x-auto">
-        <table className="w-full min-w-[900px] border-collapse text-sm [&_td]:border [&_td]:border-slate-200 [&_th]:border [&_th]:border-slate-200">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-700">
+        <table className="w-full min-w-[900px] border-collapse text-sm [&_td]:border-b [&_td]:border-slate-200 [&_th]:border-b [&_th]:border-slate-300 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6">
+          <thead className="text-left text-xs font-semibold text-slate-500">
             <tr>
-              <th className="w-32 px-3 py-3">Mã · Phân loại</th>
-              <th className="w-48 px-3 py-3">Đơn vị · Đánh giá viên</th>
-              <th className="px-3 py-3">Nội dung phát hiện</th>
-              <th className="w-32 px-3 py-3">Thời hạn</th>
+              <th className="w-32 px-4 py-4">Mã · Phân loại</th>
+              <th className="w-48 px-4 py-4">Đơn vị · Đánh giá viên</th>
+              <th className="px-4 py-4">Nội dung phát hiện</th>
+              <th className="w-32 px-4 py-4">Thời hạn</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((f) => {
               const st = FINDING_STATUS[f.status] ?? FINDING_STATUS.DRAFT;
               return (
-                <tr key={f.id} className="align-top hover:bg-slate-50">
+                <tr key={f.id} className="align-top transition-colors hover:bg-frost">
                   {/* 1. Định danh & phân loại — ba mẩu ngắn, xếp chồng thay vì ba cột */}
-                  <td className="px-3 py-3">
+                  <td className="px-4 py-4">
                     <span className="font-mono text-xs text-slate-600">{f.code}</span>
                     <div className="mt-1.5 flex flex-col items-start gap-1">
                       <SeverityBadge value={f.severity} short />
@@ -203,7 +203,7 @@ export function FindingsTable({
                   </td>
 
                   {/* 2. Ai & ở đâu. "Nơi phát hiện" thường để trống nên chỉ hiện khi có. */}
-                  <td className="px-3 py-3">
+                  <td className="px-4 py-4">
                     <p className="text-slate-800">{f.auditee ?? '—'}</p>
                     <p className="mt-0.5 text-xs text-slate-500" title={f.auditorName ?? undefined}>
                       {auditorLabel(f)}
@@ -220,7 +220,7 @@ export function FindingsTable({
                    * `whitespace-pre-wrap` giữ xuống dòng auditor đã gõ; `align-top` ở
                    * hàng giữ các cột ngắn dính mép trên thay vì trôi xuống giữa ô.
                    */}
-                  <td className="px-3 py-3">
+                  <td className="px-4 py-4">
                     <Link
                       href={`/quan-ly/dot/${auditId}/finding/${f.id}`}
                       className="font-medium text-brand-700 hover:underline"
@@ -242,7 +242,7 @@ export function FindingsTable({
                   </td>
 
                   {/* 4. Thời hạn đứng riêng: đây là cột người ta lướt tìm màu đỏ/vàng. */}
-                  <td className="whitespace-nowrap px-3 py-3">
+                  <td className="whitespace-nowrap px-4 py-4">
                     <DueCell dueDate={f.dueDate} closed={f.status === 'CLOSED'} />
                   </td>
                 </tr>
@@ -309,7 +309,7 @@ function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        className="rounded-full border border-slate-300 bg-white py-2 pl-4 pr-8 text-sm text-ink hover:border-steel focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-600/15"
       >
         <option value="">Tất cả</option>
         {options.map((o) => (

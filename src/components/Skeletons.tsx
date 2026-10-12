@@ -33,7 +33,7 @@ export function CardListSkeleton({ count = 4, cols = 'md:grid-cols-2' }: { count
   return (
     <div className={`grid gap-4 ${cols}`}>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="card space-y-3 p-5">
+        <div key={i} className="card space-y-3 p-6 sm:p-7">
           <Bar className="h-3 w-20" />
           <Bar className="h-5 w-3/4" />
           <Bar className="h-3 w-1/2" />
@@ -68,21 +68,21 @@ export function DetailSkeleton() {
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
-        <div className="card space-y-3 p-5">
+        <div className="card space-y-3 p-6 sm:p-7">
           <Bar className="h-3 w-32" />
           <Block className="h-32" />
         </div>
-        <div className="card space-y-3 p-5">
+        <div className="card space-y-3 p-6 sm:p-7">
           <Bar className="h-3 w-40" />
           <Block className="h-24" />
         </div>
       </div>
       <div className="space-y-6">
-        <div className="card space-y-3 p-5">
+        <div className="card space-y-3 p-6 sm:p-7">
           <Bar className="h-3 w-28" />
           <Block className="h-20" />
         </div>
-        <div className="card space-y-3 p-5">
+        <div className="card space-y-3 p-6 sm:p-7">
           <Bar className="h-3 w-24" />
           <Block className="h-16" />
         </div>
@@ -96,7 +96,7 @@ export function StatsSkeleton({ count = 5 }: { count?: number }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="card space-y-2 p-4">
+        <div key={i} className="card space-y-2 p-5 sm:p-6">
           <Bar className="h-3 w-24" />
           <Bar className="h-7 w-10" />
         </div>

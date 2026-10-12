@@ -28,7 +28,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         <Link href={`/quan-ly/dot/${id}/tong-hop`} className="text-sm text-slate-500 hover:underline">
           ← Tổng hợp finding
         </Link>
-        <div className="card p-6 text-sm text-slate-500">
+        <div className="card p-7 sm:p-8 text-sm text-slate-500">
           Chưa gửi báo cáo cho đơn vị nào. Sang tab Tổng hợp finding để gửi.
         </div>
       </div>
@@ -72,7 +72,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-700">
+          <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
             <tr>
               <th className="px-4 py-3">Đơn vị</th>
               <th className="px-4 py-3 text-center">Số NC</th>
@@ -157,9 +157,9 @@ function Stat({
   const color =
     tone === 'warn' ? 'text-amber-600' : tone === 'ok' ? 'text-emerald-600' : 'text-slate-400';
   return (
-    <div className="card p-4 text-center">
+    <div className="card p-5 sm:p-6">
       <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className={cn('mt-1 text-2xl font-semibold tabular-nums', color)}>{value}</p>
+      <p className={cn('mt-2 font-display text-3xl font-semibold tabular-nums', color)}>{value}</p>
     </div>
   );
 }

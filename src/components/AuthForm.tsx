@@ -35,18 +35,18 @@ export function AuthForm({ mode }: { mode: 'dang-ky' | 'dang-nhap' }) {
   }
 
   return (
-    <div className="mx-auto max-w-md">
-      <div className="card p-6">
-        <h1 className="text-xl font-semibold">
+    <div className="mx-auto max-w-md pt-4 sm:pt-10">
+      <div className="card p-8 sm:p-10">
+        <h1 className="font-display text-2xl font-semibold">
           {isSignup ? 'Đăng ký trưởng đoàn đánh giá' : 'Đăng nhập'}
         </h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-slate-500">
           {isSignup
             ? 'Tài khoản dùng để tạo và quản lý các đợt đánh giá nội bộ.'
             : 'Dành cho trưởng đoàn. Đánh giá viên vào bằng đường link đợt và mã 6 số.'}
         </p>
 
-        <form onSubmit={submit} className="mt-5 space-y-4">
+        <form onSubmit={submit} className="mt-8 space-y-5">
           {isSignup && (
             <div>
               <label className="label">Họ và tên</label>
@@ -87,24 +87,24 @@ export function AuthForm({ mode }: { mode: 'dang-ky' | 'dang-nhap' }) {
             {isSignup && <p className="mt-1 text-xs text-slate-400">Tối thiểu 8 ký tự.</p>}
           </div>
 
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
 
-          <button type="submit" disabled={busy} className="btn-primary w-full">
+          <button type="submit" disabled={busy} className="btn-primary w-full !py-2.5">
             {busy ? 'Đang xử lý…' : isSignup ? 'Tạo tài khoản' : 'Đăng nhập'}
           </button>
         </form>
       </div>
 
-      <p className="mt-4 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-slate-500">
         {isSignup ? (
           <>
             Đã có tài khoản?{' '}
-            <Link href="/dang-nhap" className="text-brand-600 hover:underline">Đăng nhập</Link>
+            <Link href="/dang-nhap" className="link">Đăng nhập</Link>
           </>
         ) : (
           <>
             Chưa có tài khoản?{' '}
-            <Link href="/dang-ky" className="text-brand-600 hover:underline">Đăng ký</Link>
+            <Link href="/dang-ky" className="link">Đăng ký</Link>
           </>
         )}
       </p>

@@ -136,7 +136,7 @@ export function FindingEditor({
   }
 
   return (
-    <div className="card space-y-4 p-5">
+    <div className="card space-y-4 p-6 sm:p-7">
       <div className="flex flex-wrap items-center gap-2">
         <SeverityBadge value={draft.severity} />
         <select

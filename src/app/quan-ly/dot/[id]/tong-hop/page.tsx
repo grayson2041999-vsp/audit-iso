@@ -95,24 +95,24 @@ export default async function Page({
 
       <AuditTabs auditId={id} issued={issued} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         {/* Cùng màu với thẻ phân loại trong bảng bên dưới — nhìn ô là biết ngay loại nào. */}
         {(['MAJOR', 'MINOR', 'OBS', 'OFI'] as const).map((s) => (
           <div
             key={s}
-            className={`rounded-xl border p-4 text-center ${SEVERITY_CARD[s]} ${
+            className={`rounded-card border p-5 sm:p-6 ${SEVERITY_CARD[s]} ${
               countBy(s) === 0 ? 'opacity-60' : ''
             }`}
           >
-            <p className="text-xs font-medium">{SEVERITY_LABELS[s]}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{countBy(s)}</p>
+            <p className="text-xs font-medium text-slate-500">{SEVERITY_LABELS[s]}</p>
+            <p className="mt-2 font-display text-3xl font-semibold tabular-nums">{countBy(s)}</p>
           </div>
         ))}
         {/* Không phải một mức phân loại nên giữ trung tính, đứng tách khỏi bốn ô kia. */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 text-center">
+        <div className="rounded-card bg-white p-5 sm:p-6">
           <p className="text-xs font-medium text-slate-500">Chưa nộp</p>
           <p
-            className={`mt-1 text-2xl font-semibold tabular-nums ${
+            className={`mt-2 font-display text-3xl font-semibold tabular-nums ${
               drafts > 0 ? 'text-amber-600' : 'text-slate-400'
             }`}
           >

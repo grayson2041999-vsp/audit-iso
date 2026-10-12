@@ -41,7 +41,7 @@ export function UnitGate({ auditId, units }: { auditId: string; units: Unit[] })
 
   if (units.length === 0) {
     return (
-      <div className="card p-6 text-sm text-slate-500">
+      <div className="card p-7 sm:p-8 text-sm text-slate-500">
         Báo cáo của đợt này chưa được phát hành. Liên hệ trưởng đoàn đánh giá.
       </div>
     );
@@ -49,7 +49,7 @@ export function UnitGate({ auditId, units }: { auditId: string; units: Unit[] })
 
   if (!selected) {
     return (
-      <div className="card p-5">
+      <div className="card p-6 sm:p-7">
         <p className="mb-4 text-sm text-slate-600">
           Bấm vào tên đơn vị mình, sau đó nhập mã 8 số do đoàn đánh giá gửi.
         </p>
@@ -62,7 +62,7 @@ export function UnitGate({ auditId, units }: { auditId: string; units: Unit[] })
                   setCode('');
                   setError(null);
                 }}
-                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-left text-sm font-medium hover:border-brand-400 hover:bg-brand-50/40"
+                className="w-full rounded-2xl bg-slate-50 px-5 py-4 text-left text-sm font-medium text-ink transition-colors hover:bg-slate-100"
               >
                 {u.name}
               </button>
@@ -74,7 +74,7 @@ export function UnitGate({ auditId, units }: { auditId: string; units: Unit[] })
   }
 
   return (
-    <div className="card mx-auto max-w-sm p-6">
+    <div className="card mx-auto max-w-sm p-7 sm:p-8">
       <button
         onClick={() => setSelected(null)}
         className="mb-4 text-sm text-slate-500 hover:underline"
@@ -82,7 +82,7 @@ export function UnitGate({ auditId, units }: { auditId: string; units: Unit[] })
         ← Chọn đơn vị khác
       </button>
 
-      <h2 className="font-semibold">{selected.name}</h2>
+      <h2 className="text-lg font-semibold">{selected.name}</h2>
       <p className="mb-4 mt-1 text-sm text-slate-500">Nhập mã 8 số được cấp.</p>
 
       <form onSubmit={submit} className="space-y-4">

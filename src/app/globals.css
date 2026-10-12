@@ -2,31 +2,102 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
+/*
+ * Hệ thiết kế: DESIGN.md — "white gallery".
+ * Nền Studio Mist (#f5f5f7), thẻ trắng bo 28px không viền không bóng,
+ * chữ Ink (#1d1d1f), xanh #0071e3 chỉ dành cho nút chính, #0066cc cho liên kết.
+ */
+:root {
+  color-scheme: light;
+  --color-gallery-white: #ffffff;
+  --color-studio-mist: #f5f5f7;
+  --color-paper-frost: #fafafc;
+  --color-hairline-silver: #d6d6d6;
+  --color-control-gray: #e6e6e8;
+  --color-ink: #1d1d1f;
+  --color-slate: #707070;
+  --color-steel: #86868b;
+  --color-apple-blue: #0066cc;
+  --color-pricing-blue: #0071e3;
+  --color-launch-orange: #b64400;
+}
 
 body {
-  @apply bg-slate-50 font-sans text-slate-900 antialiased;
+  @apply bg-mist font-sans text-ink antialiased;
+  font-feature-settings: 'kern';
+}
+
+h1, h2, h3 {
+  @apply font-display;
+}
+
+::selection {
+  background: rgba(0, 113, 227, 0.18);
 }
 
 @layer components {
+  /* Thẻ: trắng trên nền Mist, bo 28px, không bóng. Viền trong suốt để các
+     biến thể cảnh báo (border-amber-300…) vẫn tô được viền khi cần. */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    @apply rounded-card border border-transparent bg-white;
   }
+
   .label {
-    @apply block text-sm font-medium text-slate-700 mb-1.5;
+    @apply mb-1.5 block text-sm font-medium text-ink;
   }
+
   .input {
-    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
-           placeholder:text-slate-400 focus:border-brand-500 focus:outline-none
-           focus:ring-2 focus:ring-brand-500/20;
+    @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-ink
+           transition-colors placeholder:text-slate-400
+           hover:border-steel focus:border-brand-600 focus:outline-none
+           focus:ring-4 focus:ring-brand-600/15
+           disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400;
   }
+  /* Ô nhập một dòng: viên thuốc 980px như Rounded Search Input. Textarea giữ bo vừa. */
+  input.input,
+  select.input {
+    @apply rounded-full;
+  }
+
+  /* Nút: viên thuốc 9999px, chữ gọn. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
-           text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-full
+           px-5 py-2 text-sm font-normal transition-colors
+           focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-600/25
+           disabled:cursor-not-allowed disabled:opacity-40;
   }
-  .btn-primary { @apply btn bg-brand-600 text-white hover:bg-brand-700; }
-  .btn-ghost   { @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50; }
+  /* Pricing Blue Pill — chỉ cho hành động chính. */
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-500 active:bg-brand-700;
+  }
+  /* Outlined Explore Pill — nền trong suốt, viền Steel, chữ Ink. */
+  .btn-ghost {
+    @apply btn border border-steel bg-transparent text-ink hover:bg-ink/[0.04] active:bg-ink/[0.08];
+  }
+  /* Nút chữ xanh, không khung — dùng cho thao tác phụ nằm trong dòng. */
+  .btn-link {
+    @apply inline-flex items-center gap-1 text-sm text-brand-700 hover:underline
+           disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  /* Cỡ nhỏ cho thanh điều hướng: 12px như compact-control. */
+  .btn-sm {
+    @apply px-3.5 py-1 text-xs;
+  }
+
   .chip {
-    @apply inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset;
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  /* Liên kết văn bản — Apple Blue. */
+  .link {
+    @apply text-brand-700 hover:underline;
+  }
+
+  /* Tiêu đề trang. */
+  .page-title {
+    @apply font-display text-2xl font-semibold text-ink sm:text-3xl;
+  }
+  .eyebrow {
+    @apply text-sm font-semibold text-slate-500;
   }
 }

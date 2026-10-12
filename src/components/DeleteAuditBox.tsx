@@ -55,8 +55,8 @@ export function DeleteAuditBox({
   }
 
   return (
-    <section className="rounded-xl border border-red-200 bg-white p-5">
-      <h2 className="font-semibold text-red-700">Vùng nguy hiểm</h2>
+    <section className="card border-red-200 p-6 sm:p-7">
+      <h2 className="text-lg font-semibold text-red-700">Vùng nguy hiểm</h2>
       <p className="mb-4 mt-1 text-sm text-slate-500">
         Xoá vĩnh viễn đợt đánh giá này cùng toàn bộ dữ liệu bên trong. Không khôi phục lại được.
       </p>

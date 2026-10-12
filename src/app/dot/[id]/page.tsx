@@ -44,7 +44,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       )}
 
       {notOpen ? (
-        <div className="card p-6 text-center text-sm text-slate-500">
+        <div className="card p-7 sm:p-8 text-center text-sm text-slate-500">
           Đợt đánh giá chưa được mở. Trưởng đoàn còn đang phân công.
         </div>
       ) : (

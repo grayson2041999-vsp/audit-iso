@@ -38,17 +38,16 @@ export function AuditHeader({ audit, publicView = false }: { audit: Audit; publi
   return (
     <div className={publicView ? 'text-center' : ''}>
       {!publicView && (
-        <div className="mb-2">
-          <span className={`chip ring-transparent ${AUDIT_STATUS_STYLE[audit.status] ?? ''}`}>
-            {AUDIT_STATUS_LABELS[audit.status] ?? audit.status}
-          </span>
-        </div>
+        // Launch Status Label: chữ trần 12px/600, không nền.
+        <p className={`mb-3 text-xs font-semibold ${AUDIT_STATUS_STYLE[audit.status] ?? ''}`}>
+          {AUDIT_STATUS_LABELS[audit.status] ?? audit.status}
+        </p>
       )}
 
-      <p className="text-sm font-medium text-slate-500">{audit.organization}</p>
-      <h1 className="mt-0.5 text-2xl font-semibold">{audit.title}</h1>
+      <p className="text-sm text-slate-500">{audit.organization}</p>
+      <h1 className="mt-1 font-display text-2xl font-semibold text-ink sm:text-3xl">{audit.title}</h1>
 
-      <dl className={`mt-4 space-y-2.5 text-sm ${publicView ? 'inline-block text-left' : ''}`}>
+      <dl className={`mt-6 space-y-3 text-sm ${publicView ? 'inline-block text-left' : ''}`}>
         <Row label="Thời gian">
           <span className="font-medium">
             {formatDateOnly(audit.startDate)} → {formatDateOnly(audit.endDate)}
@@ -60,7 +59,7 @@ export function AuditHeader({ audit, publicView = false }: { audit: Audit; publi
           {audit.leadAuditor ? (
             // Nền tối đặc — giá trị nổi nhất trong khối, tách hẳn khỏi các thẻ
             // tiêu chuẩn nhiều màu bên dưới nên không bị lẫn.
-            <span className="inline-block rounded-md bg-slate-900 px-2.5 py-1 font-semibold text-white">
+            <span className="inline-block rounded-full bg-ink px-3 py-1 text-xs font-medium text-white">
               {audit.leadAuditor}
             </span>
           ) : (

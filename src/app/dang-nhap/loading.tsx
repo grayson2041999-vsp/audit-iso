@@ -3,7 +3,7 @@ import { Bar, Block } from '@/components/Skeletons';
 export default function Loading() {
   return (
     <div className="mx-auto max-w-md">
-      <div className="card space-y-4 p-6">
+      <div className="card space-y-4 p-7 sm:p-8">
         <Bar className="h-6 w-40" />
         <Bar className="h-3 w-full" />
         {[0, 1].map((i) => (

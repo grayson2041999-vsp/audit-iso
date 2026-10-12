@@ -76,7 +76,7 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="card max-w-2xl space-y-5 p-6">
+    <form onSubmit={submit} className="card max-w-2xl space-y-5 p-7 sm:p-8">
       <div>
         <label className="label">Tổ chức được đánh giá *</label>
         <input

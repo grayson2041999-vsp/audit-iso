@@ -39,7 +39,7 @@ export function MemberGate({ auditId, members }: { auditId: string; members: Mem
 
   if (members.length === 0) {
     return (
-      <div className="card p-6 text-sm text-slate-500">
+      <div className="card p-7 sm:p-8 text-sm text-slate-500">
         Đợt này chưa có đánh giá viên nào được cấp mã. Liên hệ trưởng đoàn.
       </div>
     );
@@ -47,7 +47,7 @@ export function MemberGate({ auditId, members }: { auditId: string; members: Mem
 
   if (!selected) {
     return (
-      <div className="card p-5">
+      <div className="card p-6 sm:p-7">
         <p className="mb-4 text-sm text-slate-600">
           Đánh giá viên vui lòng bấm vào tên mình, sau đó nhập mã 6 số do trưởng đoàn gửi
         </p>
@@ -60,7 +60,7 @@ export function MemberGate({ auditId, members }: { auditId: string; members: Mem
                   setCode('');
                   setError(null);
                 }}
-                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-left text-sm font-medium hover:border-brand-400 hover:bg-brand-50/40"
+                className="w-full rounded-2xl bg-slate-50 px-5 py-4 text-left text-sm font-medium text-ink transition-colors hover:bg-slate-100"
               >
                 {m.fullName}
               </button>
@@ -72,7 +72,7 @@ export function MemberGate({ auditId, members }: { auditId: string; members: Mem
   }
 
   return (
-    <div className="card mx-auto max-w-sm p-6">
+    <div className="card mx-auto max-w-sm p-7 sm:p-8">
       <button
         onClick={() => setSelected(null)}
         className="mb-4 text-sm text-slate-500 hover:underline"
@@ -80,7 +80,7 @@ export function MemberGate({ auditId, members }: { auditId: string; members: Mem
         ← Chọn tên khác
       </button>
 
-      <h2 className="font-semibold">{selected.fullName}</h2>
+      <h2 className="text-lg font-semibold">{selected.fullName}</h2>
       <p className="mb-4 mt-1 text-sm text-slate-500">Nhập mã 6 số được cấp.</p>
 
       <form onSubmit={submit} className="space-y-4">

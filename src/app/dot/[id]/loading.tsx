@@ -8,7 +8,7 @@ export default function Loading() {
         <Bar className="h-7 w-80 max-w-full" />
         <Bar className="h-3 w-64 max-w-full" />
       </div>
-      <div className="card space-y-3 p-5">
+      <div className="card space-y-3 p-6 sm:p-7">
         <Bar className="h-4 w-32" />
         <div className="grid gap-2 sm:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (

@@ -5,7 +5,7 @@ export default function Loading() {
     <div className="space-y-6">
       <Bar className="h-3 w-40" />
       <Bar className="h-7 w-64" />
-      <div className="card max-w-2xl space-y-5 p-6">
+      <div className="card max-w-2xl space-y-5 p-7 sm:p-8">
         {[0, 1, 2, 3, 4].map((i) => (
           <div key={i} className="space-y-2">
             <Bar className="h-3 w-32" />
