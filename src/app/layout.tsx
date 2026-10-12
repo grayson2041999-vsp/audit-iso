@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { TopNav } from '@/components/TopNav';
@@ -31,6 +31,14 @@ export const metadata: Metadata = {
   title: 'Đánh giá nội bộ ISO — Chuẩn hoá finding bằng AI',
   description:
     'Quản lý đợt đánh giá nội bộ và chuẩn hoá phát hiện theo ISO 9001 / 14001 / 45001',
+  applicationName: 'Đánh giá ISO',
+  // Tên hiện dưới biểu tượng khi lưu ra màn hình chính iPhone (tiêu đề trang thì quá dài).
+  // Biểu tượng: src/app/icon.svg, favicon.ico, apple-icon.png và manifest.ts — Next.js tự gắn.
+  appleWebApp: { title: 'Đánh giá ISO' },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#ffffff',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

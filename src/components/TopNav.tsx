@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { LogoWordmark } from './Logo';
 
 /**
  * Thanh điều hướng của trưởng đoàn.
@@ -26,11 +27,11 @@ export function TopNav({ leaderName }: { leaderName: string | null }) {
       <div className="mx-auto flex h-11 max-w-7xl items-center gap-6 px-4 sm:px-6">
         <Link
           href={leaderName ? '/quan-ly' : '/'}
-          className="flex items-center gap-2 text-ink"
+          className="flex items-center gap-3 text-ink"
+          aria-label="Đánh giá nội bộ ISO — trang chủ"
         >
-          <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-ink text-[9px] font-semibold tracking-tight text-white">
-            ISO
-          </span>
+          <LogoWordmark className="h-[30px] w-auto" />
+          <span className="hidden h-[18px] w-px bg-hairline sm:block" />
           <span className="hidden font-display text-[15px] font-semibold tracking-tight sm:inline">
             Đánh giá nội bộ
           </span>
