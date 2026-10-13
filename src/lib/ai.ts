@@ -25,6 +25,26 @@ const MAX_IMAGES = 6;
 const MAX_TOKENS = 16384;
 
 /**
+ * KHÔNG ÉP GỌI CÔNG CỤ BẰNG `tool_choice: { type: 'tool' }`.
+ *
+ * Claude Sonnet 5.5 (cùng Opus 5.5, Fable 5.1, Mythos 5.1) trả lỗi 400
+ * "tool_choice: type \"tool\" and \"any\" are not supported for this model"
+ * nếu ép như vậy. Thay vào đó:
+ *  · `auto` — model tự quyết gọi công cụ; SYSTEM_PROMPT và lời nhắc cuối
+ *    user prompt đã yêu cầu rõ "PHẢI gọi công cụ ...".
+ *  · `strict: true` trên từng công cụ — Anthropic đảm bảo input của công cụ
+ *    đúng tuyệt đối với `input_schema`, nên không mất gì về độ tin cậy JSON.
+ * Trường hợp hiếm model trả văn xuôi thay vì gọi công cụ đã có nhánh báo lỗi
+ * "AI không trả về dữ liệu có cấu trúc" bên dưới.
+ *
+ * Ràng buộc của strict mode cần nhớ khi sửa schema: mọi object phải có
+ * `additionalProperties: false`; không dùng minLength/maxLength/minimum/
+ * maximum; trường bắt buộc luôn được sinh trước trường tuỳ chọn.
+ * Tham khảo: https://platform.claude.com/docs/en/agents-and-tools/tool-use/strict-tool-use
+ */
+const TOOL_CHOICE = { type: 'auto' } as const;
+
+/**
  * Chặn sớm trường hợp model bị cắt giữa chừng.
  *
  * Phải gọi TRƯỚC khi đụng tới `toolUse.input`: khi `stop_reason` là
@@ -83,6 +103,7 @@ async function loadImageBlocks(keys: string[]): Promise<ImageBlock[]> {
  */
 const FINDING_TOOL: Anthropic.Tool = {
   name: 'ghi_nhan_finding',
+  strict: true,
   description:
     'Ghi nhận finding đã được chuẩn hoá theo chuẩn ISO. Điền các trường THEO ĐÚNG THỨ TỰ ' +
     'khai báo: lập luận phân loại trước, chốt mức độ sau. Khuôn phát biểu đổi theo mức độ: ' +
@@ -148,6 +169,7 @@ const FINDING_TOOL: Anthropic.Tool = {
             reason: { type: 'string', description: 'Vì sao viện dẫn điều khoản này' },
           },
           required: ['standard', 'clause', 'clauseTitle'],
+          additionalProperties: false,
         },
       },
       evidence: {
@@ -187,6 +209,7 @@ const FINDING_TOOL: Anthropic.Tool = {
      * SYSTEM_PROMPT — ba chỗ phải cùng một thứ tự.
      */
     required: ['severityRationale', 'severity', 'title', 'statement', 'clauses', 'evidence'],
+    additionalProperties: false,
   },
 };
 
@@ -218,8 +241,8 @@ export async function standardizeFinding(input: {
       },
     ],
     tools: [FINDING_TOOL],
-    // Ép model bắt buộc gọi công cụ — không được trả lời bằng văn xuôi.
-    tool_choice: { type: 'tool', name: FINDING_TOOL.name },
+    // Không ép bằng `type: 'tool'` — xem chú thích ở TOOL_CHOICE.
+    tool_choice: TOOL_CHOICE,
   });
 
   assertNotTruncated(message.stop_reason);
@@ -351,7 +374,7 @@ export async function* standardizeFindingStream(input: {
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: [...images, { type: 'text', text: userPrompt }] }],
     tools: [FINDING_TOOL],
-    tool_choice: { type: 'tool', name: FINDING_TOOL.name },
+    tool_choice: TOOL_CHOICE,
   });
 
   for await (const event of stream) {
@@ -378,6 +401,7 @@ export async function* standardizeFindingStream(input: {
 
 const CHECKLIST_TOOL: Anthropic.Tool = {
   name: 'soan_checklist',
+  strict: true,
   description:
     'Trả về danh mục công việc cần làm khi đánh giá một đơn vị. Mỗi dòng là một việc ' +
     'đánh giá viên thực hiện được ngay (xin hồ sơ, chọn mẫu, đối chiếu, quan sát tại chỗ), ' +
@@ -440,18 +464,22 @@ const CHECKLIST_TOOL: Anthropic.Tool = {
                         clauseTitle: { type: 'string', description: 'Tên điều khoản' },
                       },
                       required: ['standard', 'clause', 'clauseTitle'],
+                      additionalProperties: false,
                     },
                   },
                 },
                 required: ['task', 'clauses'],
+                additionalProperties: false,
               },
             },
           },
           required: ['name', 'items'],
+          additionalProperties: false,
         },
       },
     },
     required: ['unitSummary', 'groups'],
+    additionalProperties: false,
   },
 };
 
@@ -537,7 +565,7 @@ export async function* generateChecklistStream(
     system: CHECKLIST_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: buildChecklistPrompt(input) }],
     tools: [CHECKLIST_TOOL],
-    tool_choice: { type: 'tool', name: CHECKLIST_TOOL.name },
+    tool_choice: TOOL_CHOICE,
   });
 
   for await (const event of stream) {

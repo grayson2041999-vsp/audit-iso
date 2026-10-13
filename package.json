@@ -2,7 +2,7 @@
   "name": "audit-iso-finding-standardizer",
   "version": "1.0.0",
   "private": true,
-  "description": "App h\u1ed7 tr\u1ee3 auditor n\u1ed9i b\u1ed9 chu\u1ea9n ho\u00e1 finding theo ISO 9001 / 14001 / 45001 b\u1eb1ng AI",
+  "description": "App hỗ trợ auditor nội bộ chuẩn hoá finding theo ISO 9001 / 14001 / 45001 bằng AI",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,7 +15,7 @@
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.65.0",
+    "@anthropic-ai/sdk": "^0.133.0",
     "@aws-sdk/client-s3": "^3.699.0",
     "@aws-sdk/s3-request-presigner": "^3.699.0",
     "@neondatabase/serverless": "^0.10.4",
