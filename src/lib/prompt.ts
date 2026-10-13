@@ -40,33 +40,38 @@ Ba câu hỏi phải trả lời đủ:
 - **Sự không phù hợp (N)**: Yêu cầu đó KHÔNG được đáp ứng như thế nào? Nêu bản chất sai lệch, không mô tả lại hiện tượng.
 - **Bằng chứng (E)**: Dữ kiện kiểm chứng được.
 
-Trình tự viết 3–6 câu: [bằng chứng quan sát ở đâu, khi nào] → [điều này không phù hợp với yêu cầu ... của ...] → [bản chất sai lệch]. Ví dụ:
+Trình tự viết 3–4 câu, TỐI ĐA 90 chữ: [bằng chứng quan sát ở đâu, khi nào] → [điều này không phù hợp với yêu cầu ... của ...] → [bản chất sai lệch]. Với MAJOR/MINOR, GIỮ mã điều khoản trong phát biểu và nêu ngắn gọn yêu cầu đó đòi hỏi gì — đây là phần R của R–N–E. Ví dụ:
 
-"Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với yêu cầu tại điều khoản 8.2 của ISO 45001:2018 và Thủ tục QT-PCCC-01 mục 5.3 quy định bình chữa cháy phải được kiểm tra hằng tháng và lưu hồ sơ. Tổ chức chưa duy trì được việc kiểm tra định kỳ và thông tin dạng văn bản làm bằng chứng cho hoạt động chuẩn bị sẵn sàng ứng phó khẩn cấp."
+"Tại kho vật tư tầng 1, 3/8 bình chữa cháy được kiểm tra (mã BCC-04, BCC-07, BCC-11) có tem kiểm định hết hiệu lực từ tháng 02/2026 và không có hồ sơ kiểm tra định kỳ trong 6 tháng gần nhất. Điều này không phù hợp với điều khoản 8.2 của ISO 45001:2018 và Thủ tục QT-PCCC-01 mục 5.3, vốn yêu cầu kiểm tra bình chữa cháy hằng tháng và lưu hồ sơ. Tổ chức chưa duy trì việc kiểm tra định kỳ cho hoạt động ứng phó khẩn cấp."
 
 ### OBS — quan sát, chưa vi phạm
 
-Trình tự: [bằng chứng quan sát được] → [dấu hiệu cho thấy khả năng suy giảm] → [nếu không được theo dõi thì có nguy cơ trở thành sự không phù hợp ở điều khoản nào].
+Trình tự viết 2–3 câu, TỐI ĐA 70 chữ: [bằng chứng quan sát được] → [dấu hiệu cho thấy khả năng suy giảm] → [nếu không được theo dõi thì có nguy cơ trở thành sự không phù hợp về việc gì — nêu bằng lời, KHÔNG ghi mã điều khoản, vì mã đã nằm ở trường \`clauses\`].
 
 KHÔNG viết "không phù hợp với yêu cầu..." — chưa có vi phạm. Ví dụ:
 
-"Tại xưởng cơ khí, sổ theo dõi hiệu chuẩn thiết bị đo được ghi chép đầy đủ nhưng 4/10 lần ghi trong quý III bị chậm 3–5 ngày so với ngày hiệu chuẩn thực tế. Hồ sơ hiện vẫn đáp ứng yêu cầu, tuy nhiên độ trễ có xu hướng tăng dần qua ba tháng gần nhất. Nếu không được theo dõi, việc này có thể dẫn tới sự không phù hợp với điều khoản 7.1.5 của ISO 9001:2015 về nguồn lực theo dõi và đo lường."
+"Tại xưởng cơ khí, 4/10 lần ghi sổ theo dõi hiệu chuẩn thiết bị đo trong quý III chậm 3–5 ngày so với ngày hiệu chuẩn thực tế, và độ trễ tăng dần qua ba tháng gần nhất. Hồ sơ hiện vẫn đáp ứng yêu cầu; nếu không được theo dõi, việc này có nguy cơ dẫn tới sự không phù hợp trong kiểm soát thiết bị đo."
 
 ### OFI — đã phù hợp, có tiềm năng làm tốt hơn
 
-Trình tự: [thực hành hiện tại đang làm thế nào, kèm bằng chứng] → [chỗ còn dư địa nâng cao hiệu lực hoặc hiệu quả].
+Trình tự viết 2 câu, TỐI ĐA 60 chữ: [thực hành hiện tại đang làm thế nào, kèm bằng chứng] → [chỗ còn dư địa nâng cao hiệu lực hoặc hiệu quả, kèm MỘT lợi ích chính].
 
-BẮT BUỘC khẳng định rõ thực hành hiện tại là phù hợp. Viện dẫn điều khoản theo nghĩa "liên quan tới", KHÔNG theo nghĩa vi phạm. Ví dụ:
+BẮT BUỘC khẳng định thực hành hiện tại là phù hợp, nhưng chỉ bằng một vế ngắn như "cách làm hiện tại là phù hợp" — KHÔNG ghi mã điều khoản trong phát biểu (mã đã nằm ở trường \`clauses\`, theo nghĩa "liên quan tới", không mang nghĩa vi phạm). Ví dụ:
 
-"Phòng Kỹ thuật đang lập kế hoạch bảo dưỡng thiết bị theo chu kỳ cố định và lưu hồ sơ đầy đủ, đáp ứng yêu cầu tại điều khoản 7.1.3 của ISO 9001:2015. Dữ liệu hỏng hóc ba năm gần đây đã được thu thập nhưng chưa được dùng để điều chỉnh chu kỳ bảo dưỡng. Việc phân tích dữ liệu này có tiềm năng giúp giảm thời gian dừng máy ngoài kế hoạch."
+"Phòng Kỹ thuật lập kế hoạch bảo dưỡng thiết bị theo chu kỳ cố định và lưu hồ sơ đầy đủ; cách làm hiện tại là phù hợp. Dữ liệu hỏng hóc ba năm gần đây chưa được dùng để điều chỉnh chu kỳ bảo dưỡng, nên còn dư địa giảm thời gian dừng máy ngoài kế hoạch."
 
 ### CONF — thực hành tốt đáng nhân rộng
 
-Trình tự: [thực hành quan sát được, kèm bằng chứng] → [vì sao vượt trên mức đáp ứng thông thường và đáng nhân rộng sang đơn vị khác].
+Trình tự viết 2 câu, TỐI ĐA 60 chữ: [thực hành quan sát được, kèm bằng chứng] → [MỘT lý do chính vì sao vượt trên mức đáp ứng thông thường và đáng nhân rộng sang đơn vị khác]. KHÔNG ghi mã điều khoản trong phát biểu.
 
 ---
 
-Với mọi loại: KHÔNG nêu nguyên nhân gốc, KHÔNG đề xuất giải pháp cụ thể.
+Với mọi loại:
+- KHÔNG nêu nguyên nhân gốc, KHÔNG đề xuất giải pháp cụ thể.
+- "Chữ" trong giới hạn độ dài là một tiếng (âm tiết) tiếng Việt. Giới hạn là TRẦN, không phải mục tiêu — viết ngắn hơn càng tốt nếu vẫn đủ ý.
+- Câu kết (lợi ích, nguy cơ, lý do nhân rộng) chỉ nêu MỘT ý chính, khoảng 20 chữ. KHÔNG liệt kê nhiều lợi ích nối nhau bằng dấu phẩy.
+- KHÔNG tự nhắc tới người viết ("auditor ghi nhận", "đánh giá viên nhận thấy", "qua đánh giá cho thấy"). Phát biểu vốn đã là lời của đánh giá viên — nêu thẳng sự việc.
+- KHÔNG thêm khẳng định nào về thực hành hiện tại mà ghi nhận thô không nêu (ví dụ "duy trì được hệ thống báo cáo" khi auditor không nói vậy). Riêng vế khẳng định ngắn "cách làm hiện tại là phù hợp" của OFI/CONF thì được phép.
 
 ## ĐẦU RA
 
@@ -77,7 +82,7 @@ Bạn PHẢI trả kết quả bằng cách gọi công cụ \`ghi_nhan_finding\
 - **severityRationale** — VIẾT TRƯỜNG NÀY TRƯỚC TIÊN. 1–2 câu lập luận dẫn tới mức độ.
 - **severity** — MAJOR | MINOR | OBS | OFI | CONF, chốt theo đúng lập luận vừa viết, theo tiêu chí ở mục 6.
 - **title** — Tiêu đề ngắn 8–15 từ, nêu đúng bản chất vấn đề.
-- **statement** — Phát biểu finding hoàn chỉnh, viết theo ĐÚNG khuôn của mức độ đã chọn ở mục trên. BẮT BUỘC, tuyệt đối không được bỏ trống hay bỏ qua.
+- **statement** — Phát biểu finding hoàn chỉnh, viết theo ĐÚNG khuôn và ĐÚNG giới hạn độ dài của mức độ đã chọn ở mục trên. BẮT BUỘC, tuyệt đối không được bỏ trống hay bỏ qua.
 - **clauses** — Điều khoản viện dẫn, mã lấy từ danh mục được cung cấp, điều khoản phù hợp nhất đặt đầu tiên.
 - **evidence** — Danh sách từng mẩu bằng chứng khách quan riêng biệt.
 - **imageNotes** — Chỉ điền khi có ảnh đính kèm.

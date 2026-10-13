@@ -144,15 +144,19 @@ const FINDING_TOOL: Anthropic.Tool = {
       statement: {
         type: 'string',
         description:
-          'Phát biểu finding hoàn chỉnh dùng trực tiếp trong báo cáo, 3–6 câu. Khuôn viết PHẢI ' +
-          'khớp với mức độ đã chọn: ' +
-          'MAJOR/MINOR = [bằng chứng] → [không phù hợp với yêu cầu nào] → [bản chất sai lệch]. ' +
-          'OBS = [bằng chứng] → [dấu hiệu suy giảm] → [nguy cơ trở thành không phù hợp ở điều ' +
-          'khoản nào nếu không theo dõi]; KHÔNG viết "không phù hợp với yêu cầu". ' +
-          'OFI = [thực hành hiện tại kèm bằng chứng, khẳng định rõ là ĐÃ PHÙ HỢP] → [chỗ còn dư ' +
-          'địa nâng cao hiệu lực/hiệu quả]. ' +
-          'CONF = [thực hành tốt kèm bằng chứng] → [vì sao đáng nhân rộng]. ' +
-          'Với mọi loại: không nêu nguyên nhân gốc, không đề xuất giải pháp cụ thể',
+          'Phát biểu finding hoàn chỉnh dùng trực tiếp trong báo cáo. Khuôn viết và độ dài PHẢI ' +
+          'khớp với mức độ đã chọn ("chữ" = một tiếng tiếng Việt; giới hạn là trần, không phải mục tiêu): ' +
+          'MAJOR/MINOR = 3–4 câu, tối đa 90 chữ: [bằng chứng] → [không phù hợp với điều khoản/yêu ' +
+          'cầu nào, nêu ngắn yêu cầu đòi hỏi gì] → [bản chất sai lệch]. ' +
+          'OBS = 2–3 câu, tối đa 70 chữ: [bằng chứng] → [dấu hiệu suy giảm] → [nguy cơ trở thành ' +
+          'không phù hợp về việc gì nếu không theo dõi]; KHÔNG viết "không phù hợp với yêu cầu". ' +
+          'OFI = 2 câu, tối đa 60 chữ: [thực hành hiện tại kèm bằng chứng + vế ngắn "cách làm hiện ' +
+          'tại là phù hợp"] → [chỗ còn dư địa nâng cao, kèm MỘT lợi ích]. ' +
+          'CONF = 2 câu, tối đa 60 chữ: [thực hành tốt kèm bằng chứng] → [MỘT lý do đáng nhân rộng]. ' +
+          'Với OBS/OFI/CONF: KHÔNG ghi mã điều khoản trong phát biểu — mã đã nằm ở trường clauses. ' +
+          'Với mọi loại: câu kết chỉ một ý; không tự nhắc "auditor ghi nhận"/"đánh giá viên nhận ' +
+          'thấy"; không thêm khẳng định mà ghi nhận thô không nêu; không nêu nguyên nhân gốc, ' +
+          'không đề xuất giải pháp cụ thể',
       },
       clauses: {
         type: 'array',
