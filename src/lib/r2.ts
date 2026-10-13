@@ -84,12 +84,17 @@ export async function presignDownload(key: string, expiresIn = 3600) {
   return getSignedUrl(r2, cmd, { expiresIn });
 }
 
-/** Tải object về dạng base64 để đưa vào Claude vision. */
-export async function getObjectBase64(key: string) {
+/**
+ * Tải object về dạng byte thô để đưa vào Claude vision.
+ *
+ * Trả byte chứ không trả base64: `ai.ts` cần biết kích thước thật và có thể
+ * phải thu nhỏ ảnh trước khi mã hoá — mã hoá base64 rồi mới giải ra là phí.
+ */
+export async function getObjectBytes(key: string) {
   const res = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
   const bytes = await res.Body!.transformToByteArray();
   return {
-    base64: Buffer.from(bytes).toString('base64'),
+    bytes: Buffer.from(bytes),
     contentType: res.ContentType ?? 'image/jpeg',
   };
 }

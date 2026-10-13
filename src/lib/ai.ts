@@ -6,7 +6,8 @@ import {
   type StandardizedFinding, type Checklist,
 } from './types';
 import { isValidClause, type StandardCode } from './iso';
-import { getObjectBase64, isR2Configured } from './r2';
+import sharp from 'sharp';
+import { getObjectBytes, isR2Configured } from './r2';
 
 export const MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5-5';
 const MAX_IMAGES = 6;
@@ -73,27 +74,110 @@ type ImageBlock = {
   source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string };
 };
 
+/**
+ * GIỚI HẠN ẢNH CỦA ANTHROPIC API (gọi thẳng, không qua Bedrock/Vertex):
+ *   · Mỗi ảnh tối đa 10 MB SAU KHI mã hoá base64 (≈ 7,5 MB file gốc)
+ *   · Mỗi cạnh tối đa 8000 px
+ *   · Cả request tối đa 32 MB
+ * Vượt một trong ba là cả lượt chuẩn hoá hỏng với lỗi 400 — không chỉ riêng
+ * tấm ảnh đó. https://platform.claude.com/docs/en/build-with-claude/vision
+ *
+ * Bình thường ảnh đã được nén trên máy auditor (`image-compress.ts`) về
+ * 2048 px, vài trăm KB, nên không bao giờ chạm các mức này. Lớp dưới đây là
+ * LƯỚI AN TOÀN cho lúc bước nén đó lặng lẽ thất bại và ảnh gốc tới 10 MB được
+ * tải lên nguyên vẹn (trình duyệt cũ, điện thoại yếu hết bộ nhớ, ảnh GIF):
+ * ảnh quá ngưỡng được thu nhỏ NGAY TRÊN MÁY CHỦ trước khi gửi cho AI. Ảnh gốc
+ * trên R2 giữ nguyên, không bị ghi đè.
+ */
+/** File gốc trên ngưỡng này thì thu nhỏ. Để dư xa so với mức 7,5 MB của API. */
+const RESIZE_OVER_BYTES = 5 * 1024 * 1024;
+/** Cạnh dài trên ngưỡng này thì thu nhỏ. API từ chối ảnh có cạnh trên 8000 px. */
+const RESIZE_OVER_EDGE = 7000;
+/** Cùng thông số với bước nén phía trình duyệt, để ảnh hai đường ra như nhau. */
+const RESIZE_TO_EDGE = 2048;
+const RESIZE_QUALITY = 85;
+/**
+ * Trần tổng dung lượng base64 của mọi ảnh trong một lượt. Trần thật của API
+ * là 32 MB cho CẢ request (kèm prompt và danh mục điều khoản), nên chừa dư.
+ * Sau khi thu nhỏ, sáu ảnh hiếm khi quá 10 MB — trần này gần như không bao
+ * giờ chạm, chỉ để chắc chắn không có lượt nào hỏng vì ảnh.
+ */
+const MAX_TOTAL_BASE64 = 24 * 1024 * 1024;
+
+type MediaType = ImageBlock['source']['media_type'];
+const SUPPORTED_TYPES: MediaType[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+/**
+ * Thu nhỏ ảnh nếu cần. Trả về `null` nếu ảnh không đọc được.
+ *
+ * `rotate()` không tham số = xoay theo EXIF, giống `imageOrientation:
+ * 'from-image'` phía trình duyệt — thiếu nó thì ảnh điện thoại ra nằm nghiêng.
+ * GIF động chỉ lấy khung đầu, đúng như cách Claude vốn đọc GIF.
+ */
+async function prepareImage(
+  bytes: Buffer,
+  contentType: string,
+): Promise<{ data: Buffer; mediaType: MediaType } | null> {
+  const mediaType = SUPPORTED_TYPES.includes(contentType as MediaType)
+    ? (contentType as MediaType)
+    : 'image/jpeg';
+
+  let edge = 0;
+  try {
+    const meta = await sharp(bytes).metadata();
+    edge = Math.max(meta.width ?? 0, meta.height ?? 0);
+  } catch {
+    // sharp không đọc được thì API cũng không đọc được — bỏ, đừng làm hỏng cả lượt.
+    return null;
+  }
+
+  if (bytes.length <= RESIZE_OVER_BYTES && edge <= RESIZE_OVER_EDGE) {
+    return { data: bytes, mediaType };
+  }
+
+  try {
+    const data = await sharp(bytes)
+      .rotate()
+      .resize({ width: RESIZE_TO_EDGE, height: RESIZE_TO_EDGE, fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#ffffff' }) // PNG trong suốt → nền trắng, không thành nền đen
+      .jpeg({ quality: RESIZE_QUALITY })
+      .toBuffer();
+    return { data, mediaType: 'image/jpeg' };
+  } catch (e) {
+    console.error('[ai] Không thu nhỏ được ảnh:', e);
+    return null;
+  }
+}
+
 async function loadImageBlocks(keys: string[]): Promise<ImageBlock[]> {
   if (!keys.length || !isR2Configured()) return [];
   const picked = keys.slice(0, MAX_IMAGES);
-  const blocks = await Promise.all(
+  const prepared = await Promise.all(
     picked.map(async (key) => {
       try {
-        const { base64, contentType } = await getObjectBase64(key);
-        const mt = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(contentType)
-          ? contentType
-          : 'image/jpeg';
-        return {
-          type: 'image' as const,
-          source: { type: 'base64' as const, media_type: mt as ImageBlock['source']['media_type'], data: base64 },
-        };
+        const { bytes, contentType } = await getObjectBytes(key);
+        return await prepareImage(bytes, contentType);
       } catch (e) {
         console.error('[ai] Không tải được ảnh từ R2:', key, e);
         return null;
       }
     }),
   );
-  return blocks.filter((b): b is ImageBlock => b !== null);
+
+  // Giữ đúng thứ tự ảnh, dừng thêm khi chạm trần tổng dung lượng.
+  const blocks: ImageBlock[] = [];
+  let total = 0;
+  for (const img of prepared) {
+    if (!img) continue;
+    const data = img.data.toString('base64');
+    if (total + data.length > MAX_TOTAL_BASE64) {
+      console.warn('[ai] Bỏ bớt ảnh vì tổng dung lượng vượt trần một lượt gọi AI.');
+      continue;
+    }
+    total += data.length;
+    blocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data } });
+  }
+  return blocks;
 }
 
 /**
@@ -331,7 +415,10 @@ function finalize(toolInput: unknown, imageKeysCount: number, imagesLoaded: numb
     warnings.push('Không có điều khoản viện dẫn nào hợp lệ — auditor cần kiểm tra lại thủ công.');
   }
   if (imageKeysCount > imagesLoaded) {
-    warnings.push(`Có ${imageKeysCount - imagesLoaded} ảnh không đọc được và đã bị bỏ qua.`);
+    warnings.push(
+      `Có ${imageKeysCount - imagesLoaded} ảnh không đọc được hoặc quá lớn nên AI đã bỏ qua. ` +
+        'Ảnh vẫn được lưu kèm finding bình thường.',
+    );
   }
 
   return {
