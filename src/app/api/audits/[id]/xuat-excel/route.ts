@@ -1,27 +1,67 @@
 import { NextResponse } from 'next/server';
-import ExcelJS from 'exceljs';
-import { and, asc, eq, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { auditMembers, auditUnits, findings } from '@/lib/schema';
+import { auditMembers, auditUnits, findingImages, findings } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
-import { SEVERITY_LABELS } from '@/lib/iso';
+import { getObjectBytes, isR2Configured } from '@/lib/r2';
+import { buildFindingsWorkbook, MAX_PHOTOS } from '@/lib/findings-xlsx';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Bản nháp (chưa nộp)',
-  AI_DRAFTED: 'Bản nháp (chưa nộp)',
-  SUBMITTED: 'Đã nộp',
-  REVIEWED: 'Đã rà soát',
-  ISSUED: 'Đã phát hành',
-  CLOSED: 'Đã đóng',
-};
+/** Số ảnh tải song song từ R2 — đủ nhanh mà không dồn cả trăm request một lúc. */
+const PHOTO_CONCURRENCY = 6;
 
-const d = (x: Date | null) =>
-  x ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(x) : '';
+/**
+ * Tải ảnh của các finding để chèn vào file (tối đa MAX_PHOTOS mỗi finding).
+ *
+ * Ảnh nào tải lỗi thì bỏ qua — thiếu một tấm ảnh không được làm hỏng cả file
+ * xuất. R2 chưa cấu hình thì xuất file không ảnh như trước.
+ */
+async function loadPhotos(findingIds: string[]) {
+  const photos = new Map<string, Buffer[]>();
+  const photoCounts = new Map<string, number>();
+  if (!findingIds.length || !isR2Configured()) return { photos, photoCounts };
+
+  const imgs = await db
+    .select({ findingId: findingImages.findingId, key: findingImages.key })
+    .from(findingImages)
+    .where(inArray(findingImages.findingId, findingIds))
+    // Cùng thứ tự lúc auditor tải lên.
+    .orderBy(asc(findingImages.createdAt), asc(findingImages.id));
+
+  const jobs: { findingId: string; key: string; slot: number }[] = [];
+  for (const img of imgs) {
+    const n = photoCounts.get(img.findingId) ?? 0;
+    photoCounts.set(img.findingId, n + 1);
+    if (n < MAX_PHOTOS) jobs.push({ ...img, slot: n });
+  }
+
+  const loaded = new Map<string, (Buffer | null)[]>();
+  let next = 0;
+  async function worker() {
+    while (next < jobs.length) {
+      const job = jobs[next++];
+      let bytes: Buffer | null = null;
+      try {
+        bytes = (await getObjectBytes(job.key)).bytes;
+      } catch (e) {
+        console.error('[xuat-excel] Không tải được ảnh:', job.key, e);
+      }
+      const arr = loaded.get(job.findingId) ?? [];
+      arr[job.slot] = bytes;
+      loaded.set(job.findingId, arr);
+    }
+  }
+  await Promise.all(Array.from({ length: PHOTO_CONCURRENCY }, worker));
+
+  for (const [fid, arr] of loaded) {
+    photos.set(fid, arr.filter((b): b is Buffer => b != null));
+  }
+  return { photos, photoCounts };
+}
 
 /**
  * Xuất bảng tổng hợp ra .xlsx.
@@ -48,114 +88,9 @@ export async function GET(req: Request, { params }: Ctx) {
     db.select().from(auditMembers).where(eq(auditMembers.auditId, id)),
   ]);
 
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'Đánh giá nội bộ ISO';
-  wb.created = new Date();
+  const { photos, photoCounts } = await loadPhotos(rows.map((f) => f.id));
 
-  /* ---------------- Sheet 1: danh sách finding ---------------- */
-
-  const ws = wb.addWorksheet('Danh sách finding', {
-    views: [{ state: 'frozen', ySplit: 5 }],
-  });
-
-  ws.mergeCells('A1:K1');
-  ws.getCell('A1').value = audit.title;
-  ws.getCell('A1').font = { size: 14, bold: true };
-
-  ws.mergeCells('A2:K2');
-  ws.getCell('A2').value =
-    `Tổ chức được đánh giá: ${audit.organization}   ·   ` +
-    `Thời gian: ${d(audit.startDate)} – ${d(audit.endDate)}   ·   ` +
-    `Trưởng đoàn: ${audit.leadAuditor ?? ''}`;
-  ws.getCell('A2').font = { size: 10, color: { argb: 'FF666666' } };
-
-  ws.mergeCells('A3:K3');
-  ws.getCell('A3').value = `Xuất ngày ${d(new Date())} · ${rows.length} finding`;
-  ws.getCell('A3').font = { size: 9, italic: true, color: { argb: 'FF888888' } };
-
-  ws.getRow(4).height = 6;
-
-  const header = [
-    'STT', 'Mã', 'Phân loại phát hiện', 'Đơn vị được đánh giá', 'Nơi phát hiện',
-    'Điều khoản', 'Mô tả phát hiện', 'Bằng chứng khách quan', 'Thời hạn khắc phục',
-    'Đánh giá viên', 'Trạng thái',
-  ];
-  const headerRow = ws.addRow(header);
-  headerRow.eachCell((c) => {
-    c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F45F5' } };
-    c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    c.border = { bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
-  });
-  headerRow.height = 30;
-
-  rows.forEach((f, i) => {
-    const row = ws.addRow([
-      i + 1, // STT đánh lại liên tục — mã finding có thể nhảy số
-      f.code ?? '',
-      f.severity ? SEVERITY_LABELS[f.severity] : '',
-      f.auditee ?? '',
-      f.rawArea ?? '',
-      f.clauses.map((c) => `${c.standard} ${c.clause}`).join('\n'),
-      f.statement ?? f.rawText,
-      f.evidence.map((e, n) => `${n + 1}. ${e}`).join('\n'),
-      d(f.dueDate),
-      f.auditorName ?? '',
-      STATUS_LABELS[f.status] ?? f.status,
-    ]);
-    row.alignment = { vertical: 'top', wrapText: true };
-
-    // Tô đỏ nhạt cho Major, vàng nhạt cho Minor để nhìn lướt thấy ngay.
-    const fill =
-      f.severity === 'MAJOR' ? 'FFFDE8E8' : f.severity === 'MINOR' ? 'FFFEF6E0' : null;
-    if (fill) {
-      row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
-    }
-  });
-
-  ws.columns = [
-    { width: 5 }, { width: 8 }, { width: 22 }, { width: 24 }, { width: 20 },
-    { width: 18 }, { width: 60 }, { width: 40 }, { width: 14 }, { width: 20 }, { width: 18 },
-  ];
-  ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: header.length } };
-
-  /* ---------------- Sheet 2: tổng hợp theo đơn vị ---------------- */
-
-  const ws2 = wb.addWorksheet('Tổng hợp');
-
-  const sevKeys = ['MAJOR', 'MINOR', 'OBS', 'OFI', 'CONF'] as const;
-
-  const h2 = ws2.addRow(['Đơn vị được đánh giá', ...sevKeys.map((s) => SEVERITY_LABELS[s]), 'Tổng']);
-  h2.eachCell((c) => {
-    c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F45F5' } };
-    c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-  });
-  h2.height = 30;
-
-  for (const u of units) {
-    const ofUnit = rows.filter((f) => f.unitId === u.id);
-    ws2.addRow([
-      u.name,
-      ...sevKeys.map((s) => ofUnit.filter((f) => f.severity === s).length),
-      ofUnit.length,
-    ]);
-  }
-
-  const totalRow = ws2.addRow([
-    'TỔNG CỘNG',
-    ...sevKeys.map((s) => rows.filter((f) => f.severity === s).length),
-    rows.length,
-  ]);
-  totalRow.font = { bold: true };
-
-  ws2.addRow([]);
-  ws2.addRow(['Đánh giá viên', 'Số finding đã ghi nhận']).font = { bold: true };
-  for (const m of members) {
-    ws2.addRow([m.fullName, rows.filter((f) => f.memberId === m.id).length]);
-  }
-
-  ws2.columns = [{ width: 30 }, { width: 20 }, { width: 20 }, { width: 14 }, { width: 18 }, { width: 12 }, { width: 10 }];
+  const wb = await buildFindingsWorkbook({ audit, rows, units, members, photos, photoCounts });
 
   /* ---------------- Trả file ---------------- */
 
