@@ -578,12 +578,15 @@ export function AuditPlan({
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Chức danh người phê duyệt" required missing={!info.approverTitle.trim()}>
             <input
-              // Tự in hoa để file Word luôn đều một dạng, không phụ thuộc người nhập.
+              // Hiển thị in hoa bằng CSS. KHÔNG đổi chữ trong onChange: bộ gõ tiếng Việt
+              // (Telex/VNI) đang ghép dấu sẽ bị hỏng nếu giá trị bị thay giữa chừng.
+              // Giá trị được in hoa thật khi rời ô, khi server lưu và khi xuất Word.
               className="input uppercase"
               disabled={locked}
               placeholder="GIÁM ĐỐC XÍ NGHIỆP"
               value={info.approverTitle}
-              onChange={(e) =>
+              onChange={(e) => setInfo((v) => ({ ...v, approverTitle: e.target.value }))}
+              onBlur={(e) =>
                 setInfo((v) => ({ ...v, approverTitle: e.target.value.toLocaleUpperCase('vi') }))
               }
             />
