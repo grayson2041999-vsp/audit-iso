@@ -26,15 +26,10 @@ export type PlanSession = {
 
 /** Bước làm tròn mọi mốc giờ khi sinh lịch tự động. */
 export const STEP = 15;
-/**
- * Bước khi trưởng đoàn tự kéo. Nhỏ hơn STEP vì lịch tự sinh cần số tròn để đọc
- * trong file Word, còn kéo tay thì cần chỉnh được sát thực tế.
- */
-export const MANUAL_STEP = 5;
-/** Sàn thời lượng một phiên. Chạm sàn thì báo là không đủ thời gian. */
-export const MIN_SESSION = 60;
-/** Sàn khi kéo tay — thấp hơn MIN_SESSION vì đây là lựa chọn có ý thức của người dùng. */
-export const MIN_MANUAL = 15;
+/** Thời lượng tối thiểu nên có cho một phiên đơn vị khi tự xếp. */
+const MIN_SESSION = 60;
+/** Trần một phiên tự xếp khi đã phân công — nửa ngày, để lịch không bị một đơn vị ôm trọn ngày. */
+const MAX_SESSION = 240;
 
 /* ------------------------------------------------------------------ */
 /* Giờ                                                                 */
@@ -117,7 +112,7 @@ export function formatDayList(days: string[]): string {
   return sameYear ? `${text}/${sorted[0].slice(0, 4)}` : text;
 }
 
-/** Danh sách ngày từ đầu tới cuối đợt, bao gồm cả hai đầu. */
+/** Danh sách ngày từ đầu tới cuối khoảng, bao gồm cả hai đầu. */
 export function listDays(start: Date | string | null, end: Date | string | null): string[] {
   if (!start || !end) return [];
   const s = typeof start === 'string' ? new Date(start) : start;
@@ -135,42 +130,69 @@ export function listDays(start: Date | string | null, end: Date | string | null)
   return days;
 }
 
-/** Một ngày thực hiện: ngày dương lịch cụ thể kèm khung giờ riêng. */
-export type AuditDay = DayHours & {
-  date: string; // "YYYY-MM-DD"
-  /** Ngày chỉ có cuộc họp — lịch tự động không xếp đơn vị vào. */
-  meetingOnly?: boolean;
+/**
+ * Một ngày thực hiện: ngày dương lịch cụ thể và khoảng giờ làm việc Từ – Đến.
+ *
+ * Không có buổi sáng / buổi chiều, không có nghỉ trưa: ngày khai mạc có thể chỉ
+ * 08:00–09:00, ngày đánh giá có thể chỉ một buổi, tuỳ thực tế.
+ */
+export type AuditDay = {
+  date: string;  // "YYYY-MM-DD"
+  start: string; // "HH:MM"
+  end: string;   // "HH:MM"
+};
+
+export const DEFAULT_DAY_START = '08:00';
+export const DEFAULT_DAY_END = '17:00';
+
+/**
+ * Một ngày như đang nằm trong database. Bản đầu của migration 014 ghi bốn mốc
+ * sáng/chiều; bản hiện tại ghi `start` / `end`. Đọc được cả hai.
+ */
+export type StoredAuditDay = {
+  date: string;
+  start?: string;
+  end?: string;
+  amStart?: string;
+  pmEnd?: string;
 };
 
 /**
- * Ngày thực hiện của một đợt, đã sắp xếp.
+ * Ngày thực hiện của một đợt, đã sắp xếp và đã quy về dạng Từ – Đến.
  *
- * Từ migration 014 ngày được lưu thành danh sách cụ thể trong `auditDays`.
- * Đợt nào chưa có (tạo trước đó, hoặc vừa tạo mà chưa mở tab Chương trình) thì
- * suy ra từ khoảng start → end như cũ, khung giờ lấy theo `dayHours` rồi tới
- * giờ mặc định của đợt.
+ * Đợt nào chưa có danh sách ngày (tạo xong chưa mở tab Chương trình) thì suy ra
+ * từ khoảng start → end, giờ lấy theo giờ mặc định của đợt.
  */
 export function resolveAuditDays(audit: {
-  auditDays?: AuditDay[] | null;
+  auditDays?: StoredAuditDay[] | null;
   startDate: Date | string | null;
   endDate: Date | string | null;
-  dayHours?: DayHours[] | null;
-  amStart: string; amEnd: string; pmStart: string; pmEnd: string;
+  dayHours?: { amStart: string; pmEnd: string }[] | null;
+  amStart?: string | null;
+  pmEnd?: string | null;
 }): AuditDay[] {
+  const defStart = audit.amStart || DEFAULT_DAY_START;
+  const defEnd = audit.pmEnd || DEFAULT_DAY_END;
+
   if (audit.auditDays && audit.auditDays.length > 0) {
-    return [...audit.auditDays].sort((a, b) => a.date.localeCompare(b.date));
+    return audit.auditDays
+      .map((d) => ({
+        date: d.date,
+        start: d.start ?? d.amStart ?? defStart,
+        end: d.end ?? d.pmEnd ?? defEnd,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
   }
-  const fallback: DayHours = {
-    amStart: audit.amStart, amEnd: audit.amEnd, pmStart: audit.pmStart, pmEnd: audit.pmEnd,
-  };
-  return listDays(audit.startDate, audit.endDate).map((date, i) => {
-    const h = audit.dayHours?.[i] ?? fallback;
-    return { date, amStart: h.amStart, amEnd: h.amEnd, pmStart: h.pmStart, pmEnd: h.pmEnd };
-  });
+
+  return listDays(audit.startDate, audit.endDate).map((date, i) => ({
+    date,
+    start: audit.dayHours?.[i]?.amStart ?? defStart,
+    end: audit.dayHours?.[i]?.pmEnd ?? defEnd,
+  }));
 }
 
 /* ------------------------------------------------------------------ */
-/* Xung đột                                                            */
+/* Người tham gia                                                      */
 /* ------------------------------------------------------------------ */
 
 /** Ai tham gia phiên này: đơn vị thì lấy người được phân công, họp thì cả đoàn. */
@@ -183,469 +205,220 @@ export function sessionMembers(
   return allMemberIds; // khai mạc, kết thúc, họp đoàn — cả đoàn dự
 }
 
-const overlaps = (a: PlanSession, b: PlanSession) =>
-  a.day === b.day &&
-  toMinutes(a.startTime) < toMinutes(b.endTime) &&
-  toMinutes(b.startTime) < toMinutes(a.endTime);
+const isMeeting = (k: SessionKind) => k !== 'UNIT';
+
+/** Sắp theo ngày rồi theo giờ bắt đầu; họp khai mạc luôn trước, họp kết thúc luôn sau nếu trùng mốc. */
+export function sortSessions<T extends Pick<PlanSession, 'day' | 'startTime' | 'kind'>>(list: T[]): T[] {
+  const rank = (k: SessionKind) => (k === 'OPENING' ? 0 : k === 'CLOSING' ? 2 : 1);
+  return [...list].sort(
+    (a, b) =>
+      a.day.localeCompare(b.day) ||
+      rank(a.kind) - rank(b.kind) ||
+      toMinutes(a.startTime) - toMinutes(b.startTime),
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Hai cuộc họp cố định                                                */
+/* ------------------------------------------------------------------ */
 
 /**
- * Tìm các phiên bị trùng: giao nhau về thời gian VÀ có chung ít nhất một
- * đánh giá viên. Trả về id các phiên có vấn đề, kèm mô tả để hiện cảnh báo.
+ * Ghim họp khai mạc vào ĐẦU ngày đầu tiên và họp kết thúc vào CUỐI ngày cuối.
+ *
+ * Gọi sau mọi thao tác đụng tới ngày (thêm, đổi, xoá ngày, sửa giờ ngày) và
+ * sau khi sửa thời lượng cuộc họp. Nhờ vậy lịch không bao giờ thiếu hai cuộc
+ * họp này và chúng không bao giờ nằm sai chỗ — không cần ai nhớ dời chúng.
+ *
+ * Giữ nguyên thời lượng của cuộc họp đang có; chưa có thì tạo mới với thời
+ * lượng mặc định. Dư (dữ liệu cũ có hai khai mạc) thì chỉ giữ cái đầu.
  */
-export function findTimeConflicts(
+export function pinMeetings(
   sessions: PlanSession[],
-  unitMembers: Map<string, string[]>,
-  members: { id: string; fullName: string }[],
-): { ids: Set<string>; messages: string[] } {
-  const allIds = members.map((m) => m.id);
-  const nameById = new Map(members.map((m) => [m.id, m.fullName]));
-
-  const ids = new Set<string>();
-  const messages: string[] = [];
-
-  for (let i = 0; i < sessions.length; i++) {
-    for (let j = i + 1; j < sessions.length; j++) {
-      const a = sessions[i];
-      const b = sessions[j];
-      if (!overlaps(a, b)) continue;
-
-      const ma = new Set(sessionMembers(a, unitMembers, allIds));
-      const shared = sessionMembers(b, unitMembers, allIds).filter((m) => ma.has(m));
-      if (shared.length === 0) continue;
-
-      ids.add(a.id);
-      ids.add(b.id);
-      messages.push(
-        `${shared.map((m) => nameById.get(m) ?? '?').join(', ')} bị xếp trùng giờ ` +
-          `${a.startTime}–${a.endTime} và ${b.startTime}–${b.endTime} ngày ${formatDayLong(a.day)}`,
-      );
-    }
-  }
-
-  return { ids, messages: [...new Set(messages)] };
-}
-
-/**
- * Phiên có nằm trọn trong một khung giờ làm việc không.
- *
- * Lịch sinh tự động luôn thoả điều kiện này, nhưng khi trưởng đoàn sửa tay thì
- * có thể tạo ra phiên ôm trọn giờ nghỉ trưa hoặc tràn ra ngoài giờ tan ca.
- * Trả về mô tả lỗi, hoặc null nếu hợp lệ.
- */
-export function checkWorkingHours(
-  s: Pick<PlanSession, 'startTime' | 'endTime'>,
-  hours: { amStart: string; amEnd: string; pmStart: string; pmEnd: string },
-): string | null {
-  const a = toMinutes(s.startTime);
-  const b = toMinutes(s.endTime);
-  if (b <= a) return 'Giờ kết thúc phải sau giờ bắt đầu';
-
-  const inAm = a >= toMinutes(hours.amStart) && b <= toMinutes(hours.amEnd);
-  const inPm = a >= toMinutes(hours.pmStart) && b <= toMinutes(hours.pmEnd);
-  if (inAm || inPm) return null;
-
-  // Bắt đầu trong buổi sáng nhưng kết thúc sau giờ nghỉ → ôm trọn giờ trưa.
-  if (a < toMinutes(hours.amEnd) && b > toMinutes(hours.pmStart)) {
-    return 'Phiên vắt qua giờ nghỉ trưa';
-  }
-  return `Nằm ngoài giờ làm việc (${hours.amStart}–${hours.amEnd}, ${hours.pmStart}–${hours.pmEnd})`;
-}
-
-/* ------------------------------------------------------------------ */
-/* Kéo thả: vùng cấm và vị trí hợp lệ                                   */
-/* ------------------------------------------------------------------ */
-
-/** Một khoảng thời gian trong ngày, tính bằng phút kể từ nửa đêm. */
-export type Span = { start: number; end: number };
-
-/** Làm tròn về mốc 5 phút gần nhất. */
-export const snapManual = (m: number) => Math.round(m / MANUAL_STEP) * MANUAL_STEP;
-
-/** Gộp các khoảng chồng hoặc chạm nhau thành danh sách rời rạc, đã sắp xếp. */
-function mergeSpans(spans: Span[]): Span[] {
-  const sorted = spans.filter((s) => s.end > s.start).sort((a, b) => a.start - b.start);
-  const out: Span[] = [];
-  for (const s of sorted) {
-    const last = out[out.length - 1];
-    if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
-    else out.push({ ...s });
-  }
-  return out;
-}
-
-/**
- * Hai phiên có được phép chồng giờ không.
- *
- * Cấm khi: một trong hai là cuộc họp (cả đoàn dự nên không ai đi đâu được),
- * hoặc cùng một đơn vị (không thể đánh giá chính nó hai lần cùng lúc), hoặc có
- * chung ít nhất một đánh giá viên.
- */
-function clashes(
-  a: Pick<PlanSession, 'kind' | 'unitId'>,
-  b: Pick<PlanSession, 'kind' | 'unitId'>,
-  unitMembers: Map<string, string[]>,
-) {
-  if (a.kind !== 'UNIT' || b.kind !== 'UNIT') return true;
-  if (a.unitId && a.unitId === b.unitId) return true;
-
-  const ma = a.unitId ? unitMembers.get(a.unitId) ?? [] : [];
-  const mb = b.unitId ? unitMembers.get(b.unitId) ?? [] : [];
-  return ma.some((x) => mb.includes(x));
-}
-
-/**
- * Những khoảng giờ mà phiên `self` không được chạm vào, trong đúng ngày của nó.
- *
- * Gồm giờ nghỉ trưa và mọi phiên khác xung khắc với nó. Nhờ luật "cuộc họp là
- * tường với tất cả" mà họp khai mạc và họp kết thúc không cần luật riêng.
- */
-export function blockedSpans(input: {
-  self: Pick<PlanSession, 'id' | 'day' | 'kind' | 'unitId'>;
-  sessions: PlanSession[];
-  hours: Pick<Hours, 'amEnd' | 'pmStart'>;
-  unitMembers: Map<string, string[]>;
-}): Span[] {
-  const { self, sessions, hours, unitMembers } = input;
-
-  const spans: Span[] = [];
-
-  const lunchStart = toMinutes(hours.amEnd);
-  const lunchEnd = toMinutes(hours.pmStart);
-  if (lunchEnd > lunchStart) spans.push({ start: lunchStart, end: lunchEnd });
-
-  for (const s of sessions) {
-    if (s.id === self.id || s.day !== self.day) continue;
-    if (!clashes(self, s, unitMembers)) continue;
-    spans.push({ start: toMinutes(s.startTime), end: toMinutes(s.endTime) });
-  }
-
-  return mergeSpans(spans);
-}
-
-/** Phần còn lại của ngày làm việc sau khi trừ hết vùng cấm. */
-export function freeSpans(blocked: Span[], hours: Pick<Hours, 'amStart' | 'pmEnd'>): Span[] {
-  const dayStart = toMinutes(hours.amStart);
-  const dayEnd = toMinutes(hours.pmEnd);
-
-  const out: Span[] = [];
-  let cursor = dayStart;
-  for (const b of mergeSpans(blocked)) {
-    if (b.start > cursor) out.push({ start: cursor, end: Math.min(b.start, dayEnd) });
-    cursor = Math.max(cursor, b.end);
-    if (cursor >= dayEnd) break;
-  }
-  if (cursor < dayEnd) out.push({ start: cursor, end: dayEnd });
-
-  return out.filter((s) => s.end > s.start);
-}
-
-/**
- * Mốc bắt đầu hợp lệ gần `wanted` nhất cho một phiên dài `duration`.
- *
- * Đây là thứ làm nên cảm giác "chặn cứng": khối đi theo chuột tới sát mép vùng
- * cấm rồi dừng lại ở đó thay vì nhảy vọt qua. Trả về null khi không còn chỗ nào
- * chứa nổi phiên dài như vậy.
- */
-export function nearestStart(wanted: number, duration: number, free: Span[]): number | null {
-  const fits = free.filter((f) => f.end - f.start >= duration);
-  if (fits.length === 0) return null;
-
-  const target = snapManual(wanted);
-  let best: number | null = null;
-  let bestDist = Infinity;
-
-  for (const f of fits) {
-    const s = Math.min(Math.max(target, f.start), f.end - duration);
-    const dist = Math.abs(s - target);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = s;
-    }
-  }
-  return best;
-}
-
-/**
- * Khoảng mà mép đang kéo được phép chạy tới, khi mép kia đứng yên tại `fixed`.
- * `side` là mép ĐANG kéo.
- */
-export function resizeLimit(
-  fixed: number,
-  side: 'start' | 'end',
-  free: Span[],
-): Span | null {
-  const home =
-    side === 'end'
-      ? free.find((f) => f.start <= fixed && fixed < f.end)
-      : free.find((f) => f.start < fixed && fixed <= f.end);
-  if (!home) return null;
-
-  return side === 'end'
-    ? { start: fixed + MIN_MANUAL, end: home.end }
-    : { start: home.start, end: fixed - MIN_MANUAL };
-}
-
-/**
- * Nắn lịch theo khung giờ làm việc mới.
- *
- * Trước đây đổi khung giờ chỉ hiện cảnh báo rồi bắt trưởng đoàn tự đi dọn từng
- * phiên. Nhưng máy suy ra được kết quả nên máy làm, còn người nhìn lưới rồi
- * chỉnh tiếp — nắn xong là một bước Ctrl+Z, không ưng thì lùi lại.
- *
- * Ba luật, theo đúng thứ tự:
- *
- *  1. Hai cuộc họp NEO vào khung và giữ nguyên thời lượng. Dời giờ vào 08:00 →
- *     08:30 thì họp khai mạc 30 phút thành 08:30–09:00. Chỉ neo lại khi chính
- *     mốc đó đổi, để không giật cuộc họp mà trưởng đoàn đã cố ý kéo đi chỗ khác.
- *
- *  2. Mọi phiên bị CẮT phần nằm ngoài vùng hợp lệ — ngoài giờ làm việc, trong
- *     giờ nghỉ trưa, hoặc chồng lên cuộc họp vừa neo lại. Cắt chứ không đẩy:
- *     đẩy thì đụng phiên kế tiếp rồi kéo theo dây chuyền, một thay đổi nhỏ xáo
- *     cả lịch. Cắt là cục bộ và đoán trước được.
- *
- *  3. Phiên bị cắt đến gần như không còn gì thì bỏ hẳn. Đơn vị đó quay về kho ở
- *     trạng thái chưa xếp, và chưa xếp đủ đơn vị thì không lưu được.
- */
-export function reflowToHours(input: {
-  sessions: PlanSession[];
-  days: string[];
-  /** Khung giờ trước khi đổi — chỉ dùng để biết ngày nào có mốc vừa thay đổi. */
-  fromOf: (day: string) => DayHours;
-  toOf: HoursOf;
-}): PlanSession[] {
-  const { sessions, days, fromOf, toOf } = input;
+  days: AuditDay[],
+  defaults: { openingMinutes: number; closingMinutes: number },
+  makeId: () => string,
+): PlanSession[] {
   if (days.length === 0) return sessions;
-
   const first = days[0];
   const last = days[days.length - 1];
 
-  // Ngày nào khung giờ đang gõ dở thì để yên, đừng cắt gì của ngày đó.
-  const usable = (day: string) => {
-    const h = toOf(day);
-    return toMinutes(h.amEnd) > toMinutes(h.amStart) && toMinutes(h.pmEnd) > toMinutes(h.pmStart);
+  const op = sessions.find((s) => s.kind === 'OPENING');
+  const cl = sessions.find((s) => s.kind === 'CLOSING');
+  const rest = sessions.filter((s) => s.kind !== 'OPENING' && s.kind !== 'CLOSING');
+
+  const len = (s: PlanSession | undefined, fallback: number) =>
+    s ? Math.max(5, toMinutes(s.endTime) - toMinutes(s.startTime)) : fallback;
+
+  const fs = toMinutes(first.start);
+  const fe = toMinutes(first.end);
+  const opening: PlanSession = {
+    id: op?.id ?? makeId(),
+    note: op?.note ?? null,
+    kind: 'OPENING',
+    unitId: null,
+    day: first.date,
+    startTime: first.start,
+    endTime: toHHMM(Math.min(fs + len(op, defaults.openingMinutes), Math.max(fe, fs + 5))),
   };
 
-  /* 1. Neo lại hai cuộc họp, mỗi cái theo khung giờ của đúng ngày nó nằm */
-  const anchored = sessions.map((s) => {
-    if (!usable(s.day)) return s;
-    const h = toOf(s.day);
-    const old = fromOf(s.day);
-    const len = toMinutes(s.endTime) - toMinutes(s.startTime);
+  const ls = toMinutes(last.start);
+  const le = toMinutes(last.end);
+  const closing: PlanSession = {
+    id: cl?.id ?? makeId(),
+    note: cl?.note ?? null,
+    kind: 'CLOSING',
+    unitId: null,
+    day: last.date,
+    startTime: toHHMM(Math.max(le - len(cl, defaults.closingMinutes), Math.min(ls, le - 5))),
+    endTime: last.end,
+  };
 
-    if (s.kind === 'OPENING' && s.day === first && h.amStart !== old.amStart) {
-      const amS = toMinutes(h.amStart);
-      return { ...s, startTime: toHHMM(amS), endTime: toHHMM(Math.min(amS + len, toMinutes(h.amEnd))) };
-    }
-    if (s.kind === 'CLOSING' && s.day === last && h.pmEnd !== old.pmEnd) {
-      const pmE = toMinutes(h.pmEnd);
-      return {
-        ...s,
-        startTime: toHHMM(Math.max(pmE - len, toMinutes(h.pmStart))),
-        endTime: toHHMM(pmE),
-      };
-    }
-    return s;
-  });
+  return [opening, ...rest, closing];
+}
 
-  /** Hai cuộc họp sau khi neo — chúng là chướng ngại cho mọi phiên khác. */
-  const meetingsByDay = new Map<string, Span[]>();
-  for (const s of anchored) {
-    if (s.kind !== 'OPENING' && s.kind !== 'CLOSING') continue;
-    const span = { start: toMinutes(s.startTime), end: toMinutes(s.endTime) };
-    meetingsByDay.set(s.day, [...(meetingsByDay.get(s.day) ?? []), span]);
-  }
+/* ------------------------------------------------------------------ */
+/* Kiểm tra lịch                                                       */
+/* ------------------------------------------------------------------ */
 
-  /* 2–3. Cắt vào vùng hợp lệ, bỏ hẳn nếu không còn gì */
-  return anchored.flatMap<PlanSession>((s) => {
-    if (!usable(s.day)) return [s];
-    const h = toOf(s.day);
+export type PlanCheck = {
+  /** Lỗi gắn với từng dòng lịch, để tô đỏ đúng dòng. */
+  rowIssues: Map<string, string[]>;
+  /** Lỗi chung của cả lịch. */
+  general: string[];
+  /** Đơn vị chưa có phiên nào. */
+  missingUnits: { id: string; name: string }[];
+  /** Số dòng vi phạm vị trí hai cuộc họp (đặt trước khai mạc / sau kết thúc). */
+  orderProblems: number;
+  /** Số dòng có lỗi giờ giấc hoặc trùng giờ. */
+  timeProblems: number;
+  ok: boolean;
+};
 
-    const amE = toMinutes(h.amEnd);
-    const pmS = toMinutes(h.pmStart);
-    const lunch: Span[] = pmS > amE ? [{ start: amE, end: pmS }] : [];
+/**
+ * Các quy tắc bắt buộc của một chương trình đánh giá:
+ *  - mọi đơn vị đều có ít nhất một phiên,
+ *  - có đúng một họp khai mạc, là phiên đầu tiên của đợt (đầu ngày đầu),
+ *  - có đúng một họp kết thúc, là phiên cuối cùng của đợt (cuối ngày cuối),
+ *  - mọi phiên nằm trong giờ làm việc của ngày, không ai bị xếp trùng giờ.
+ */
+export function validatePlan(input: {
+  days: AuditDay[];
+  sessions: PlanSession[];
+  units: { id: string; name: string }[];
+  unitMembers: Map<string, string[]>;
+  members: { id: string; fullName: string }[];
+}): PlanCheck {
+  const { days, sessions, units, unitMembers, members } = input;
+  const rowIssues = new Map<string, string[]>();
+  const general: string[] = [];
+  const add = (id: string, msg: string) => rowIssues.set(id, [...(rowIssues.get(id) ?? []), msg]);
+  const orderRows = new Set<string>();
+  const timeRows = new Set<string>();
+  const addOrder = (id: string, msg: string) => {
+    orderRows.add(id);
+    add(id, msg);
+  };
+  const addTime = (id: string, msg: string) => {
+    timeRows.add(id);
+    add(id, msg);
+  };
 
-    const isMeetingAnchor = s.kind === 'OPENING' || s.kind === 'CLOSING';
-    const obstacles = isMeetingAnchor ? [] : meetingsByDay.get(s.day) ?? [];
-    const free = freeSpans([...lunch, ...obstacles], h);
+  const dayByDate = new Map(days.map((d) => [d.date, d]));
+  const allIds = members.map((m) => m.id);
+  const nameById = new Map(members.map((m) => [m.id, m.fullName]));
+  const unitName = new Map(units.map((u) => [u.id, u.name]));
+  const label = (s: PlanSession) =>
+    s.kind === 'UNIT' ? (s.unitId ? unitName.get(s.unitId) ?? 'Đơn vị' : 'Dòng chưa chọn đơn vị') : KIND_LABELS[s.kind];
 
+  /* --- Hai cuộc họp --- */
+  const openings = sessions.filter((s) => s.kind === 'OPENING');
+  const closings = sessions.filter((s) => s.kind === 'CLOSING');
+  if (openings.length === 0) general.push('Lịch chưa có họp khai mạc.');
+  if (openings.length > 1) general.push('Lịch có nhiều hơn một họp khai mạc.');
+  if (closings.length === 0) general.push('Lịch chưa có họp kết thúc.');
+  if (closings.length > 1) general.push('Lịch có nhiều hơn một họp kết thúc.');
+
+  const first = days[0];
+  const last = days[days.length - 1];
+  const op = openings[0];
+  const cl = closings[0];
+  if (op && first && op.day !== first.date) addOrder(op.id, 'Họp khai mạc phải ở ngày đầu tiên');
+  if (cl && last && cl.day !== last.date) addOrder(cl.id, 'Họp kết thúc phải ở ngày cuối cùng');
+
+  /* --- Từng dòng --- */
+  for (const s of sessions) {
     const a = toMinutes(s.startTime);
     const b = toMinutes(s.endTime);
+    const day = dayByDate.get(s.day);
 
-    // Giữ phần nằm trong khoảng trống chồng lấn NHIỀU NHẤT. Khi giờ nghỉ trưa
-    // dời vào giữa một phiên, phiên bị chẻ đôi — lấy mẩu dài hơn thay vì sinh
-    // thêm một phiên mà trưởng đoàn không yêu cầu.
-    let best: Span | null = null;
-    let bestOverlap = 0;
-    for (const f of free) {
-      const overlap = Math.min(b, f.end) - Math.max(a, f.start);
-      if (overlap > bestOverlap) {
-        bestOverlap = overlap;
-        best = f;
-      }
+    if (!day) addTime(s.id, 'Ngày này không còn trong danh sách ngày thực hiện');
+    if (b <= a) addTime(s.id, 'Giờ kết thúc phải sau giờ bắt đầu');
+    else if (day && (a < toMinutes(day.start) || b > toMinutes(day.end))) {
+      addTime(s.id, `Nằm ngoài giờ làm việc của ngày (${day.start}–${day.end})`);
     }
+    if (s.kind === 'UNIT' && !s.unitId) add(s.id, 'Chưa chọn đơn vị');
 
-    if (!best || bestOverlap < MANUAL_STEP) return [];
-    return [
-      {
-        ...s,
-        startTime: toHHMM(Math.max(a, best.start)),
-        endTime: toHHMM(Math.min(b, best.end)),
-      },
-    ];
-  });
-}
-
-/* ------------------------------------------------------------------ */
-/* Quỹ thời gian                                                       */
-/* ------------------------------------------------------------------ */
-
-/** Khung giờ làm việc của MỘT ngày. */
-export type DayHours = {
-  amStart: string; amEnd: string; pmStart: string; pmEnd: string;
-};
-
-export type Hours = DayHours & {
-  openingMinutes: number; closingMinutes: number;
-  /** Ngày chỉ họp: không mở khung nào để xếp đơn vị. */
-  meetingOnly?: boolean;
-};
-
-/**
- * Tra khung giờ của một ngày cụ thể.
- *
- * Mỗi ngày đánh giá có thể có giờ làm việc riêng — ngày đầu vào muộn vì đoàn
- * phải di chuyển, ngày cuối về sớm. Vì vậy mọi thứ đụng tới giờ giấc đều nhận
- * hàm tra cứu chứ không nhận một bộ giờ duy nhất.
- *
- * Riêng thời lượng hai cuộc họp vẫn là của cả đợt, nên hàm này trả về kèm
- * chúng cho tiện dùng.
- */
-export type HoursOf = (day: string) => Hours;
-
-type Window = { day: string; start: number; end: number };
-
-/**
- * Các khung giờ còn trống để xếp đơn vị, sau khi đã trừ họp khai mạc (đầu ngày
- * đầu) và họp kết thúc (cuối ngày cuối). Ngày đánh dấu "chỉ họp" không có khung.
- */
-export function buildWindows(days: string[], hoursOf: HoursOf): Window[] {
-  if (days.length === 0) return [];
-
-  const lastDay = days[days.length - 1];
-  const windows: Window[] = [];
-
-  for (const day of days) {
-    const h = hoursOf(day);
-    if (h.meetingOnly) continue;
-    const am = { s: toMinutes(h.amStart), e: toMinutes(h.amEnd) };
-    const pm = { s: toMinutes(h.pmStart), e: toMinutes(h.pmEnd) };
-    if (am.e <= am.s || pm.e <= pm.s) continue; // ngày này đang nhập dở
-
-    const mStart = day === days[0] ? ceilStep(am.s + h.openingMinutes) : am.s;
-    if (am.e > mStart) windows.push({ day, start: mStart, end: am.e });
-
-    const aEnd = day === lastDay ? floorStep(pm.e - h.closingMinutes) : pm.e;
-    if (aEnd > pm.s) windows.push({ day, start: pm.s, end: aEnd });
-  }
-  return windows;
-}
-
-export type Capacity = {
-  /** Tổng phút ĐỒNG HỒ còn lại để đánh giá đơn vị. */
-  availableMinutes: number;
-  /**
-   * SEQUENTIAL — chưa phân công ai, cả đoàn đi cùng nhau, chia cho số đơn vị.
-   * PARALLEL   — đã phân công, chia cho số vòng của người bận nhất.
-   */
-  mode: 'SEQUENTIAL' | 'PARALLEL';
-  /** Số lần chia: số đơn vị, hoặc số vòng của người bận nhất. */
-  divisor: number;
-  /** Thời lượng trung bình mỗi đơn vị, phút. */
-  perUnitMinutes: number;
-  /** Dưới sàn MIN_SESSION — quỹ thời gian không đủ. */
-  atFloor: boolean;
-  /** Bị trần buổi dài nhất cắt bớt — quỹ còn dư, lịch sẽ có chỗ trống. */
-  capped: boolean;
-  /** Độ dài buổi làm việc dài nhất, phút. Không phiên nào dài hơn con số này. */
-  longestWindow: number;
-  unitCount: number;
-  dayCount: number;
-};
-
-/**
- * Tính quỹ thời gian và thời lượng trung bình mỗi đơn vị.
- *
- * Chia theo thời gian ĐỒNG HỒ, không phải công sức: một buổi làm việc với đơn
- * vị mất bấy nhiêu thời gian bất kể có 1 hay 4 đánh giá viên ngồi trong phòng.
- *
- * Chỗ khác nhau giữa hai chế độ nằm ở số chia:
- *  - Chưa phân công: cả đoàn đi cùng nhau nên mỗi đơn vị chiếm trọn một khoảng
- *    thời gian → chia cho SỐ ĐƠN VỊ.
- *  - Đã phân công: nhiều đơn vị chạy song song, nhưng người ôm K đơn vị thì K
- *    phiên đó buộc nối tiếp → chia cho K, tức SỐ VÒNG CỦA NGƯỜI BẬN NHẤT.
- *    Con số ra lớn hơn hẳn — đó chính là lợi ích của việc phân công.
- */
-export function computeCapacity(input: {
-  days: string[];
-  hoursOf: HoursOf;
-  units: { id: string }[];
-  unitMembers: Map<string, string[]>;
-}): Capacity {
-  const { days, hoursOf, units, unitMembers } = input;
-
-  const windows = buildWindows(days, hoursOf);
-  const availableMinutes = windows.reduce((sum, w) => sum + (w.end - w.start), 0);
-
-  const load = new Map<string, number>();
-  for (const u of units) {
-    for (const m of unitMembers.get(u.id) ?? []) load.set(m, (load.get(m) ?? 0) + 1);
+    if (s.kind !== 'OPENING' && op && s.day === op.day && a < toMinutes(op.endTime)) {
+      addOrder(s.id, `Phải bắt đầu sau họp khai mạc (kết thúc ${op.endTime})`);
+    }
+    if (s.kind !== 'CLOSING' && cl && s.day === cl.day && b > toMinutes(cl.startTime)) {
+      addOrder(s.id, `Phải kết thúc trước họp kết thúc (bắt đầu ${cl.startTime})`);
+    }
   }
 
-  const mode: Capacity['mode'] = load.size === 0 ? 'SEQUENTIAL' : 'PARALLEL';
-  const divisor =
-    units.length === 0 ? 0 : mode === 'SEQUENTIAL' ? units.length : Math.max(...load.values());
+  /* --- Trùng giờ: chung đánh giá viên, hoặc cùng một đơn vị --- */
+  for (let i = 0; i < sessions.length; i++) {
+    for (let j = i + 1; j < sessions.length; j++) {
+      const x = sessions[i];
+      const y = sessions[j];
+      if (x.day !== y.day) continue;
+      if (!(toMinutes(x.startTime) < toMinutes(y.endTime) && toMinutes(y.startTime) < toMinutes(x.endTime))) {
+        continue;
+      }
+      // Khai mạc / kết thúc đã có luật riêng ở trên, không báo trùng hai lần.
+      if (x.kind === 'OPENING' || x.kind === 'CLOSING' || y.kind === 'OPENING' || y.kind === 'CLOSING') {
+        continue;
+      }
 
-  const raw = divisor > 0 ? floorStep(availableMinutes / divisor) : 0;
+      if (x.kind === 'UNIT' && y.kind === 'UNIT' && x.unitId && x.unitId === y.unitId) {
+        addTime(x.id, 'Trùng giờ với một phiên khác của chính đơn vị này');
+        addTime(y.id, 'Trùng giờ với một phiên khác của chính đơn vị này');
+        continue;
+      }
 
-  /**
-   * Trần bằng buổi làm việc dài nhất.
-   *
-   * Không có trần thì phép chia cho ra những con số đúng mà vô dụng: 3 đơn vị
-   * giao cho 3 người, mỗi người một đơn vị, số vòng bằng 1, thế là mỗi đơn vị
-   * "được" trọn cả quỹ hai ngày. Không buổi nào chứa nổi nên thuật toán bỏ hết
-   * và trưởng đoàn mở tab ra thấy lịch trắng.
-   *
-   * Một phiên không thể vắt qua giờ nghỉ trưa hay sang ngày hôm sau, nên buổi
-   * dài nhất chính là giới hạn vật lý. Phần quỹ dôi ra thành chỗ trống trong
-   * lịch — đúng bản chất, và trưởng đoàn tự quyết dùng vào việc gì.
-   */
-  const longestWindow = windows.reduce((mx, w) => Math.max(mx, w.end - w.start), 0);
-  const capped = raw > longestWindow && longestWindow > 0;
-  const perUnitMinutes = Math.max(0, capped ? floorStep(longestWindow) : raw);
+      const mx = new Set(sessionMembers(x, unitMembers, allIds));
+      const shared = sessionMembers(y, unitMembers, allIds).filter((m) => mx.has(m));
+      if (shared.length === 0 && !(isMeeting(x.kind) || isMeeting(y.kind))) continue;
+
+      const who = shared.map((m) => nameById.get(m) ?? '?').join(', ');
+      const tail = who ? ` — ${who}` : '';
+      addTime(x.id, `Trùng giờ với ${label(y)} ${y.startTime}–${y.endTime}${tail}`);
+      addTime(y.id, `Trùng giờ với ${label(x)} ${x.startTime}–${x.endTime}${tail}`);
+    }
+  }
+
+  /* --- Đơn vị nào cũng phải được đánh giá --- */
+  const scheduled = new Set(sessions.filter((s) => s.kind === 'UNIT' && s.unitId).map((s) => s.unitId!));
+  const missing = units.filter((u) => !scheduled.has(u.id));
+  if (missing.length > 0) {
+    general.push(`Chưa xếp lịch cho: ${missing.map((u) => u.name).join(', ')}.`);
+  }
 
   return {
-    availableMinutes,
-    mode,
-    divisor,
-    perUnitMinutes,
-    atFloor: divisor > 0 && perUnitMinutes < MIN_SESSION,
-    capped,
-    longestWindow,
-    unitCount: units.length,
-    dayCount: days.length,
+    rowIssues,
+    general,
+    missingUnits: missing,
+    orderProblems: orderRows.size,
+    timeProblems: timeRows.size,
+    ok: rowIssues.size === 0 && general.length === 0,
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* Sinh lịch tự động                                                   */
+/* Tự xếp lịch                                                         */
 /* ------------------------------------------------------------------ */
 
-export type GenerateResult = {
-  sessions: Omit<PlanSession, 'id'>[];
-  capacity: Capacity;
-  /** Đơn vị không xếp được vào đâu. */
-  unplacedUnitIds: string[];
-};
+type Window = { day: string; start: number; end: number };
 
 /** Chia N phần vào các khung theo tỉ lệ độ dài, dùng phương pháp phần dư lớn nhất. */
 function shareOut(total: number, weights: number[]): number[] {
@@ -656,7 +429,6 @@ function shareOut(total: number, weights: number[]): number[] {
   const base = exact.map(Math.floor);
   let left = total - base.reduce((a, b) => a + b, 0);
 
-  // Phần dư rơi vào các khung có phần thập phân lớn nhất.
   const order = exact
     .map((v, i) => ({ i, frac: v - Math.floor(v) }))
     .sort((a, b) => b.frac - a.frac);
@@ -669,58 +441,77 @@ function shareOut(total: number, weights: number[]): number[] {
   return base;
 }
 
-export function generateTimedPlan(input: {
-  days: string[];
-  hoursOf: HoursOf;
+export type GenerateResult = {
+  sessions: Omit<PlanSession, 'id'>[];
+  /** Đơn vị không xếp được vào đâu — trưởng đoàn thêm tay. */
+  unplacedUnitIds: string[];
+};
+
+/**
+ * Dàn lịch tự động trong các ngày đã chọn.
+ *
+ * Khai mạc ở đầu ngày đầu, kết thúc ở cuối ngày cuối, đơn vị lấp phần giữa:
+ *  - Chưa phân công ai: cả đoàn đi cùng nhau, các đơn vị nối tiếp nhau và chia
+ *    đều toàn bộ thời gian còn lại.
+ *  - Đã phân công: các đơn vị khác người phụ trách chạy song song, người ôm
+ *    nhiều đơn vị thì các phiên của họ nối tiếp nhau, không ai bị trùng giờ.
+ */
+export function generatePlan(input: {
+  days: AuditDay[];
   units: { id: string }[];
   unitMembers: Map<string, string[]>;
   allMemberIds: string[];
+  openingMinutes: number;
+  closingMinutes: number;
 }): GenerateResult {
-  const { days, hoursOf, units, unitMembers, allMemberIds } = input;
+  const { days, units, unitMembers, allMemberIds, openingMinutes, closingMinutes } = input;
+  if (days.length === 0) return { sessions: [], unplacedUnitIds: units.map((u) => u.id) };
 
-  const capacity = computeCapacity({ days, hoursOf, units, unitMembers });
-  const windows = buildWindows(days, hoursOf);
+  const first = days[0];
+  const last = days[days.length - 1];
 
-  if (days.length === 0 || windows.length === 0) {
-    return { sessions: [], capacity, unplacedUnitIds: units.map((u) => u.id) };
-  }
-
-  const lastDay = days[days.length - 1];
-  // Họp khai mạc bám giờ vào của NGÀY ĐẦU, họp kết thúc bám giờ tan của NGÀY CUỐI.
-  const firstHours = hoursOf(days[0]);
-  const lastHours = hoursOf(lastDay);
-  const am = { s: toMinutes(firstHours.amStart) };
-  const pm = { e: toMinutes(lastHours.pmEnd) };
+  const opStart = toMinutes(first.start);
+  const opEnd = Math.min(opStart + openingMinutes, toMinutes(first.end));
+  const clEnd = toMinutes(last.end);
+  const clStart = Math.max(clEnd - closingMinutes, toMinutes(last.start));
 
   const out: Omit<PlanSession, 'id'>[] = [
-    {
-      day: days[0],
-      startTime: toHHMM(am.s),
-      endTime: toHHMM(ceilStep(am.s + firstHours.openingMinutes)),
-      kind: 'OPENING', unitId: null, note: null,
-    },
-    {
-      day: lastDay,
-      startTime: toHHMM(floorStep(pm.e - lastHours.closingMinutes)),
-      endTime: toHHMM(pm.e),
-      kind: 'CLOSING', unitId: null, note: null,
-    },
+    { day: first.date, startTime: toHHMM(opStart), endTime: toHHMM(opEnd), kind: 'OPENING', unitId: null, note: null },
+    { day: last.date, startTime: toHHMM(clStart), endTime: toHHMM(clEnd), kind: 'CLOSING', unitId: null, note: null },
   ];
 
-  const unplacedUnitIds: string[] = [];
+  /* Khoảng trống để xếp đơn vị: cả ngày, trừ phần của hai cuộc họp. */
+  const windows: Window[] = [];
+  for (const d of days) {
+    let s = toMinutes(d.start);
+    let e = toMinutes(d.end);
+    if (d.date === first.date) s = Math.max(s, opEnd);
+    if (d.date === last.date) e = Math.min(e, clStart);
+    s = ceilStep(s);
+    e = floorStep(e);
+    if (e - s >= STEP) windows.push({ day: d.date, start: s, end: e });
+  }
 
-  if (capacity.mode === 'SEQUENTIAL') {
-    /* --------- Cả đoàn đi cùng nhau: lấp kín từng buổi theo thứ tự --------- */
+  const unplacedUnitIds: string[] = [];
+  if (windows.length === 0 || units.length === 0) {
+    return { sessions: sortSessions(out), unplacedUnitIds: units.map((u) => u.id) };
+  }
+
+  const load = new Map<string, number>();
+  for (const u of units) {
+    for (const m of unitMembers.get(u.id) ?? []) load.set(m, (load.get(m) ?? 0) + 1);
+  }
+
+  if (load.size === 0) {
+    /* --------- Cả đoàn đi cùng nhau: lấp kín từng khoảng theo thứ tự --------- */
     const counts = shareOut(units.length, windows.map((w) => w.end - w.start));
     let idx = 0;
 
     windows.forEach((w, wi) => {
       const n = counts[wi];
       if (n <= 0) return;
-
       const span = w.end - w.start;
       const base = floorStep(span / n);
-      // Phần dư chia thành các khối 15 phút, cộng vào những đơn vị đầu buổi.
       const extras = Math.floor((span - base * n) / STEP);
 
       let t = w.start;
@@ -731,58 +522,49 @@ export function generateTimedPlan(input: {
           continue;
         }
         out.push({
-          day: w.day,
-          startTime: toHHMM(t),
-          endTime: toHHMM(Math.min(t + dur, w.end)),
+          day: w.day, startTime: toHHMM(t), endTime: toHHMM(Math.min(t + dur, w.end)),
           kind: 'UNIT', unitId: units[idx].id, note: null,
         });
         t += dur;
       }
     });
-
     for (; idx < units.length; idx++) unplacedUnitIds.push(units[idx].id);
   } else {
     /* --------- Đã phân công: xếp song song, tránh trùng người --------- */
-    const per = Math.max(MIN_SESSION, capacity.perUnitMinutes);
+    const available = windows.reduce((n, w) => n + (w.end - w.start), 0);
+    const longest = windows.reduce((mx, w) => Math.max(mx, w.end - w.start), 0);
+    const busiest = Math.max(...load.values());
+    // Chia theo số vòng của người bận nhất, không dài hơn khoảng trống dài nhất và nửa ngày.
+    const per = Math.max(
+      Math.min(MIN_SESSION, longest),
+      Math.min(floorStep(available / busiest), longest, MAX_SESSION),
+    );
 
-    const placed: { day: string; start: number; end: number; members: string[] }[] = [
-      { day: days[0], start: am.s, end: ceilStep(am.s + firstHours.openingMinutes), members: allMemberIds },
-      { day: lastDay, start: floorStep(pm.e - lastHours.closingMinutes), end: pm.e, members: allMemberIds },
-    ];
-
+    const placed: { day: string; start: number; end: number; members: string[] }[] = [];
     const free = (day: string, a: number, b: number, ms: string[]) =>
       !placed.some(
         (x) => x.day === day && a < x.end && x.start < b && x.members.some((y) => ms.includes(y)),
       );
 
-    // Đơn vị nhiều người phụ trách xếp trước — càng dễ đụng lịch người khác thì
-    // càng phải chọn chỗ khi còn nhiều ô trống. Thứ tự khai báo giữ làm tiêu chí phụ.
+    // Đơn vị nhiều người phụ trách xếp trước — càng dễ đụng lịch thì càng phải chọn chỗ sớm.
     const order = units
       .map((u, i) => ({ u, i }))
       .sort(
         (a, b) =>
-          (unitMembers.get(b.u.id)?.length ?? 0) - (unitMembers.get(a.u.id)?.length ?? 0) ||
-          a.i - b.i,
+          (unitMembers.get(b.u.id)?.length ?? 0) - (unitMembers.get(a.u.id)?.length ?? 0) || a.i - b.i,
       );
 
     for (const { u } of order) {
-      // Đơn vị chưa phân công ai vẫn phải có chỗ trong lịch — trước đây bị bỏ qua
-      // im lặng khiến trưởng đoàn mở tab ra thấy lịch trống trơn.
-      const ms = unitMembers.get(u.id) ?? [];
+      // Đơn vị chưa ai phụ trách thì cả đoàn đi — không được chồng lên ai.
+      const ms = unitMembers.get(u.id)?.length ? unitMembers.get(u.id)! : allMemberIds;
 
       let done = false;
       for (const w of windows) {
-        /**
-         * Buổi ngắn hơn thời lượng chuẩn vẫn dùng được, chỉ là phiên ngắn lại.
-         * Nếu đòi buổi nào cũng phải đủ `per` thì một buổi sáng 3 tiếng bị bỏ
-         * trống chỉ vì chuẩn là 3 tiếng rưỡi, rồi cả đoàn dồn hết vào buổi
-         * chiều — sớm hơn bao giờ cũng tốt hơn cho lịch đánh giá.
-         */
         const dur = Math.min(per, w.end - w.start);
         if (dur < Math.min(per, MIN_SESSION)) continue;
 
-        for (let t = ceilStep(w.start); t + dur <= w.end; t += STEP) {
-          if (ms.length > 0 && !free(w.day, t, t + dur, ms)) continue;
+        for (let t = w.start; t + dur <= w.end; t += STEP) {
+          if (!free(w.day, t, t + dur, ms)) continue;
           placed.push({ day: w.day, start: t, end: t + dur, members: ms });
           out.push({
             day: w.day, startTime: toHHMM(t), endTime: toHHMM(t + dur),
@@ -797,14 +579,7 @@ export function generateTimedPlan(input: {
     }
   }
 
-  const dayIndex = new Map(days.map((d, i) => [d, i]));
-  out.sort(
-    (a, b) =>
-      (dayIndex.get(a.day) ?? 0) - (dayIndex.get(b.day) ?? 0) ||
-      toMinutes(a.startTime) - toMinutes(b.startTime),
-  );
-
-  return { sessions: out, capacity, unplacedUnitIds };
+  return { sessions: sortSessions(out), unplacedUnitIds };
 }
 
 /* ------------------------------------------------------------------ */

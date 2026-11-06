@@ -28,18 +28,17 @@ const schema = z.object({
   closingMinutes: z.number().int().min(15).max(480).optional(),
   /**
    * Ngày thực hiện: danh sách ngày cụ thể, không cần liền nhau, mỗi ngày một
-   * khung giờ. Gửi kèm thì thay cả danh sách.
+   * khoảng giờ Từ – Đến. Gửi kèm thì thay cả danh sách.
    */
   days: z
     .array(
-      z.object({
-        date: z.string().regex(dayRe, 'Ngày không hợp lệ'),
-        amStart: z.string().regex(timeRe, 'Giờ không hợp lệ'),
-        amEnd: z.string().regex(timeRe, 'Giờ không hợp lệ'),
-        pmStart: z.string().regex(timeRe, 'Giờ không hợp lệ'),
-        pmEnd: z.string().regex(timeRe, 'Giờ không hợp lệ'),
-        meetingOnly: z.boolean().optional(),
-      }),
+      z
+        .object({
+          date: z.string().regex(dayRe, 'Ngày không hợp lệ'),
+          start: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+          end: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+        })
+        .refine((x) => x.end > x.start, { message: 'Giờ kết thúc của ngày phải sau giờ bắt đầu' }),
     )
     .min(1, 'Đợt phải có ít nhất một ngày thực hiện')
     .max(60, 'Tối đa 60 ngày thực hiện')
@@ -130,11 +129,7 @@ export async function PUT(req: Request, { params }: Ctx) {
         ...(d.closingMinutes ? { closingMinutes: d.closingMinutes } : {}),
         ...(days
           ? {
-              auditDays: days.map((x) => ({
-                date: x.date,
-                amStart: x.amStart, amEnd: x.amEnd, pmStart: x.pmStart, pmEnd: x.pmEnd,
-                ...(x.meetingOnly ? { meetingOnly: true } : {}),
-              })),
+              auditDays: days.map((x) => ({ date: x.date, start: x.start, end: x.end })),
               // Giữ hai cột cũ khớp theo — danh sách đợt, báo cáo, Excel vẫn đọc chúng.
               startDate: new Date(days[0].date),
               endDate: new Date(days[days.length - 1].date),

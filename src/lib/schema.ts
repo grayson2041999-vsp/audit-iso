@@ -3,11 +3,16 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
-/** Một ngày thực hiện của đợt, lưu trong cột `audits.audit_days`. */
+/**
+ * Một ngày thực hiện của đợt, lưu trong cột `audits.audit_days`: ngày và khoảng
+ * giờ Từ – Đến. Bản đầu của migration 014 ghi bốn mốc sáng/chiều (amStart…
+ * pmEnd) — vẫn đọc được qua `resolveAuditDays`.
+ */
 export type AuditDayRow = {
   date: string; // "YYYY-MM-DD"
-  amStart: string; amEnd: string; pmStart: string; pmEnd: string;
-  /** Ngày chỉ có cuộc họp — lịch tự động không xếp đơn vị vào. */
+  start?: string;
+  end?: string;
+  amStart?: string; amEnd?: string; pmStart?: string; pmEnd?: string;
   meetingOnly?: boolean;
 };
 
@@ -147,7 +152,7 @@ export const audits = pgTable('audits', {
   /**
    * Ngày thực hiện — danh sách NGÀY CỤ THỂ, đã sắp xếp, không cần liền nhau
    * (khai mạc một ngày, đánh giá vài ngày rời rạc, kết thúc một ngày khác).
-   * Mỗi ngày mang khung giờ riêng.
+   * Mỗi ngày có một khoảng giờ Từ – Đến, không chia buổi, không nghỉ trưa.
    *
    * Mảng rỗng = đợt chưa chuyển, đọc qua `resolveAuditDays` để suy ra từ
    * khoảng ngày. start_date / end_date luôn được ghi bằng ngày đầu và ngày cuối.

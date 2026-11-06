@@ -61,10 +61,6 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           location: audit.location ?? '',
           approverTitle: audit.approverTitle ?? '',
           approverName: audit.approverName ?? '',
-          amStart: audit.amStart,
-          amEnd: audit.amEnd,
-          pmStart: audit.pmStart,
-          pmEnd: audit.pmEnd,
           openingMinutes: audit.openingMinutes,
           closingMinutes: audit.closingMinutes,
         }}
