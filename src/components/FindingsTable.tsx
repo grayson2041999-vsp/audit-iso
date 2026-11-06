@@ -177,7 +177,7 @@ export function FindingsTable({
        * ("ISO 45001:2018 — 6.1.1, 6.1.2.1, 6.1.2.2") thay vì mỗi mã một dòng.
        */}
       <div className="card overflow-x-auto">
-        <table className="w-full min-w-[900px] border-collapse text-sm [&_td]:border-b [&_td]:border-slate-200 [&_th]:border-b [&_th]:border-slate-300 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6">
+        <table className="w-full min-w-[900px] border-collapse text-sm [&_td]:border-b [&_td]:border-slate-200 [&_th]:border-b [&_th]:border-slate-300 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6 [&_td]:border-r [&_th]:border-r [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
           <thead className="text-left text-xs font-semibold text-slate-500">
             <tr>
               <th className="w-32 px-4 py-4">Mã · Phân loại</th>

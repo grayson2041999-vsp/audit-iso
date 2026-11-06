@@ -373,7 +373,7 @@ export function CapaTracker({
           </div>
 
           <div className="card overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
+            <table className="w-full min-w-[720px] border-collapse text-sm [&_td]:border-slate-200 [&_th]:border-slate-200 [&_td]:border-r [&_th]:border-r [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">
               <thead className="text-left text-xs font-semibold text-slate-500">
                 <tr className="border-b border-slate-300">
                   <th className="w-24 py-3.5 pl-5 pr-3">Finding</th>
@@ -415,7 +415,7 @@ export function CapaTracker({
                     <td className="px-3 py-3.5">
                       <span className="tabular-nums text-slate-700">{formatDay(i.dueDate)}</span>
                       <div className="mt-1">
-                        <DueChip tone={i.tone} dueDate={i.dueDate} completedDate={i.completedDate} today={today} />
+                        <DueChip tone={i.tone} dueDate={i.dueDate} today={today} />
                       </div>
                     </td>
                     <td className="py-3.5 pl-3 pr-5" onClick={(e) => e.stopPropagation()}>
@@ -594,22 +594,14 @@ function StackedBar({
 }
 
 function DueChip({
-  tone, dueDate, completedDate, today,
+  tone, dueDate, today,
 }: {
   tone: DueTone;
   dueDate: string | null;
-  completedDate: string | null;
   today: string;
 }) {
-  if (tone === 'done') {
-    const late = dueDate && completedDate && completedDate > dueDate;
-    return (
-      <span className={`chip ${late ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>
-        Xong {completedDate ? formatDay(completedDate).slice(0, 5) : ''}
-        {late ? ' · trễ' : ''}
-      </span>
-    );
-  }
+  // Đã hoàn thành: không cần nhắc gì thêm, cột Trạng thái đã nói đủ.
+  if (tone === 'done') return null;
   if (tone === 'none') return <span className="chip bg-slate-100 text-slate-500">Chưa có hạn</span>;
   const d = daysUntil(dueDate!, today);
   if (tone === 'overdue') return <span className="chip bg-red-100 text-red-700">Trễ {-d} ngày</span>;
