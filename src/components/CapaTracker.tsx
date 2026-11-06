@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SeverityBadge } from './Badge';
 import { SEVERITY_LABELS, STANDARD_SHORT, type StandardCode } from '@/lib/iso';
@@ -68,7 +68,6 @@ export function CapaTracker({
   const [editing, setEditing] = useState<{ mode: 'new'; findingId?: string } | { mode: 'edit'; id: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const findingById = useMemo(() => new Map(findings.map((f) => [f.id, f])), [findings]);
 
@@ -141,9 +140,9 @@ export function CapaTracker({
 
   const hasFilter = Object.values(filters).some(Boolean);
 
-  function focusList(patch: Partial<Filters>) {
-    setFilters({ ...NO_FILTER, ...patch });
-    requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  /** Bấm một con số ở dải tổng quan: lọc theo nó, giữ nguyên đơn vị đang chọn. Bấm lại thì bỏ. */
+  function toggleFilter<K extends 'status' | 'due'>(key: K, value: Filters[K]) {
+    setFilters((f) => ({ ...f, [key]: f[key] === value ? '' : value }));
   }
 
   /* ---------------- Lưu ---------------- */
@@ -183,7 +182,6 @@ export function CapaTracker({
   async function saveDraft(draft: Draft): Promise<boolean> {
     const body = {
       content: draft.content,
-      owner: draft.owner.trim() || null,
       dueDate: draft.dueDate || null,
       status: draft.status,
       completedDate: draft.status === 'DONE' ? draft.completedDate || null : null,
@@ -225,49 +223,56 @@ export function CapaTracker({
     <div className="space-y-6">
       {error && <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</p>}
 
-      {/* ============ Tổng quan ============ */}
-      <div className="grid gap-3 sm:gap-4 lg:grid-cols-4">
-        <section className="card p-5 sm:p-6 lg:col-span-2">
-          <p className="text-xs font-medium text-slate-500">Tiến độ khắc phục chung</p>
-          <div className="mt-2 flex items-baseline gap-3">
-            <span className="font-display text-4xl font-semibold tabular-nums text-ink">{percent(done, total)}%</span>
-            <span className="text-sm text-slate-500">
-              {done} / {total} mục hoàn thành
-            </span>
-          </div>
-          <StackedBar counts={byStatus} total={total} className="mt-4 h-2.5" />
-          <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-600">
+      {/* ============ Tổng quan: một dải mỏng ============ */}
+      <section className="card flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4 sm:px-6">
+        <div className="flex items-baseline gap-2">
+          <span className="font-display text-3xl font-semibold tabular-nums text-ink">{percent(done, total)}%</span>
+          <span className="text-sm text-slate-500">
+            hoàn thành · {done}/{total} mục
+          </span>
+        </div>
+
+        <div className="min-w-[12rem] flex-1">
+          <StackedBar counts={byStatus} total={total} className="h-2" />
+          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
             {CAPA_STATUSES.map((s) => (
               <li key={s}>
-                <button onClick={() => focusList({ status: s })} className="flex items-center gap-1.5 hover:text-ink">
+                <button
+                  onClick={() => toggleFilter('status', s)}
+                  className={`flex items-center gap-1.5 rounded-full px-1.5 py-0.5 hover:text-ink ${
+                    filters.status === s ? 'bg-slate-100 font-medium text-ink' : ''
+                  }`}
+                >
                   <span className={`h-2 w-2 rounded-full ${CAPA_BAR[s]}`} />
                   {CAPA_LABEL[s]} <strong className="tabular-nums text-ink">{byStatus[s]}</strong>
                 </button>
               </li>
             ))}
           </ul>
-        </section>
+        </div>
 
-        <StatCard
-          label="Trễ hạn"
-          value={overdue}
-          hint="Chưa hoàn thành, đã quá thời hạn"
-          tone={overdue > 0 ? 'text-red-600' : 'text-slate-400'}
-          onClick={overdue > 0 ? () => focusList({ due: 'overdue' }) : undefined}
-        />
-        <StatCard
-          label="Sắp đến hạn"
-          value={soon}
-          hint="Đến hạn trong 7 ngày tới"
-          tone={soon > 0 ? 'text-amber-600' : 'text-slate-400'}
-          onClick={soon > 0 ? () => focusList({ due: 'soon' }) : undefined}
-        />
-      </div>
+        <div className="flex gap-2">
+          <AlertPill
+            label="Trễ hạn"
+            value={overdue}
+            active={filters.due === 'overdue'}
+            tone="red"
+            onClick={() => toggleFilter('due', 'overdue')}
+          />
+          <AlertPill
+            label="Sắp đến hạn"
+            value={soon}
+            active={filters.due === 'soon'}
+            tone="amber"
+            onClick={() => toggleFilter('due', 'soon')}
+          />
+        </div>
+      </section>
 
       {ncWithout.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-card bg-amber-50 px-5 py-4 text-sm text-amber-900">
+        <div className="flex flex-wrap items-center gap-3 rounded-card bg-amber-50 px-5 py-3 text-sm text-amber-900">
           <span>
-            Có <strong>{ncWithout.length}</strong> sự không phù hợp (Major / Minor NC) chưa có mục khắc phục:{' '}
+            <strong>{ncWithout.length}</strong> sự không phù hợp (Major / Minor NC) chưa có mục khắc phục:{' '}
             {ncWithout.map((f) => f.code).join(', ')}.
           </span>
           <button onClick={quickCreate} disabled={busy} className="btn-primary ml-auto !px-4 !py-1.5 text-sm">
@@ -276,178 +281,164 @@ export function CapaTracker({
         </div>
       )}
 
-      {/* ============ Theo đơn vị ============ */}
-      <section className="card overflow-x-auto">
-        <div className="px-6 pt-5">
-          <h2 className="text-lg font-semibold">Tiến độ theo đơn vị</h2>
-          <p className="mt-0.5 text-sm text-slate-500">Bấm một đơn vị để xem các mục của đơn vị đó.</p>
-        </div>
-        <table className="mt-3 w-full min-w-[640px] border-collapse text-sm">
-          <thead className="text-left text-xs font-semibold text-slate-500">
-            <tr className="border-b border-slate-200">
-              <th className="px-6 py-2.5">Đơn vị</th>
-              <th className="w-20 px-3 py-2.5 text-right">Số mục</th>
-              <th className="w-[38%] px-3 py-2.5">Tình trạng</th>
-              <th className="w-24 px-3 py-2.5 text-right">Hoàn thành</th>
-              <th className="w-48 px-6 py-2.5 text-right">Cảnh báo</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="grid items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        {/* ============ Đơn vị: vừa là số liệu, vừa là bộ lọc ============ */}
+        <aside className="lg:sticky lg:top-20">
+          {/* Điện thoại: một hàng nút trượt ngang */}
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
+            <UnitPill name="Tất cả" pct={percent(done, total)} active={!filters.unit} onClick={() => setFilters((f) => ({ ...f, unit: '' }))} />
             {unitGroups.map((g) => (
-              <tr
+              <UnitPill
                 key={g.key}
-                onClick={() => focusList({ unit: g.key })}
-                className="cursor-pointer border-b border-slate-100 last:border-b-0 hover:bg-frost"
-              >
-                <td className="px-6 py-3 font-medium text-ink">{g.name}</td>
-                <td className="px-3 py-3 text-right tabular-nums text-slate-600">{g.total || '—'}</td>
-                <td className="px-3 py-3">
-                  {g.total > 0 ? (
-                    <StackedBar counts={g.counts} total={g.total} className="h-2" />
-                  ) : (
-                    <span className="text-xs text-slate-400">Chưa có mục khắc phục</span>
-                  )}
-                </td>
-                <td className="px-3 py-3 text-right">
-                  {g.total > 0 ? (
-                    <span className={`font-semibold tabular-nums ${g.done === g.total ? 'text-emerald-700' : 'text-ink'}`}>
-                      {percent(g.done, g.total)}%
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
-                </td>
-                <td className="px-6 py-3 text-right">
-                  <span className="inline-flex flex-wrap justify-end gap-1">
-                    {g.overdue > 0 && (
-                      <span className="chip whitespace-nowrap bg-red-50 text-red-700">Trễ hạn {g.overdue}</span>
-                    )}
-                    {g.missing > 0 && (
-                      <span className="chip whitespace-nowrap bg-amber-50 text-amber-800" title="Sự không phù hợp chưa có mục khắc phục">
-                        {g.missing} NC chưa có mục
-                      </span>
-                    )}
-                  </span>
-                </td>
-              </tr>
+                name={g.name}
+                pct={g.total ? percent(g.done, g.total) : null}
+                alert={g.overdue > 0}
+                active={filters.unit === g.key}
+                onClick={() => setFilters((f) => ({ ...f, unit: f.unit === g.key ? '' : g.key }))}
+              />
             ))}
-          </tbody>
-        </table>
-      </section>
+          </div>
 
-      {/* ============ Danh sách mục ============ */}
-      <section ref={listRef} className="scroll-mt-4 space-y-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <h2 className="mr-auto text-lg font-semibold">Chi tiết các mục khắc phục</h2>
-          <button onClick={() => setEditing({ mode: 'new' })} className="btn-primary">
-            + Thêm mục khắc phục
-          </button>
-        </div>
+          {/* Màn hình rộng: cột danh sách đơn vị */}
+          <nav className="card hidden max-h-[calc(100vh-7rem)] overflow-y-auto p-2 lg:block">
+            <p className="px-3 pb-1 pt-2 text-xs font-semibold text-slate-500">Tiến độ theo đơn vị</p>
+            <UnitRow
+              name="Tất cả đơn vị"
+              total={total}
+              done={done}
+              counts={byStatus}
+              overdue={overdue}
+              missing={ncWithout.length}
+              active={!filters.unit}
+              onClick={() => setFilters((f) => ({ ...f, unit: '' }))}
+            />
+            <div className="my-1 border-t border-slate-100" />
+            {unitGroups.map((g) => (
+              <UnitRow
+                key={g.key}
+                name={g.name}
+                total={g.total}
+                done={g.done}
+                counts={g.counts}
+                overdue={g.overdue}
+                missing={g.missing}
+                active={filters.unit === g.key}
+                onClick={() => setFilters((f) => ({ ...f, unit: f.unit === g.key ? '' : g.key }))}
+              />
+            ))}
+          </nav>
+        </aside>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterSelect
-            label="Đơn vị"
-            value={filters.unit}
-            onChange={(v) => setFilters((f) => ({ ...f, unit: v }))}
-            options={unitGroups.map((g) => ({ id: g.key, label: g.name }))}
-          />
-          <FilterSelect
-            label="Phân loại"
-            value={filters.severity}
-            onChange={(v) => setFilters((f) => ({ ...f, severity: v }))}
-            options={SEVERITY_ORDER.map((s) => ({ id: s, label: SEVERITY_LABELS[s] }))}
-          />
-          <FilterSelect
-            label="Trạng thái"
-            value={filters.status}
-            onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
-            options={CAPA_STATUSES.map((s) => ({ id: s, label: CAPA_LABEL[s] }))}
-          />
-          <FilterSelect
-            label="Thời hạn"
-            value={filters.due}
-            onChange={(v) => setFilters((f) => ({ ...f, due: v as Filters['due'] }))}
-            options={[
-              { id: 'overdue', label: 'Trễ hạn' },
-              { id: 'soon', label: 'Sắp đến hạn (7 ngày)' },
-            ]}
-          />
-          {hasFilter && (
-            <button onClick={() => setFilters(NO_FILTER)} className="btn-ghost">
-              Bỏ lọc
+        {/* ============ Danh sách mục ============ */}
+        <section className="min-w-0 space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <h2 className="mr-auto text-lg font-semibold">
+              {filters.unit ? unitGroups.find((g) => g.key === filters.unit)?.name : 'Tất cả các mục khắc phục'}
+            </h2>
+            <button onClick={() => setEditing({ mode: 'new' })} className="btn-primary">
+              + Thêm mục khắc phục
             </button>
-          )}
-          <span className="ml-auto pb-2 text-sm text-slate-500">
-            {hasFilter ? `${filtered.length} / ${total} mục` : `${total} mục`}
-          </span>
-        </div>
+          </div>
 
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[960px] border-collapse text-sm">
-            <thead className="text-left text-xs font-semibold text-slate-500">
-              <tr className="border-b border-slate-300">
-                <th className="w-28 py-3.5 pl-6 pr-3">Finding</th>
-                <th className="w-40 px-3 py-3.5">Đơn vị</th>
-                <th className="px-3 py-3.5">Nội dung công việc cần thực hiện</th>
-                <th className="w-36 px-3 py-3.5">Phụ trách</th>
-                <th className="w-36 px-3 py-3.5">Thời hạn</th>
-                <th className="w-44 py-3.5 pl-3 pr-6">Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-400">
-                    {total === 0 ? 'Chưa có mục khắc phục nào. Bấm "+ Thêm mục khắc phục" để bắt đầu.' : 'Không có mục nào khớp bộ lọc.'}
-                  </td>
+          <div className="flex flex-wrap items-end gap-3">
+            <FilterSelect
+              label="Phân loại"
+              value={filters.severity}
+              onChange={(v) => setFilters((f) => ({ ...f, severity: v }))}
+              options={SEVERITY_ORDER.map((s) => ({ id: s, label: SEVERITY_LABELS[s] }))}
+            />
+            <FilterSelect
+              label="Trạng thái"
+              value={filters.status}
+              onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+              options={CAPA_STATUSES.map((s) => ({ id: s, label: CAPA_LABEL[s] }))}
+            />
+            <FilterSelect
+              label="Thời hạn"
+              value={filters.due}
+              onChange={(v) => setFilters((f) => ({ ...f, due: v as Filters['due'] }))}
+              options={[
+                { id: 'overdue', label: 'Trễ hạn' },
+                { id: 'soon', label: 'Sắp đến hạn (7 ngày)' },
+              ]}
+            />
+            {hasFilter && (
+              <button onClick={() => setFilters(NO_FILTER)} className="btn-ghost">
+                Bỏ lọc
+              </button>
+            )}
+            <span className="ml-auto pb-2 text-sm text-slate-500">
+              {hasFilter ? `${filtered.length} / ${total} mục` : `${total} mục`}
+            </span>
+          </div>
+
+          <div className="card overflow-x-auto">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
+              <thead className="text-left text-xs font-semibold text-slate-500">
+                <tr className="border-b border-slate-300">
+                  <th className="w-24 py-3.5 pl-5 pr-3">Finding</th>
+                  {!filters.unit && <th className="w-36 px-3 py-3.5">Đơn vị</th>}
+                  <th className="px-3 py-3.5">Nội dung công việc cần thực hiện</th>
+                  <th className="w-32 px-3 py-3.5">Thời hạn</th>
+                  <th className="w-40 py-3.5 pl-3 pr-5">Trạng thái</th>
                 </tr>
-              )}
-              {filtered.map((i: Item) => (
-                <tr
-                  key={i.id}
-                  onClick={() => setEditing({ mode: 'edit', id: i.id })}
-                  className={`cursor-pointer border-b border-slate-200 align-top last:border-b-0 hover:bg-frost ${
-                    i.tone === 'overdue' ? 'bg-red-50/40' : ''
-                  }`}
-                >
-                  <td className="py-3.5 pl-6 pr-3">
-                    <span className="font-mono text-xs text-slate-600">{i.finding.code}</span>
-                    <div className="mt-1.5">
-                      <SeverityBadge value={i.finding.severity} short />
-                    </div>
-                  </td>
-                  <td className="px-3 py-3.5 text-slate-700">{i.finding.unitName}</td>
-                  <td className="px-3 py-3.5">
-                    <p className="line-clamp-3 whitespace-pre-line text-ink">{i.content}</p>
-                    <p className="mt-1 line-clamp-1 text-xs text-slate-500">Finding: {i.finding.title}</p>
-                  </td>
-                  <td className="px-3 py-3.5 text-slate-700">{i.owner || <span className="text-slate-400">—</span>}</td>
-                  <td className="px-3 py-3.5">
-                    <span className="tabular-nums text-slate-700">{formatDay(i.dueDate)}</span>
-                    <div className="mt-1">
-                      <DueChip tone={i.tone} dueDate={i.dueDate} completedDate={i.completedDate} today={today} />
-                    </div>
-                  </td>
-                  <td className="py-3.5 pl-3 pr-6" onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={i.status}
-                      disabled={busy}
-                      onChange={(e) => quickStatus(i.id, e.target.value as CapaStatus)}
-                      className={`w-full cursor-pointer rounded-full border-0 px-3 py-1.5 text-xs font-medium ${CAPA_STYLE[i.status]}`}
-                    >
-                      {CAPA_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {CAPA_LABEL[s]}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={filters.unit ? 4 : 5} className="px-6 py-10 text-center text-sm text-slate-400">
+                      {total === 0
+                        ? 'Chưa có mục khắc phục nào. Bấm "+ Thêm mục khắc phục" để bắt đầu.'
+                        : 'Không có mục nào khớp bộ lọc.'}
+                    </td>
+                  </tr>
+                )}
+                {filtered.map((i: Item) => (
+                  <tr
+                    key={i.id}
+                    onClick={() => setEditing({ mode: 'edit', id: i.id })}
+                    className={`cursor-pointer border-b border-slate-200 align-top last:border-b-0 hover:bg-frost ${
+                      i.tone === 'overdue' ? 'bg-red-50/40' : ''
+                    }`}
+                  >
+                    <td className="py-3.5 pl-5 pr-3">
+                      <span className="font-mono text-xs text-slate-600">{i.finding.code}</span>
+                      <div className="mt-1.5">
+                        <SeverityBadge value={i.finding.severity} short />
+                      </div>
+                    </td>
+                    {!filters.unit && <td className="px-3 py-3.5 text-slate-700">{i.finding.unitName}</td>}
+                    <td className="px-3 py-3.5">
+                      <p className="line-clamp-3 whitespace-pre-line text-ink">{i.content}</p>
+                      <p className="mt-1 line-clamp-1 text-xs text-slate-500">Finding: {i.finding.title}</p>
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <span className="tabular-nums text-slate-700">{formatDay(i.dueDate)}</span>
+                      <div className="mt-1">
+                        <DueChip tone={i.tone} dueDate={i.dueDate} completedDate={i.completedDate} today={today} />
+                      </div>
+                    </td>
+                    <td className="py-3.5 pl-3 pr-5" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={i.status}
+                        disabled={busy}
+                        onChange={(e) => quickStatus(i.id, e.target.value as CapaStatus)}
+                        className={`w-full cursor-pointer rounded-full border-0 px-3 py-1.5 text-xs font-medium ${CAPA_STYLE[i.status]}`}
+                      >
+                        {CAPA_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {CAPA_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
 
       {editing && (
         <CapaDrawer
@@ -483,28 +474,98 @@ export function CapaTracker({
 
 /* ------------------------------------------------------------------ */
 
-function StatCard({
-  label, value, hint, tone, onClick,
+function AlertPill({
+  label, value, active, tone, onClick,
 }: {
   label: string;
   value: number;
-  hint: string;
-  tone: string;
-  onClick?: () => void;
+  active: boolean;
+  tone: 'red' | 'amber';
+  onClick: () => void;
 }) {
-  const Tag = onClick ? 'button' : 'div';
+  const on = value > 0;
+  const color = !on
+    ? 'bg-slate-50 text-slate-400'
+    : tone === 'red'
+      ? 'bg-red-50 text-red-700'
+      : 'bg-amber-50 text-amber-800';
+  const ring = active ? (tone === 'red' ? 'ring-2 ring-red-400' : 'ring-2 ring-amber-400') : '';
   return (
-    <Tag
+    <button
       onClick={onClick}
-      className={`card block p-5 text-left sm:p-6 ${onClick ? 'transition-shadow hover:shadow-subtle' : ''}`}
+      disabled={!on && !active}
+      className={`flex items-baseline gap-2 rounded-xl px-4 py-2 text-left ${color} ${ring}`}
+      title={active ? 'Bấm để bỏ lọc' : `Lọc các mục ${label.toLowerCase()}`}
     >
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className={`mt-2 font-display text-4xl font-semibold tabular-nums ${tone}`}>{value}</p>
-      <p className="mt-1 text-xs text-slate-500">
-        {hint}
-        {onClick && <span className="text-brand-700"> · Xem</span>}
-      </p>
-    </Tag>
+      <span className="font-display text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="text-xs font-medium">{label}</span>
+    </button>
+  );
+}
+
+/** Một dòng đơn vị ở cột bên trái: tên, %, thanh tình trạng, cảnh báo. */
+function UnitRow({
+  name, total, done, counts, overdue, missing, active, onClick,
+}: {
+  name: string;
+  total: number;
+  done: number;
+  counts: Record<CapaStatus, number>;
+  overdue: number;
+  missing: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`block w-full rounded-xl px-3 py-2.5 text-left transition-colors ${
+        active ? 'bg-brand-50 ring-1 ring-brand-200' : 'hover:bg-frost'
+      }`}
+    >
+      <span className="flex items-baseline gap-2">
+        <span className={`min-w-0 flex-1 truncate text-sm ${active ? 'font-semibold text-brand-800' : 'font-medium text-ink'}`} title={name}>
+          {name}
+        </span>
+        <span
+          className={`text-sm font-semibold tabular-nums ${
+            total === 0 ? 'text-slate-300' : done === total ? 'text-emerald-700' : 'text-ink'
+          }`}
+        >
+          {total === 0 ? '—' : `${percent(done, total)}%`}
+        </span>
+      </span>
+      {total > 0 && <StackedBar counts={counts} total={total} className="mt-1.5 h-1.5" />}
+      <span className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
+        <span>{total > 0 ? `${done}/${total} mục` : 'Chưa có mục'}</span>
+        {overdue > 0 && <span className="font-medium text-red-600">Trễ {overdue}</span>}
+        {missing > 0 && <span className="font-medium text-amber-700">{missing} NC chưa có mục</span>}
+      </span>
+    </button>
+  );
+}
+
+/** Nút đơn vị dạng viên, dùng trên điện thoại. */
+function UnitPill({
+  name, pct, active, alert, onClick,
+}: {
+  name: string;
+  pct: number | null;
+  active: boolean;
+  alert?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm ${
+        active ? 'border-brand-600 bg-brand-50 font-medium text-brand-800' : 'border-slate-200 bg-white text-slate-700'
+      }`}
+    >
+      {alert && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
+      <span className="max-w-[10rem] truncate">{name}</span>
+      <span className="tabular-nums text-slate-500">{pct === null ? '—' : `${pct}%`}</span>
+    </button>
   );
 }
 
@@ -592,7 +653,6 @@ function FilterSelect({
 type Draft = {
   findingId: string;
   content: string;
-  owner: string;
   dueDate: string;
   status: CapaStatus;
   completedDate: string;
@@ -632,7 +692,6 @@ function CapaDrawer({
   const [d, setD] = useState<Draft>(() => ({
     findingId: row?.findingId ?? initialFinding?.id ?? '',
     content: row?.content ?? '',
-    owner: row?.owner ?? '',
     dueDate: row?.dueDate ?? initialFinding?.dueDate ?? '',
     status: row?.status ?? 'TODO',
     completedDate: row?.completedDate ?? '',
@@ -737,15 +796,29 @@ function CapaDrawer({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label">Người / bộ phận phụ trách</label>
-              <input value={d.owner} onChange={(e) => set('owner', e.target.value)} className="input" />
+          <div>
+            <label className="label">Thời hạn</label>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="date"
+                value={d.dueDate}
+                onChange={(e) => set('dueDate', e.target.value)}
+                className="input !w-auto"
+              />
+              {finding?.dueDate && finding.dueDate !== d.dueDate && (
+                <button
+                  type="button"
+                  onClick={() => set('dueDate', finding.dueDate!)}
+                  className="text-xs text-brand-700 hover:underline"
+                >
+                  Dùng hạn gợi ý của finding ({formatDay(finding.dueDate)})
+                </button>
+              )}
             </div>
-            <div>
-              <label className="label">Thời hạn</label>
-              <input type="date" value={d.dueDate} onChange={(e) => set('dueDate', e.target.value)} className="input" />
-            </div>
+            <p className="mt-1.5 text-xs text-slate-500">
+              Thời hạn riêng của mục này — sửa ở đây không đổi các mục khác. Hạn 30 ngày (Major) /
+              60 ngày (Minor) chỉ là gợi ý lúc tạo.
+            </p>
           </div>
 
           <div>
