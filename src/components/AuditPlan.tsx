@@ -599,7 +599,7 @@ export function AuditPlan({
             <CheckItem ok={check.conflictRows === 0} warnOnly>
               {check.conflictRows === 0
                 ? 'Không ai bị xếp trùng giờ'
-                : `${check.conflictRows} dòng bị trùng giờ — chỉ là cảnh báo, vẫn lưu được`}
+                : `${check.conflictRows} dòng bị trùng giờ`}
             </CheckItem>
           </ul>
           {(!check.ok || check.conflictRows > 0) && (

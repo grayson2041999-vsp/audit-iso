@@ -178,10 +178,9 @@ export async function GET(_req: Request, { params }: Ctx) {
         tableHeader: true,
         children: [
           cell('TT', { bold: true, width: 6, shade: 'F1F5F9', align: AlignmentType.CENTER }),
-          cell('Họ và tên', { bold: true, width: 24, shade: 'F1F5F9' }),
-          cell('Vai trò', { bold: true, width: 18, shade: 'F1F5F9' }),
-          cell('Đơn vị công tác', { bold: true, width: 22, shade: 'F1F5F9' }),
-          cell('Đơn vị được phân công', { bold: true, width: 30, shade: 'F1F5F9' }),
+          cell('Họ và tên', { bold: true, width: 30, shade: 'F1F5F9' }),
+          cell('Vai trò', { bold: true, width: 20, shade: 'F1F5F9' }),
+          cell('Đơn vị được phân công', { bold: true, width: 44, shade: 'F1F5F9' }),
         ],
       }),
       ...members.map((m, i) =>
@@ -190,7 +189,6 @@ export async function GET(_req: Request, { params }: Ctx) {
             cell(String(i + 1), { align: AlignmentType.CENTER }),
             cell(m.fullName),
             cell(m.fullName === audit.leadAuditor || m.isLeader === '1' ? 'Trưởng đoàn' : 'Đánh giá viên'),
-            cell(m.homeUnit ?? '—'),
             cell(
               (memberUnits.get(m.id) ?? [])
                 .map((u) => unitById.get(u)?.name)
@@ -334,20 +332,31 @@ export async function GET(_req: Request, { params }: Ctx) {
 
   const buffer = await Packer.toBuffer(doc);
 
-  const slug = audit.organization
+  /**
+   * Tên file: "Chuong trinh danh gia - <Tên đợt đánh giá>.docx".
+   *
+   * Gửi hai bản tên: `filename*` giữ nguyên dấu tiếng Việt của tên đợt (trình
+   * duyệt hiện đại đều dùng bản này), `filename` bỏ dấu cho trình duyệt cũ.
+   * Bỏ các ký tự Windows / macOS không cho đặt trong tên file.
+   */
+  const title = audit.title.replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const fileName = `Chuong trinh danh gia - ${title || 'Dot danh gia'}.docx`;
+  // encodeURIComponent để lọt ' ( ) — ba ký tự này không được đứng trần trong filename*.
+  const encodeRfc5987 = (v: string) =>
+    encodeURIComponent(v).replace(/['()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  const asciiName = fileName
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
-    .replace(/[^\w]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+    .replace(/[^\x20-\x7e]/g, '');
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': `attachment; filename="${slug || 'chuong-trinh'}_chuong-trinh-danh-gia.docx"`,
+      'Content-Disposition':
+        `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeRfc5987(fileName)}`,
       'Cache-Control': 'no-store',
     },
   });
