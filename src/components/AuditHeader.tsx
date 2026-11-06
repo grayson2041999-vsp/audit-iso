@@ -3,6 +3,7 @@ import {
   STANDARD_SHORT, STANDARD_STYLE, STANDARD_DOMAIN, sortStandards,
 } from '@/lib/iso';
 import { AUDIT_STATUS_LABELS, AUDIT_STATUS_STYLE } from '@/lib/audit-access';
+import { formatDayList } from '@/lib/plan';
 
 type Audit = {
   organization: string;
@@ -12,6 +13,8 @@ type Audit = {
   leadAuditor: string | null;
   startDate: Date | null;
   endDate: Date | null;
+  /** Ngày thực hiện cụ thể (migration 014). Rỗng thì hiện khoảng start → end. */
+  auditDays?: { date: string }[] | null;
   status: string;
 };
 
@@ -28,12 +31,15 @@ type Audit = {
 export function AuditHeader({ audit, publicView = false }: { audit: Audit; publicView?: boolean }) {
   const standards = sortStandards(audit.standards);
 
+  const listed = (audit.auditDays ?? []).map((d) => d.date);
   const days =
-    audit.startDate && audit.endDate
-      ? Math.round(
-          (new Date(audit.endDate).getTime() - new Date(audit.startDate).getTime()) / 86_400_000,
-        ) + 1
-      : 0;
+    listed.length > 0
+      ? listed.length
+      : audit.startDate && audit.endDate
+        ? Math.round(
+            (new Date(audit.endDate).getTime() - new Date(audit.startDate).getTime()) / 86_400_000,
+          ) + 1
+        : 0;
 
   return (
     <div className={publicView ? 'text-center' : ''}>
@@ -50,7 +56,9 @@ export function AuditHeader({ audit, publicView = false }: { audit: Audit; publi
       <dl className={`mt-6 space-y-3 text-sm ${publicView ? 'inline-block text-left' : ''}`}>
         <Row label="Thời gian">
           <span className="font-medium">
-            {formatDateOnly(audit.startDate)} → {formatDateOnly(audit.endDate)}
+            {listed.length > 0
+              ? formatDayList(listed)
+              : `${formatDateOnly(audit.startDate)} → ${formatDateOnly(audit.endDate)}`}
           </span>
           {days > 0 && <span className="ml-2 text-slate-500">({days} ngày)</span>}
         </Row>

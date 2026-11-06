@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 import { assignments, auditMembers, auditSessions, auditUnits } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
 import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
-import { KIND_LABELS, formatDayLong, listDays, toMinutes } from '@/lib/plan';
+import { KIND_LABELS, formatDayList, formatDayLong, resolveAuditDays, toMinutes } from '@/lib/plan';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -17,11 +17,6 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const FONT = 'Times New Roman';
 const GRAY = 'DDDDDD';
-
-const dmy = (x: Date | null) =>
-  x
-    ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(x)
-    : '';
 
 /* ------------------------------------------------------------------ */
 /* Khối dựng sẵn                                                       */
@@ -120,7 +115,8 @@ export async function GET(_req: Request, { params }: Ctx) {
     memberUnits.set(l.memberId, [...(memberUnits.get(l.memberId) ?? []), l.unitId]);
   }
 
-  const days = listDays(audit.startDate, audit.endDate);
+  // Ngày thực hiện cụ thể — rời rạc được (khai mạc, các ngày đánh giá, kết thúc).
+  const days = resolveAuditDays(audit).map((d) => d.date);
   const standards = audit.standards
     .map((s) => STANDARD_SHORT[s as StandardCode] ?? s)
     .join('; ');
@@ -150,7 +146,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       new TableRow({
         children: [
           cell('Thời gian', { bold: true, shade: 'F1F5F9' }),
-          cell(`${dmy(audit.startDate)} – ${dmy(audit.endDate)}   (${days.length} ngày)`),
+          cell(`${formatDayList(days)}   (${days.length} ngày)`),
         ],
       }),
       new TableRow({

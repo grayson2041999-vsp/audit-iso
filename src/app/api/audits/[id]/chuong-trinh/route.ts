@@ -4,12 +4,14 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { auditSessions, audits } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
+import { formatDayLong, resolveAuditDays } from '@/lib/plan';
 
 export const runtime = 'nodejs';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+const dayRe = /^\d{4}-\d{2}-\d{2}$/;
 
 const schema = z.object({
   /* --- Thông tin chương trình --- */
@@ -24,24 +26,30 @@ const schema = z.object({
   pmEnd: z.string().regex(timeRe, 'Giờ không hợp lệ').optional(),
   openingMinutes: z.number().int().min(15).max(480).optional(),
   closingMinutes: z.number().int().min(15).max(480).optional(),
-  /** Khung giờ riêng từng ngày, theo thứ tự ngày trong đợt. */
-  dayHours: z
+  /**
+   * Ngày thực hiện: danh sách ngày cụ thể, không cần liền nhau, mỗi ngày một
+   * khung giờ. Gửi kèm thì thay cả danh sách.
+   */
+  days: z
     .array(
       z.object({
+        date: z.string().regex(dayRe, 'Ngày không hợp lệ'),
         amStart: z.string().regex(timeRe, 'Giờ không hợp lệ'),
         amEnd: z.string().regex(timeRe, 'Giờ không hợp lệ'),
         pmStart: z.string().regex(timeRe, 'Giờ không hợp lệ'),
         pmEnd: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+        meetingOnly: z.boolean().optional(),
       }),
     )
-    .max(60)
+    .min(1, 'Đợt phải có ít nhất một ngày thực hiện')
+    .max(60, 'Tối đa 60 ngày thực hiện')
     .optional(),
 
   /* --- Toàn bộ lịch, ghi đè --- */
   sessions: z
     .array(
       z.object({
-        day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        day: z.string().regex(dayRe),
         startTime: z.string().regex(timeRe, 'Giờ không hợp lệ'),
         endTime: z.string().regex(timeRe, 'Giờ không hợp lệ'),
         kind: z.enum(['OPENING', 'UNIT', 'INTERNAL', 'CLOSING']),
@@ -76,6 +84,34 @@ export async function PUT(req: Request, { params }: Ctx) {
   }
   const d = parsed.data;
 
+  /* ---- Ngày thực hiện: sắp xếp, không trùng, lịch không được nằm ngoài ---- */
+  const days = d.days ? [...d.days].sort((a, b) => a.date.localeCompare(b.date)) : null;
+  if (days) {
+    const dup = days.find((x, i) => i > 0 && x.date === days[i - 1].date);
+    if (dup) {
+      return NextResponse.json(
+        { error: `Ngày ${formatDayLong(dup.date)} bị khai hai lần.` },
+        { status: 400 },
+      );
+    }
+  }
+  if (d.sessions) {
+    const allowed = new Set(
+      (days ?? resolveAuditDays(owned.audit)).map((x) => x.date),
+    );
+    const outside = [...new Set(d.sessions.map((s) => s.day).filter((x) => !allowed.has(x)))];
+    if (outside.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            `Lịch còn phiên ở ${outside.sort().map(formatDayLong).join(', ')} — ` +
+            'ngày này không có trong danh sách ngày thực hiện.',
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   try {
     await db
       .update(audits)
@@ -92,7 +128,18 @@ export async function PUT(req: Request, { params }: Ctx) {
         ...(d.pmEnd ? { pmEnd: d.pmEnd } : {}),
         ...(d.openingMinutes ? { openingMinutes: d.openingMinutes } : {}),
         ...(d.closingMinutes ? { closingMinutes: d.closingMinutes } : {}),
-        ...(d.dayHours ? { dayHours: d.dayHours } : {}),
+        ...(days
+          ? {
+              auditDays: days.map((x) => ({
+                date: x.date,
+                amStart: x.amStart, amEnd: x.amEnd, pmStart: x.pmStart, pmEnd: x.pmEnd,
+                ...(x.meetingOnly ? { meetingOnly: true } : {}),
+              })),
+              // Giữ hai cột cũ khớp theo — danh sách đợt, báo cáo, Excel vẫn đọc chúng.
+              startDate: new Date(days[0].date),
+              endDate: new Date(days[days.length - 1].date),
+            }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(audits.id, id));

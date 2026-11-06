@@ -8,7 +8,7 @@ import { getOwnedAudit } from '@/lib/audit-access';
 import { AuditTabs } from '@/components/AuditTabs';
 import { AuditHeader } from '@/components/AuditHeader';
 import { AuditPlan } from '@/components/AuditPlan';
-import { listDays, defaultObjectives, defaultCriteria, type PlanSession } from '@/lib/plan';
+import { resolveAuditDays, defaultObjectives, defaultCriteria, type PlanSession } from '@/lib/plan';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +35,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       .orderBy(asc(auditSessions.day), asc(auditSessions.startTime)),
   ]);
 
-  const days = listDays(audit.startDate, audit.endDate);
+  const days = resolveAuditDays(audit);
 
   return (
     <div className="space-y-6">
@@ -48,7 +48,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
       <AuditPlan
         auditId={id}
-        days={days}
+        initialDays={days}
         locked={audit.status === 'CLOSED'}
         units={units.map((u) => ({ id: u.id, name: u.name }))}
         members={members.map((m) => ({ id: m.id, fullName: m.fullName }))}
@@ -68,7 +68,6 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           openingMinutes: audit.openingMinutes,
           closingMinutes: audit.closingMinutes,
         }}
-        initialDayHours={audit.dayHours ?? []}
       initialSessions={sessions.map(
           (s): PlanSession => ({
             id: s.id,

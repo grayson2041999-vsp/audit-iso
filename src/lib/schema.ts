@@ -3,6 +3,14 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
+/** Một ngày thực hiện của đợt, lưu trong cột `audits.audit_days`. */
+export type AuditDayRow = {
+  date: string; // "YYYY-MM-DD"
+  amStart: string; amEnd: string; pmStart: string; pmEnd: string;
+  /** Ngày chỉ có cuộc họp — lịch tự động không xếp đơn vị vào. */
+  meetingOnly?: boolean;
+};
+
 /* ------------------------------------------------------------------ */
 /* Enums                                                               */
 /* ------------------------------------------------------------------ */
@@ -128,11 +136,23 @@ export const audits = pgTable('audits', {
    * ngày thì khung giờ đi theo mà không phải ánh xạ lại ngày dương lịch.
    *
    * Ngày nào không có phần tử tương ứng thì dùng bốn cột am_start… ở trên.
+   *
+   * KHÔNG DÙNG NỮA từ migration 014 — thay bằng `auditDays`. Chỉ còn được đọc
+   * để suy ra ngày cho đợt cũ chưa chuyển.
    */
   dayHours: jsonb('day_hours')
     .$type<{ amStart: string; amEnd: string; pmStart: string; pmEnd: string }[]>()
     .default([])
     .notNull(),
+  /**
+   * Ngày thực hiện — danh sách NGÀY CỤ THỂ, đã sắp xếp, không cần liền nhau
+   * (khai mạc một ngày, đánh giá vài ngày rời rạc, kết thúc một ngày khác).
+   * Mỗi ngày mang khung giờ riêng.
+   *
+   * Mảng rỗng = đợt chưa chuyển, đọc qua `resolveAuditDays` để suy ra từ
+   * khoảng ngày. start_date / end_date luôn được ghi bằng ngày đầu và ngày cuối.
+   */
+  auditDays: jsonb('audit_days').$type<AuditDayRow[]>().default([]).notNull(),
 
   standards: jsonb('standards').$type<string[]>().default([]).notNull(),
   leadAuditor: text('lead_auditor'),             // Tên trưởng đoàn ghi trên báo cáo

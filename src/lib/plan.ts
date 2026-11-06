@@ -82,6 +82,41 @@ export function toDayString(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** "2026-10-22" → "22/10/2026" */
+export function formatDayShort(day: string) {
+  const [y, m, d] = day.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+const nextDayString = (day: string) => {
+  const [y, m, d] = day.split('-').map(Number);
+  return toDayString(new Date(y, m - 1, d + 1));
+};
+
+/**
+ * Danh sách ngày rời rạc → chữ gọn để in.
+ *
+ * Ngày liền nhau gộp thành một khoảng. Cùng năm thì năm chỉ ghi một lần ở cuối:
+ *   ["2026-10-22","2026-10-24","2026-10-25","2026-10-30"]
+ *   → "22/10, 24/10 – 25/10, 30/10/2026"
+ */
+export function formatDayList(days: string[]): string {
+  const sorted = [...new Set(days)].sort();
+  if (sorted.length === 0) return '';
+
+  const runs: [string, string][] = [];
+  for (const d of sorted) {
+    const last = runs[runs.length - 1];
+    if (last && nextDayString(last[1]) === d) last[1] = d;
+    else runs.push([d, d]);
+  }
+
+  const sameYear = sorted[0].slice(0, 4) === sorted[sorted.length - 1].slice(0, 4);
+  const fmt = (d: string) => (sameYear ? formatDayShort(d).slice(0, 5) : formatDayShort(d));
+  const text = runs.map(([a, b]) => (a === b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`)).join(', ');
+  return sameYear ? `${text}/${sorted[0].slice(0, 4)}` : text;
+}
+
 /** Danh sách ngày từ đầu tới cuối đợt, bao gồm cả hai đầu. */
 export function listDays(start: Date | string | null, end: Date | string | null): string[] {
   if (!start || !end) return [];
@@ -98,6 +133,40 @@ export function listDays(start: Date | string | null, end: Date | string | null)
     cur.setDate(cur.getDate() + 1);
   }
   return days;
+}
+
+/** Một ngày thực hiện: ngày dương lịch cụ thể kèm khung giờ riêng. */
+export type AuditDay = DayHours & {
+  date: string; // "YYYY-MM-DD"
+  /** Ngày chỉ có cuộc họp — lịch tự động không xếp đơn vị vào. */
+  meetingOnly?: boolean;
+};
+
+/**
+ * Ngày thực hiện của một đợt, đã sắp xếp.
+ *
+ * Từ migration 014 ngày được lưu thành danh sách cụ thể trong `auditDays`.
+ * Đợt nào chưa có (tạo trước đó, hoặc vừa tạo mà chưa mở tab Chương trình) thì
+ * suy ra từ khoảng start → end như cũ, khung giờ lấy theo `dayHours` rồi tới
+ * giờ mặc định của đợt.
+ */
+export function resolveAuditDays(audit: {
+  auditDays?: AuditDay[] | null;
+  startDate: Date | string | null;
+  endDate: Date | string | null;
+  dayHours?: DayHours[] | null;
+  amStart: string; amEnd: string; pmStart: string; pmEnd: string;
+}): AuditDay[] {
+  if (audit.auditDays && audit.auditDays.length > 0) {
+    return [...audit.auditDays].sort((a, b) => a.date.localeCompare(b.date));
+  }
+  const fallback: DayHours = {
+    amStart: audit.amStart, amEnd: audit.amEnd, pmStart: audit.pmStart, pmEnd: audit.pmEnd,
+  };
+  return listDays(audit.startDate, audit.endDate).map((date, i) => {
+    const h = audit.dayHours?.[i] ?? fallback;
+    return { date, amStart: h.amStart, amEnd: h.amEnd, pmStart: h.pmStart, pmEnd: h.pmEnd };
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -437,6 +506,8 @@ export type DayHours = {
 
 export type Hours = DayHours & {
   openingMinutes: number; closingMinutes: number;
+  /** Ngày chỉ họp: không mở khung nào để xếp đơn vị. */
+  meetingOnly?: boolean;
 };
 
 /**
@@ -455,7 +526,7 @@ type Window = { day: string; start: number; end: number };
 
 /**
  * Các khung giờ còn trống để xếp đơn vị, sau khi đã trừ họp khai mạc (đầu ngày
- * đầu) và họp kết thúc (cuối ngày cuối).
+ * đầu) và họp kết thúc (cuối ngày cuối). Ngày đánh dấu "chỉ họp" không có khung.
  */
 export function buildWindows(days: string[], hoursOf: HoursOf): Window[] {
   if (days.length === 0) return [];
@@ -465,6 +536,7 @@ export function buildWindows(days: string[], hoursOf: HoursOf): Window[] {
 
   for (const day of days) {
     const h = hoursOf(day);
+    if (h.meetingOnly) continue;
     const am = { s: toMinutes(h.amStart), e: toMinutes(h.amEnd) };
     const pm = { s: toMinutes(h.pmStart), e: toMinutes(h.pmEnd) };
     if (am.e <= am.s || pm.e <= pm.s) continue; // ngày này đang nhập dở
