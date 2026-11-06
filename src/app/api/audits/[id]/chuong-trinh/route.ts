@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { auditSessions, audits } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
-import { formatDayLong, resolveAuditDays } from '@/lib/plan';
+import { formatDayLong, rangesProblem, resolveAuditDays, sortRanges } from '@/lib/plan';
 
 export const runtime = 'nodejs';
 
@@ -28,17 +28,26 @@ const schema = z.object({
   closingMinutes: z.number().int().min(15).max(480).optional(),
   /**
    * Ngày thực hiện: danh sách ngày cụ thể, không cần liền nhau, mỗi ngày một
-   * khoảng giờ Từ – Đến. Gửi kèm thì thay cả danh sách.
+   * hoặc nhiều khoảng giờ làm việc. Gửi kèm thì thay cả danh sách.
    */
   days: z
     .array(
       z
         .object({
           date: z.string().regex(dayRe, 'Ngày không hợp lệ'),
-          start: z.string().regex(timeRe, 'Giờ không hợp lệ'),
-          end: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+          ranges: z
+            .array(
+              z.object({
+                start: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+                end: z.string().regex(timeRe, 'Giờ không hợp lệ'),
+              }),
+            )
+            .min(1, 'Mỗi ngày phải có ít nhất một khoảng giờ')
+            .max(6, 'Tối đa 6 khoảng giờ mỗi ngày'),
         })
-        .refine((x) => x.end > x.start, { message: 'Giờ kết thúc của ngày phải sau giờ bắt đầu' }),
+        .refine((x) => rangesProblem(x.ranges) === null, {
+          message: 'Khoảng giờ của một ngày không hợp lệ (kết thúc trước bắt đầu, hoặc chồng nhau)',
+        }),
     )
     .min(1, 'Đợt phải có ít nhất một ngày thực hiện')
     .max(60, 'Tối đa 60 ngày thực hiện')
@@ -129,7 +138,7 @@ export async function PUT(req: Request, { params }: Ctx) {
         ...(d.closingMinutes ? { closingMinutes: d.closingMinutes } : {}),
         ...(days
           ? {
-              auditDays: days.map((x) => ({ date: x.date, start: x.start, end: x.end })),
+              auditDays: days.map((x) => ({ date: x.date, ranges: sortRanges(x.ranges) })),
               // Giữ hai cột cũ khớp theo — danh sách đợt, báo cáo, Excel vẫn đọc chúng.
               startDate: new Date(days[0].date),
               endDate: new Date(days[days.length - 1].date),

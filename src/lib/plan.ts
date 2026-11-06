@@ -130,64 +130,121 @@ export function listDays(start: Date | string | null, end: Date | string | null)
   return days;
 }
 
+/** Một khoảng giờ làm việc trong ngày, "HH:MM". */
+export type TimeRange = { start: string; end: string };
+
 /**
- * Một ngày thực hiện: ngày dương lịch cụ thể và khoảng giờ làm việc Từ – Đến.
- *
- * Không có buổi sáng / buổi chiều, không có nghỉ trưa: ngày khai mạc có thể chỉ
- * 08:00–09:00, ngày đánh giá có thể chỉ một buổi, tuỳ thực tế.
+ * Một ngày thực hiện: ngày dương lịch cụ thể và MỘT HOẶC NHIỀU khoảng giờ làm
+ * việc — 08:00–11:00 và 14:00–17:00, hoặc chỉ 08:00–09:00 cho ngày khai mạc.
+ * Giữa hai khoảng là giờ nghỉ, không xếp phiên vào.
  */
 export type AuditDay = {
-  date: string;  // "YYYY-MM-DD"
-  start: string; // "HH:MM"
-  end: string;   // "HH:MM"
+  date: string; // "YYYY-MM-DD"
+  /** Đã sắp xếp theo giờ, không chồng nhau, ít nhất một khoảng. */
+  ranges: TimeRange[];
 };
 
-export const DEFAULT_DAY_START = '08:00';
-export const DEFAULT_DAY_END = '17:00';
+/** Khoảng giờ mặc định cho ngày mới: sáng và chiều. */
+export const DEFAULT_RANGES: TimeRange[] = [
+  { start: '08:00', end: '11:30' },
+  { start: '13:30', end: '17:00' },
+];
+
+/** Giờ bắt đầu sớm nhất / kết thúc muộn nhất của một ngày. */
+export const dayStart = (d: AuditDay) => d.ranges[0]?.start ?? DEFAULT_RANGES[0].start;
+export const dayEnd = (d: AuditDay) => d.ranges[d.ranges.length - 1]?.end ?? DEFAULT_RANGES[1].end;
+
+/** "08:00–11:00, 14:00–17:00" */
+export const formatRanges = (ranges: TimeRange[]) => ranges.map((r) => `${r.start}–${r.end}`).join(', ');
+
+export const sortRanges = (ranges: TimeRange[]) =>
+  [...ranges].sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+
+/** Lỗi của danh sách khoảng giờ một ngày, hoặc null nếu hợp lệ. */
+export function rangesProblem(ranges: TimeRange[]): string | null {
+  if (ranges.length === 0) return 'chưa có khoảng giờ nào';
+  const sorted = sortRanges(ranges);
+  for (const r of sorted) {
+    if (toMinutes(r.end) <= toMinutes(r.start)) return `khoảng ${r.start}–${r.end} có giờ kết thúc không sau giờ bắt đầu`;
+  }
+  for (let i = 1; i < sorted.length; i++) {
+    if (toMinutes(sorted[i].start) < toMinutes(sorted[i - 1].end)) {
+      return `khoảng ${sorted[i - 1].start}–${sorted[i - 1].end} và ${sorted[i].start}–${sorted[i].end} chồng nhau`;
+    }
+  }
+  return null;
+}
 
 /**
- * Một ngày như đang nằm trong database. Bản đầu của migration 014 ghi bốn mốc
- * sáng/chiều; bản hiện tại ghi `start` / `end`. Đọc được cả hai.
+ * Một ngày như đang nằm trong database. Đọc được mọi dạng đã từng ghi:
+ *  - hiện tại: `ranges`,
+ *  - bản trước: một khoảng `start` / `end`,
+ *  - bản đầu của migration 014: bốn mốc sáng / chiều.
  */
 export type StoredAuditDay = {
   date: string;
+  ranges?: TimeRange[];
   start?: string;
   end?: string;
   amStart?: string;
+  amEnd?: string;
+  pmStart?: string;
   pmEnd?: string;
 };
 
+/** Bốn mốc sáng/chiều → hai khoảng; sáng và chiều liền nhau thì gộp làm một. */
+function fromHalves(h: { amStart: string; amEnd: string; pmStart: string; pmEnd: string }): TimeRange[] {
+  if (toMinutes(h.pmStart) <= toMinutes(h.amEnd)) return [{ start: h.amStart, end: h.pmEnd }];
+  return [
+    { start: h.amStart, end: h.amEnd },
+    { start: h.pmStart, end: h.pmEnd },
+  ];
+}
+
 /**
- * Ngày thực hiện của một đợt, đã sắp xếp và đã quy về dạng Từ – Đến.
+ * Ngày thực hiện của một đợt, đã sắp xếp và đã quy về dạng danh sách khoảng giờ.
  *
  * Đợt nào chưa có danh sách ngày (tạo xong chưa mở tab Chương trình) thì suy ra
- * từ khoảng start → end, giờ lấy theo giờ mặc định của đợt.
+ * từ khoảng start → end, giờ lấy theo giờ sáng / chiều mặc định của đợt.
  */
 export function resolveAuditDays(audit: {
   auditDays?: StoredAuditDay[] | null;
   startDate: Date | string | null;
   endDate: Date | string | null;
-  dayHours?: { amStart: string; pmEnd: string }[] | null;
+  dayHours?: { amStart: string; amEnd: string; pmStart: string; pmEnd: string }[] | null;
   amStart?: string | null;
+  amEnd?: string | null;
+  pmStart?: string | null;
   pmEnd?: string | null;
 }): AuditDay[] {
-  const defStart = audit.amStart || DEFAULT_DAY_START;
-  const defEnd = audit.pmEnd || DEFAULT_DAY_END;
+  const defaults = {
+    amStart: audit.amStart || DEFAULT_RANGES[0].start,
+    amEnd: audit.amEnd || DEFAULT_RANGES[0].end,
+    pmStart: audit.pmStart || DEFAULT_RANGES[1].start,
+    pmEnd: audit.pmEnd || DEFAULT_RANGES[1].end,
+  };
 
   if (audit.auditDays && audit.auditDays.length > 0) {
     return audit.auditDays
-      .map((d) => ({
-        date: d.date,
-        start: d.start ?? d.amStart ?? defStart,
-        end: d.end ?? d.pmEnd ?? defEnd,
-      }))
+      .map((d): AuditDay => {
+        if (d.ranges && d.ranges.length > 0) return { date: d.date, ranges: sortRanges(d.ranges) };
+        if (d.start && d.end) return { date: d.date, ranges: [{ start: d.start, end: d.end }] };
+        return {
+          date: d.date,
+          ranges: fromHalves({
+            amStart: d.amStart ?? defaults.amStart,
+            amEnd: d.amEnd ?? defaults.amEnd,
+            pmStart: d.pmStart ?? defaults.pmStart,
+            pmEnd: d.pmEnd ?? defaults.pmEnd,
+          }),
+        };
+      })
       .sort((a, b) => a.date.localeCompare(b.date));
   }
 
   return listDays(audit.startDate, audit.endDate).map((date, i) => ({
     date,
-    start: audit.dayHours?.[i]?.amStart ?? defStart,
-    end: audit.dayHours?.[i]?.pmEnd ?? defEnd,
+    ranges: fromHalves(audit.dayHours?.[i] ?? defaults),
   }));
 }
 
@@ -249,20 +306,23 @@ export function pinMeetings(
   const len = (s: PlanSession | undefined, fallback: number) =>
     s ? Math.max(5, toMinutes(s.endTime) - toMinutes(s.startTime)) : fallback;
 
-  const fs = toMinutes(first.start);
-  const fe = toMinutes(first.end);
+  // Khai mạc nằm trong khoảng giờ ĐẦU của ngày đầu, kết thúc nằm trong khoảng CUỐI của ngày cuối.
+  const fr = first.ranges[0] ?? DEFAULT_RANGES[0];
+  const lr = last.ranges[last.ranges.length - 1] ?? DEFAULT_RANGES[1];
+  const fs = toMinutes(fr.start);
+  const fe = toMinutes(fr.end);
   const opening: PlanSession = {
     id: op?.id ?? makeId(),
     note: op?.note ?? null,
     kind: 'OPENING',
     unitId: null,
     day: first.date,
-    startTime: first.start,
+    startTime: fr.start,
     endTime: toHHMM(Math.min(fs + len(op, defaults.openingMinutes), Math.max(fe, fs + 5))),
   };
 
-  const ls = toMinutes(last.start);
-  const le = toMinutes(last.end);
+  const ls = toMinutes(lr.start);
+  const le = toMinutes(lr.end);
   const closing: PlanSession = {
     id: cl?.id ?? makeId(),
     note: cl?.note ?? null,
@@ -270,7 +330,7 @@ export function pinMeetings(
     unitId: null,
     day: last.date,
     startTime: toHHMM(Math.max(le - len(cl, defaults.closingMinutes), Math.min(ls, le - 5))),
-    endTime: last.end,
+    endTime: lr.end,
   };
 
   return [opening, ...rest, closing];
@@ -353,8 +413,8 @@ export function validatePlan(input: {
 
     if (!day) addTime(s.id, 'Ngày này không còn trong danh sách ngày thực hiện');
     if (b <= a) addTime(s.id, 'Giờ kết thúc phải sau giờ bắt đầu');
-    else if (day && (a < toMinutes(day.start) || b > toMinutes(day.end))) {
-      addTime(s.id, `Nằm ngoài giờ làm việc của ngày (${day.start}–${day.end})`);
+    else if (day && !day.ranges.some((r) => a >= toMinutes(r.start) && b <= toMinutes(r.end))) {
+      addTime(s.id, `Phải nằm trọn trong một khoảng giờ làm việc của ngày (${formatRanges(day.ranges)})`);
     }
     if (s.kind === 'UNIT' && !s.unitId) add(s.id, 'Chưa chọn đơn vị');
 
@@ -470,26 +530,30 @@ export function generatePlan(input: {
   const first = days[0];
   const last = days[days.length - 1];
 
-  const opStart = toMinutes(first.start);
-  const opEnd = Math.min(opStart + openingMinutes, toMinutes(first.end));
-  const clEnd = toMinutes(last.end);
-  const clStart = Math.max(clEnd - closingMinutes, toMinutes(last.start));
+  const fr = first.ranges[0] ?? DEFAULT_RANGES[0];
+  const lr = last.ranges[last.ranges.length - 1] ?? DEFAULT_RANGES[1];
+  const opStart = toMinutes(fr.start);
+  const opEnd = Math.min(opStart + openingMinutes, toMinutes(fr.end));
+  const clEnd = toMinutes(lr.end);
+  const clStart = Math.max(clEnd - closingMinutes, toMinutes(lr.start));
 
   const out: Omit<PlanSession, 'id'>[] = [
     { day: first.date, startTime: toHHMM(opStart), endTime: toHHMM(opEnd), kind: 'OPENING', unitId: null, note: null },
     { day: last.date, startTime: toHHMM(clStart), endTime: toHHMM(clEnd), kind: 'CLOSING', unitId: null, note: null },
   ];
 
-  /* Khoảng trống để xếp đơn vị: cả ngày, trừ phần của hai cuộc họp. */
+  /* Khoảng trống để xếp đơn vị: mọi khoảng giờ của mọi ngày, trừ phần của hai cuộc họp. */
   const windows: Window[] = [];
   for (const d of days) {
-    let s = toMinutes(d.start);
-    let e = toMinutes(d.end);
-    if (d.date === first.date) s = Math.max(s, opEnd);
-    if (d.date === last.date) e = Math.min(e, clStart);
-    s = ceilStep(s);
-    e = floorStep(e);
-    if (e - s >= STEP) windows.push({ day: d.date, start: s, end: e });
+    d.ranges.forEach((r, ri) => {
+      let s = toMinutes(r.start);
+      let e = toMinutes(r.end);
+      if (d.date === first.date && ri === 0) s = Math.max(s, opEnd);
+      if (d.date === last.date && ri === d.ranges.length - 1) e = Math.min(e, clStart);
+      s = ceilStep(s);
+      e = floorStep(e);
+      if (e - s >= STEP) windows.push({ day: d.date, start: s, end: e });
+    });
   }
 
   const unplacedUnitIds: string[] = [];

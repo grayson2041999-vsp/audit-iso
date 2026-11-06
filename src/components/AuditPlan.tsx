@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { WordIcon } from './FileIcons';
 import {
-  DEFAULT_DAY_END, DEFAULT_DAY_START, KIND_LABELS,
+  DEFAULT_RANGES, KIND_LABELS, dayEnd, dayStart, formatRanges, rangesProblem, sortRanges,
   formatDayLong, formatDayShort, generatePlan, pinMeetings, sortSessions, toDayString, toHHMM,
   toMinutes, validatePlan,
-  type AuditDay, type PlanSession, type SessionKind,
+  type AuditDay, type PlanSession, type SessionKind, type TimeRange,
 } from '@/lib/plan';
 
 type Unit = { id: string; name: string };
@@ -135,10 +135,11 @@ export function AuditPlan({
   ];
   const missingFields = REQUIRED.filter((f) => !String(info[f.key] ?? '').trim());
 
+  /** Ngày nào có khoảng giờ sai: kết thúc trước bắt đầu, hoặc hai khoảng chồng nhau. */
   const brokenDays = planDays
-    .map((d, i) => ({ d, i }))
-    .filter(({ d }) => toMinutes(d.end) <= toMinutes(d.start))
-    .map(({ i }) => i + 1);
+    .map((d, i) => ({ i, problem: rangesProblem(d.ranges) }))
+    .filter((x) => x.problem)
+    .map((x) => `ngày ${x.i + 1}: ${x.problem}`);
 
   /* ---------------- Hoàn tác ---------------- */
 
@@ -236,7 +237,7 @@ export function AuditPlan({
     const before = planDays.filter((d) => d.date < date).pop() ?? planDays[0];
     apply(sessions, [
       ...planDays,
-      { date, start: before?.start ?? DEFAULT_DAY_START, end: before?.end ?? DEFAULT_DAY_END },
+      { date, ranges: (before?.ranges ?? DEFAULT_RANGES).map((r) => ({ ...r })) },
     ]);
     return true;
   }
@@ -274,14 +275,14 @@ export function AuditPlan({
     );
   }
 
-  function setDayRange(date: string, patch: Partial<Pick<AuditDay, 'start' | 'end'>>) {
-    apply(sessions, planDays.map((d) => (d.date === date ? { ...d, ...patch } : d)));
+  function setDayRanges(date: string, ranges: TimeRange[]) {
+    apply(sessions, planDays.map((d) => (d.date === date ? { ...d, ranges } : d)));
   }
 
-  function applyRangeToAll() {
+  function applyRangesToAll() {
     const first = planDays[0];
     if (!first) return;
-    apply(sessions, planDays.map((d) => ({ ...d, start: first.start, end: first.end })));
+    apply(sessions, planDays.map((d) => ({ ...d, ranges: first.ranges.map((r) => ({ ...r })) })));
   }
 
   /* ---------------- Dòng lịch ---------------- */
@@ -296,18 +297,33 @@ export function AuditPlan({
 
   /**
    * Thêm một dòng vào ngày: nối tiếp sau phiên muộn nhất (trừ họp kết thúc),
-   * dài 1 giờ, và chọn sẵn đơn vị đầu tiên chưa có lịch.
+   * nằm trong khoảng giờ còn chỗ, dài tối đa 1 giờ, và chọn sẵn đơn vị đầu tiên
+   * chưa có lịch.
    */
   function addRow(date: string) {
     const day = planDays.find((d) => d.date === date);
     if (!day) return;
     const inDay = sessions.filter((s) => s.day === date && s.kind !== 'CLOSING');
     const closing = sessions.find((s) => s.kind === 'CLOSING' && s.day === date);
-    const limit = closing ? toMinutes(closing.startTime) : toMinutes(day.end);
+    const latest = Math.max(toMinutes(dayStart(day)), ...inDay.map((s) => toMinutes(s.endTime)));
 
-    let start = Math.max(toMinutes(day.start), ...inDay.map((s) => toMinutes(s.endTime)));
-    if (start >= limit) start = Math.max(toMinutes(day.start), limit - 60);
-    const end = Math.max(start + 15, Math.min(start + 60, limit));
+    // Khoảng giờ đầu tiên còn chỗ sau phiên muộn nhất; giới hạn bởi họp kết thúc nếu có.
+    const spans = day.ranges.map((r) => ({
+      s: toMinutes(r.start),
+      e: Math.min(toMinutes(r.end), closing ? toMinutes(closing.startTime) : Infinity),
+    }));
+    const span = spans.find((r) => Math.max(r.s, latest) < r.e);
+    let start: number;
+    let end: number;
+    if (span) {
+      start = Math.max(span.s, latest);
+      end = Math.min(start + 60, span.e);
+    } else {
+      // Hết chỗ: đặt vào khoảng cuối, lịch sẽ báo trùng để người dùng chỉnh.
+      const r = spans[spans.length - 1];
+      start = r.s;
+      end = Math.min(r.s + 60, toMinutes(dayEnd(day)));
+    }
 
     const unit = units.find((u) => !scheduledUnits.has(u.id));
     apply([
@@ -344,7 +360,7 @@ export function AuditPlan({
       return;
     }
     if (brokenDays.length > 0) {
-      setError(`Ngày ${brokenDays.join(', ')}: giờ kết thúc phải sau giờ bắt đầu.`);
+      setError(`Khoảng giờ không hợp lệ — ${brokenDays.join('; ')}.`);
       return;
     }
     if (!check.ok) {
@@ -462,8 +478,8 @@ export function AuditPlan({
         <div>
           <h2 className="text-lg font-semibold">Ngày thực hiện</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Các ngày không cần liền nhau. Mỗi ngày một khoảng giờ làm việc — ngày khai mạc có thể
-            chỉ vài chục phút, ngày đánh giá có thể chỉ một buổi.
+            Các ngày không cần liền nhau. Mỗi ngày có một hoặc nhiều khoảng giờ làm việc, ví dụ
+            08:00–11:00 và 14:00–17:00; ngày khai mạc có thể chỉ 08:00–09:00.
           </p>
         </div>
 
@@ -478,8 +494,8 @@ export function AuditPlan({
               locked={locked}
               canRemove={planDays.length > 1}
               showApplyAll={i === 0 && planDays.length > 1}
-              onRange={(patch) => setDayRange(d.date, patch)}
-              onApplyAll={applyRangeToAll}
+              onRanges={(ranges) => setDayRanges(d.date, ranges)}
+              onApplyAll={applyRangesToAll}
               onMove={(to) => moveDay(d.date, to)}
               onRemove={(to) => removeDay(d.date, to)}
             />
@@ -490,7 +506,7 @@ export function AuditPlan({
 
         {brokenDays.length > 0 && (
           <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
-            Ngày {brokenDays.join(', ')}: giờ kết thúc phải sau giờ bắt đầu.
+            Khoảng giờ không hợp lệ — {brokenDays.join('; ')}.
           </p>
         )}
       </section>
@@ -618,7 +634,7 @@ function CheckItem({ ok, children }: { ok: boolean; children: React.ReactNode })
  */
 function DayRow({
   index, day, otherDays, count, locked, canRemove, showApplyAll,
-  onRange, onApplyAll, onMove, onRemove,
+  onRanges, onApplyAll, onMove, onRemove,
 }: {
   index: number;
   day: AuditDay;
@@ -629,7 +645,7 @@ function DayRow({
   locked: boolean;
   canRemove: boolean;
   showApplyAll: boolean;
-  onRange: (patch: Partial<Pick<AuditDay, 'start' | 'end'>>) => void;
+  onRanges: (ranges: TimeRange[]) => void;
   onApplyAll: () => void;
   onMove: (to: string) => boolean;
   /** `to` = ngày nhận các phiên; null = bỏ các phiên khỏi lịch. */
@@ -647,12 +663,7 @@ function DayRow({
           <span className="ml-1.5 text-slate-500">{formatDayLong(day.date)}</span>
         </span>
 
-        <span className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">Từ</span>
-          <TimeInput value={day.start} disabled={locked} onCommit={(v) => onRange({ start: v })} />
-          <span className="text-xs text-slate-500">đến</span>
-          <TimeInput value={day.end} disabled={locked} onCommit={(v) => onRange({ end: v })} />
-        </span>
+        <RangesEditor ranges={day.ranges} locked={locked} onChange={onRanges} />
 
         <span className="text-xs text-slate-400">{count > 0 ? `${count} phiên` : ''}</span>
 
@@ -758,6 +769,73 @@ function DayRow({
   );
 }
 
+/**
+ * Các khoảng giờ của một ngày: mỗi khoảng "Từ … đến …", bỏ được khoảng thừa,
+ * thêm được khoảng mới. Khoảng mới bắt đầu sau khoảng cuối một tiếng, dài ba
+ * tiếng — đúng kiểu nghỉ trưa rồi làm buổi chiều.
+ */
+function RangesEditor({
+  ranges, locked, onChange,
+}: {
+  ranges: TimeRange[];
+  locked: boolean;
+  onChange: (ranges: TimeRange[]) => void;
+}) {
+  const set = (i: number, patch: Partial<TimeRange>) =>
+    onChange(sortRanges(ranges.map((r, k) => (k === i ? { ...r, ...patch } : r))));
+
+  /**
+   * Khoảng gợi ý khi bấm thêm. Ngày chỉ có buổi chiều thì thêm buổi sáng vào
+   * TRƯỚC (08:00 tới trước khoảng đầu một tiếng); còn lại thêm vào SAU khoảng
+   * cuối một tiếng, dài ba tiếng.
+   */
+  const first = ranges[0];
+  const last = ranges[ranges.length - 1];
+  let suggestion: TimeRange | null = null;
+  if (first && toMinutes(first.start) >= 12 * 60) {
+    const end = Math.min(toMinutes(first.start) - 60, 11 * 60 + 30);
+    suggestion = { start: toHHMM(Math.min(8 * 60, end - 60)), end: toHHMM(end) };
+  } else {
+    const start = last ? Math.ceil((toMinutes(last.end) + 60) / 15) * 15 : 8 * 60;
+    if (start + 30 <= 23 * 60) {
+      suggestion = { start: toHHMM(start), end: toHHMM(Math.min(start + 180, 23 * 60)) };
+    }
+  }
+  const canAdd = suggestion !== null;
+
+  return (
+    <span className="flex flex-col gap-1.5">
+      {ranges.map((r, i) => (
+        <span key={i} className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-500">Từ</span>
+          <TimeInput value={r.start} disabled={locked} onCommit={(v) => set(i, { start: v })} />
+          <span className="text-xs text-slate-500">đến</span>
+          <TimeInput value={r.end} disabled={locked} onCommit={(v) => set(i, { end: v })} />
+          {!locked && ranges.length > 1 && (
+            <button
+              onClick={() => onChange(ranges.filter((_, k) => k !== i))}
+              title="Bỏ khoảng giờ này"
+              className="px-1 text-slate-400 hover:text-red-600"
+            >
+              ✕
+            </button>
+          )}
+        </span>
+      ))}
+      {!locked && canAdd && (
+        <button
+          onClick={() => {
+            if (suggestion) onChange(sortRanges([...ranges, suggestion]));
+          }}
+          className="self-start text-xs text-brand-700 hover:underline"
+        >
+          + Thêm khoảng giờ
+        </button>
+      )}
+    </span>
+  );
+}
+
 /** Thêm một ngày bất kỳ — không cần liền với các ngày đã có. */
 function AddDayRow({
   suggest, onAdd,
@@ -837,7 +915,7 @@ function DayTable({
         <strong>Ngày {index + 1}</strong>
         <span className="ml-1.5 text-slate-600">{formatDayLong(day.date)}</span>
         <span className="ml-2 text-xs text-slate-400">
-          {day.start}–{day.end}
+          {formatRanges(day.ranges)}
         </span>
       </p>
 
