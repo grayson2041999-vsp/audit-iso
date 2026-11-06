@@ -367,6 +367,15 @@ export function AuditPlan({
       setError('Lịch chưa đạt các điều kiện ở mục Kiểm tra lịch. Sửa các dòng tô đỏ rồi lưu lại.');
       return;
     }
+    // Trùng giờ không chặn lưu — trưởng đoàn quyết định, nhưng phải hỏi một lần.
+    if (
+      check.conflictRows > 0 &&
+      !window.confirm(
+        `Lịch còn ${check.conflictRows} dòng bị trùng giờ (tô vàng). Vẫn lưu chương trình như vậy?`,
+      )
+    ) {
+      return;
+    }
 
     setBusy(true);
     setError(null);
@@ -554,6 +563,7 @@ export function AuditPlan({
             unitMembers={unitMembers}
             memberName={memberName}
             issues={check.rowIssues}
+            warnings={check.rowWarnings}
             locked={locked}
             onPatch={patchSession}
             onRemove={removeSession}
@@ -583,12 +593,20 @@ export function AuditPlan({
               {!orderOk && check.orderProblems > 0 && ` — ${check.orderProblems} dòng đặt sai chỗ`}
             </CheckItem>
             <CheckItem ok={timeOk}>
-              Đúng giờ làm việc, không ai bị xếp trùng giờ
+              Mọi phiên nằm trong khoảng giờ làm việc
               {!timeOk && check.timeProblems > 0 && ` — ${check.timeProblems} dòng có lỗi`}
             </CheckItem>
+            <CheckItem ok={check.conflictRows === 0} warnOnly>
+              {check.conflictRows === 0
+                ? 'Không ai bị xếp trùng giờ'
+                : `${check.conflictRows} dòng bị trùng giờ — chỉ là cảnh báo, vẫn lưu được`}
+            </CheckItem>
           </ul>
-          {!check.ok && (
-            <p className="mt-2 text-xs text-slate-500">Các dòng có lỗi được tô đỏ trong bảng phía trên.</p>
+          {(!check.ok || check.conflictRows > 0) && (
+            <p className="mt-2 text-xs text-slate-500">
+              {!check.ok && 'Dòng có lỗi tô đỏ, phải sửa mới lưu được. '}
+              {check.conflictRows > 0 && 'Dòng trùng giờ tô vàng, bạn tự quyết định giữ hay sửa.'}
+            </p>
           )}
         </div>
       </section>
@@ -608,6 +626,8 @@ export function AuditPlan({
             </span>
           ) : !check.ok ? (
             <span className="text-xs text-red-600">Lịch chưa đạt — xem mục Kiểm tra lịch</span>
+          ) : check.conflictRows > 0 ? (
+            <span className="text-xs text-amber-700">Còn {check.conflictRows} dòng trùng giờ — vẫn lưu được</span>
           ) : (
             <span className="text-xs text-slate-400">Lưu trước khi xuất file để lấy bản mới nhất</span>
           )}
@@ -619,10 +639,20 @@ export function AuditPlan({
 
 /* ------------------------------------------------------------------ */
 
-function CheckItem({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+function CheckItem({
+  ok, warnOnly, children,
+}: {
+  ok: boolean;
+  /** Chưa đạt thì chỉ cảnh báo (vàng), không phải lỗi chặn lưu (đỏ). */
+  warnOnly?: boolean;
+  children: React.ReactNode;
+}) {
+  const tone = ok ? 'text-slate-600' : warnOnly ? 'text-amber-800' : 'text-red-700';
+  const mark = ok ? '✓' : warnOnly ? '⚠' : '✗';
+  const markTone = ok ? 'text-emerald-600' : warnOnly ? 'text-amber-600' : 'text-red-600';
   return (
-    <li className={`flex gap-2 ${ok ? 'text-slate-600' : 'text-red-700'}`}>
-      <span aria-hidden className={ok ? 'text-emerald-600' : 'text-red-600'}>{ok ? '✓' : '✗'}</span>
+    <li className={`flex gap-2 ${tone}`}>
+      <span aria-hidden className={markTone}>{mark}</span>
       <span>{children}</span>
     </li>
   );
@@ -893,7 +923,7 @@ function AddDayRow({
  * họp kết thúc sửa giờ bắt đầu. Mốc còn lại bám theo giờ của ngày.
  */
 function DayTable({
-  index, day, rows, units, scheduledUnits, unitMembers, memberName, issues, locked,
+  index, day, rows, units, scheduledUnits, unitMembers, memberName, issues, warnings, locked,
   onPatch, onRemove, onAdd,
 }: {
   index: number;
@@ -904,6 +934,8 @@ function DayTable({
   unitMembers: Map<string, string[]>;
   memberName: Map<string, string>;
   issues: Map<string, string[]>;
+  /** Cảnh báo trùng giờ — tô vàng, không chặn lưu. */
+  warnings: Map<string, string[]>;
   locked: boolean;
   onPatch: (id: string, patch: Partial<PlanSession>) => void;
   onRemove: (id: string) => void;
@@ -926,6 +958,7 @@ function DayTable({
 
         {rows.map((s) => {
           const rowIssues = issues.get(s.id) ?? [];
+          const rowWarnings = warnings.get(s.id) ?? [];
           const fixed = isPinned(s);
           const people =
             s.kind === 'UNIT'
@@ -936,7 +969,13 @@ function DayTable({
             <div
               key={s.id}
               className={`border-b border-slate-100 px-3 py-2 last:border-b-0 ${
-                rowIssues.length > 0 ? 'bg-red-50' : fixed ? 'bg-slate-50' : ''
+                rowIssues.length > 0
+                  ? 'bg-red-50'
+                  : rowWarnings.length > 0
+                    ? 'bg-amber-50'
+                    : fixed
+                      ? 'bg-slate-50'
+                      : ''
               }`}
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
@@ -1025,6 +1064,13 @@ function DayTable({
                 <ul className="mt-1 space-y-0.5 text-xs text-red-700">
                   {rowIssues.map((m, i) => (
                     <li key={i}>• {m}</li>
+                  ))}
+                </ul>
+              )}
+              {rowWarnings.length > 0 && (
+                <ul className="mt-1 space-y-0.5 text-xs text-amber-800">
+                  {rowWarnings.map((m, i) => (
+                    <li key={i}>⚠ {m}</li>
                   ))}
                 </ul>
               )}

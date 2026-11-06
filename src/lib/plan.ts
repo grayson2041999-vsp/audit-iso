@@ -349,8 +349,16 @@ export type PlanCheck = {
   missingUnits: { id: string; name: string }[];
   /** Số dòng vi phạm vị trí hai cuộc họp (đặt trước khai mạc / sau kết thúc). */
   orderProblems: number;
-  /** Số dòng có lỗi giờ giấc hoặc trùng giờ. */
+  /** Số dòng có lỗi giờ giấc (ngoài khoảng giờ làm việc, giờ kết thúc trước bắt đầu). */
   timeProblems: number;
+  /**
+   * Cảnh báo trùng giờ, gắn với từng dòng. KHÔNG chặn lưu — thực tế có lúc
+   * trưởng đoàn chủ động cho một người ghé hai nơi, hoặc chấp nhận chồng ít phút.
+   */
+  rowWarnings: Map<string, string[]>;
+  /** Số dòng bị trùng giờ. */
+  conflictRows: number;
+  /** Lịch đạt mọi điều kiện bắt buộc (không tính cảnh báo trùng giờ). */
   ok: boolean;
 };
 
@@ -359,7 +367,10 @@ export type PlanCheck = {
  *  - mọi đơn vị đều có ít nhất một phiên,
  *  - có đúng một họp khai mạc, là phiên đầu tiên của đợt (đầu ngày đầu),
  *  - có đúng một họp kết thúc, là phiên cuối cùng của đợt (cuối ngày cuối),
- *  - mọi phiên nằm trong giờ làm việc của ngày, không ai bị xếp trùng giờ.
+ *  - mọi phiên nằm trong giờ làm việc của ngày.
+ *
+ * Trùng giờ (chung đánh giá viên, hoặc cùng một đơn vị) chỉ là CẢNH BÁO, nằm
+ * riêng ở `rowWarnings` — trưởng đoàn tự quyết có lưu hay không.
  */
 export function validatePlan(input: {
   days: AuditDay[];
@@ -382,6 +393,8 @@ export function validatePlan(input: {
     timeRows.add(id);
     add(id, msg);
   };
+  const rowWarnings = new Map<string, string[]>();
+  const warn = (id: string, msg: string) => rowWarnings.set(id, [...(rowWarnings.get(id) ?? []), msg]);
 
   const dayByDate = new Map(days.map((d) => [d.date, d]));
   const allIds = members.map((m) => m.id);
@@ -441,8 +454,8 @@ export function validatePlan(input: {
       }
 
       if (x.kind === 'UNIT' && y.kind === 'UNIT' && x.unitId && x.unitId === y.unitId) {
-        addTime(x.id, 'Trùng giờ với một phiên khác của chính đơn vị này');
-        addTime(y.id, 'Trùng giờ với một phiên khác của chính đơn vị này');
+        warn(x.id, 'Trùng giờ với một phiên khác của chính đơn vị này');
+        warn(y.id, 'Trùng giờ với một phiên khác của chính đơn vị này');
         continue;
       }
 
@@ -452,8 +465,8 @@ export function validatePlan(input: {
 
       const who = shared.map((m) => nameById.get(m) ?? '?').join(', ');
       const tail = who ? ` — ${who}` : '';
-      addTime(x.id, `Trùng giờ với ${label(y)} ${y.startTime}–${y.endTime}${tail}`);
-      addTime(y.id, `Trùng giờ với ${label(x)} ${x.startTime}–${x.endTime}${tail}`);
+      warn(x.id, `Trùng giờ với ${label(y)} ${y.startTime}–${y.endTime}${tail}`);
+      warn(y.id, `Trùng giờ với ${label(x)} ${x.startTime}–${x.endTime}${tail}`);
     }
   }
 
@@ -470,6 +483,8 @@ export function validatePlan(input: {
     missingUnits: missing,
     orderProblems: orderRows.size,
     timeProblems: timeRows.size,
+    rowWarnings,
+    conflictRows: rowWarnings.size,
     ok: rowIssues.size === 0 && general.length === 0,
   };
 }
