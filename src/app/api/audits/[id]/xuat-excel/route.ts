@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { auditMembers, auditUnits, findingImages, findings } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
+import { attachmentHeader } from '@/lib/download-name';
 import { getObjectBytes, isR2Configured } from '@/lib/r2';
 import { buildFindingsWorkbook, MAX_PHOTOS } from '@/lib/findings-xlsx';
 
@@ -95,21 +96,10 @@ export async function GET(req: Request, { params }: Ctx) {
   /* ---------------- Trả file ---------------- */
 
   const buffer = await wb.xlsx.writeBuffer();
-  // Không còn mã đợt — đặt tên file theo tên tổ chức, bỏ dấu để tải về không lỗi.
-  const slug = audit.organization
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .replace(/[^\w]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-  const fileName = `${slug || 'tong-hop'}_finding.xlsx`;
-
   return new NextResponse(buffer, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="${fileName}"`,
+      'Content-Disposition': attachmentHeader('Tổng hợp findings', audit.title, 'xlsx'),
       'Cache-Control': 'no-store',
     },
   });

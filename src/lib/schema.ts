@@ -1,5 +1,5 @@
 import {
-  pgTable, text, timestamp, uuid, integer, jsonb, pgEnum, index, uniqueIndex, boolean,
+  pgTable, text, timestamp, uuid, integer, jsonb, pgEnum, index, uniqueIndex, boolean, date,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -533,7 +533,7 @@ export type CapaAttachment = {
 };
 
 /**
- * Chỉ tạo cho finding mức MAJOR và MINOR — xem `NEEDS_CAPA` trong `lib/capa.ts`.
+ * KHÔNG DÙNG NỮA (thay bằng `capa_actions`). Giữ định nghĩa để bảng cũ còn đọc được.
  * OBS / OFI / CONF không bắt buộc khắc phục; bắt đơn vị làm hồ sơ CAPA cho một
  * cơ hội cải tiến là cách nhanh nhất khiến họ ghét cả công cụ lẫn việc đánh giá.
  */
@@ -600,6 +600,60 @@ export const correctiveEvents = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => ({ reportIdx: index('corrective_events_report_idx').on(t.reportId, t.createdAt) }),
+);
+
+/* ------------------------------------------------------------------ */
+/* capa_actions — theo dõi khắc phục, trưởng đoàn tự nhập               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Trạng thái một mục khắc phục:
+ *   TODO           Chưa thực hiện
+ *   IN_PROGRESS    Đang thực hiện
+ *   PENDING_REVIEW Chờ kiểm tra — đơn vị báo đã làm, đoàn chưa xác nhận
+ *   DONE           Hoàn thành — đoàn đã kiểm tra, tính vào % hoàn thành
+ */
+export const capaActionStatusEnum = pgEnum('capa_action_status', [
+  'TODO', 'IN_PROGRESS', 'PENDING_REVIEW', 'DONE',
+]);
+
+/**
+ * Một việc cần làm để khắc phục một finding. Một finding có thể có nhiều mục.
+ *
+ * Đơn vị và phân loại KHÔNG lưu ở đây mà đọc qua finding, nên sửa finding
+ * (đổi đơn vị, hạ mức) thì bảng theo dõi tự đúng theo. Xoá finding thì các mục
+ * của nó đi theo.
+ *
+ * Thay cho cả luồng corrective_* cũ: đoàn và đơn vị trao đổi ở ngoài app, app
+ * chỉ là sổ theo dõi.
+ */
+export const capaActions = pgTable(
+  'capa_actions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    auditId: uuid('audit_id')
+      .references(() => audits.id, { onDelete: 'cascade' })
+      .notNull(),
+    findingId: uuid('finding_id')
+      .references(() => findings.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Nội dung công việc cần thực hiện. */
+    content: text('content').notNull(),
+    /** Người / bộ phận phụ trách phía đơn vị. */
+    owner: text('owner'),
+    dueDate: date('due_date', { mode: 'string' }),
+    status: capaActionStatusEnum('status').default('TODO').notNull(),
+    /** Ngày hoàn thành — tự điền khi chuyển sang Hoàn thành, sửa được. */
+    completedDate: date('completed_date', { mode: 'string' }),
+    /** Kết quả kiểm tra / ghi chú của đoàn. */
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    auditIdx: index('capa_actions_audit_idx').on(t.auditId),
+    findingIdx: index('capa_actions_finding_idx').on(t.findingId),
+  }),
 );
 
 /* ------------------------------------------------------------------ */
@@ -720,3 +774,4 @@ export type ReportRelease = typeof reportReleases.$inferSelect;
 export type CorrectiveReport = typeof correctiveReports.$inferSelect;
 export type CorrectiveItem = typeof correctiveItems.$inferSelect;
 export type CorrectiveEvent = typeof correctiveEvents.$inferSelect;
+export type CapaAction = typeof capaActions.$inferSelect;

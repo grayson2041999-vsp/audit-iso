@@ -7,6 +7,7 @@ import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { assignments, auditMembers, auditSessions, auditUnits } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
+import { attachmentHeader } from '@/lib/download-name';
 import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
 import { KIND_LABELS, formatDayList, formatDayLong, resolveAuditDays, toMinutes } from '@/lib/plan';
 
@@ -332,31 +333,11 @@ export async function GET(_req: Request, { params }: Ctx) {
 
   const buffer = await Packer.toBuffer(doc);
 
-  /**
-   * Tên file: "Chuong trinh danh gia - <Tên đợt đánh giá>.docx".
-   *
-   * Gửi hai bản tên: `filename*` giữ nguyên dấu tiếng Việt của tên đợt (trình
-   * duyệt hiện đại đều dùng bản này), `filename` bỏ dấu cho trình duyệt cũ.
-   * Bỏ các ký tự Windows / macOS không cho đặt trong tên file.
-   */
-  const title = audit.title.replace(/[\\/:*?"<>|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
-  const fileName = `Chuong trinh danh gia - ${title || 'Dot danh gia'}.docx`;
-  // encodeURIComponent để lọt ' ( ) — ba ký tự này không được đứng trần trong filename*.
-  const encodeRfc5987 = (v: string) =>
-    encodeURIComponent(v).replace(/['()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-  const asciiName = fileName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .replace(/[^\x20-\x7e]/g, '');
-
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition':
-        `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeRfc5987(fileName)}`,
+      'Content-Disposition': attachmentHeader('Chương trình đánh giá', audit.title, 'docx'),
       'Cache-Control': 'no-store',
     },
   });

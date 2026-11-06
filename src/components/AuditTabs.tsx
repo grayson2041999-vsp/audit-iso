@@ -4,19 +4,18 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 /**
- * Tab "Khắc phục" chỉ hiện sau khi đã phát hành báo cáo (`issued`). Trước đó
- * nó rỗng, hiện ra chỉ khiến người dùng bấm vào rồi thắc mắc.
+ * Bốn bước của một đợt, đọc từ trái sang phải đúng trình tự công việc.
+ * "Khắc phục" là nơi trưởng đoàn tự theo dõi việc khắc phục của đơn vị —
+ * không còn gửi gì cho đơn vị qua app.
  */
-export function AuditTabs({ auditId, issued = false }: { auditId: string; issued?: boolean }) {
+export function AuditTabs({ auditId }: { auditId: string }) {
   const pathname = usePathname();
 
   const tabs = [
-    { href: `/quan-ly/dot/${auditId}`, label: 'Chuẩn bị đợt', exact: true },
+    { href: `/quan-ly/dot/${auditId}`, label: 'Thiết lập đợt đánh giá', exact: true },
     { href: `/quan-ly/dot/${auditId}/chuong-trinh`, label: 'Chương trình đánh giá', exact: false },
     { href: `/quan-ly/dot/${auditId}/tong-hop`, label: 'Tổng hợp finding', exact: false },
-    ...(issued
-      ? [{ href: `/quan-ly/dot/${auditId}/khac-phuc`, label: 'Khắc phục', exact: false }]
-      : []),
+    { href: `/quan-ly/dot/${auditId}/khac-phuc`, label: 'Khắc phục', exact: false },
   ];
 
   // Điều khiển phân đoạn: rãnh Control Gray, mục đang chọn là viên trắng có viền 1px.
