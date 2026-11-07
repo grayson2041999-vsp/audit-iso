@@ -42,7 +42,7 @@ export default async function Page({
 
       <h1 className="text-2xl font-semibold">Checklist đánh giá</h1>
 
-      <ChecklistBuilder auditId={id} unitId={unitId} unitName={unit.name} />
+      <ChecklistBuilder auditId={id} unitId={unitId} unitName={unit.name} standards={audit.standards} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 /**
- * Bốn bước của một đợt, đọc từ trái sang phải đúng trình tự công việc.
+ * Các bước của một đợt, đọc từ trái sang phải đúng trình tự công việc.
  * "Khắc phục" là nơi trưởng đoàn tự theo dõi việc khắc phục của đơn vị —
  * không còn gửi gì cho đơn vị qua app.
  */
@@ -14,6 +14,7 @@ export function AuditTabs({ auditId }: { auditId: string }) {
   const tabs = [
     { href: `/quan-ly/dot/${auditId}`, label: 'Thiết lập đợt đánh giá', exact: true },
     { href: `/quan-ly/dot/${auditId}/chuong-trinh`, label: 'Chương trình đánh giá', exact: false },
+    { href: `/quan-ly/dot/${auditId}/checklist`, label: 'Checklist đánh giá', exact: false },
     { href: `/quan-ly/dot/${auditId}/tong-hop`, label: 'Tổng hợp finding', exact: false },
     { href: `/quan-ly/dot/${auditId}/khac-phuc`, label: 'Khắc phục', exact: false },
   ];

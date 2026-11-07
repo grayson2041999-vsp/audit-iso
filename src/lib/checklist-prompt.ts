@@ -1,4 +1,5 @@
 import { clauseListByTier, STANDARD_SHORT, type StandardCode } from './iso';
+import { questionsFor, type ChecklistAnswers } from './checklist-questions';
 
 /**
  * Bảy nhóm chủ đề, THEO ĐÚNG THỨ TỰ IN RA GIẤY.
@@ -92,7 +93,7 @@ Trả kết quả bằng cách gọi công cụ \`soan_checklist\`. Không viế
 export function buildChecklistPrompt(input: {
   unitName: string;
   unitNote?: string | null;
-  description: string;
+  answers: ChecklistAnswers;
   standards: StandardCode[];
   organization: string;
   objectives?: string | null;
@@ -102,6 +103,13 @@ export function buildChecklistPrompt(input: {
 }) {
   const { lo, hi } = checklistSize(input.sessionMinutes);
   const groups = groupsFor(input.standards);
+
+  // Mỗi câu hỏi thành một mục có tiêu đề; câu bỏ trống thì không đưa vào.
+  const unitInfo = questionsFor(input.standards)
+    .map((q) => ({ label: q.label, text: input.answers[q.key]?.trim() }))
+    .filter((x) => x.text)
+    .map((x) => `### ${x.label}\n"""\n${x.text}\n"""`)
+    .join('\n\n');
 
   const context = [
     `- Tổ chức được đánh giá: ${input.organization}`,
@@ -126,13 +134,11 @@ ${clauseListByTier(input.standards)}
 
 ${context}
 
-## CHỨC NĂNG, NHIỆM VỤ / QUY CHẾ HOẠT ĐỘNG CỦA ĐƠN VỊ
+## THÔNG TIN VỀ ĐƠN VỊ
 
-Do đánh giá viên thu thập được. Đây là nguồn duy nhất cho biết đơn vị này làm gì — mọi công việc bạn soạn phải bám vào nó.
+Người soạn trả lời theo từng câu hỏi dưới đây. Đây là nguồn duy nhất cho biết đơn vị này làm gì — mọi công việc bạn soạn phải bám vào nó. Câu hỏi nào không có mặt ở đây là người soạn không cung cấp: KHÔNG tự suy diễn hay bịa thông tin cho phần đó.
 
-"""
-${input.description.trim()}
-"""
+${unitInfo}
 
 ## YÊU CẦU CHO LẦN NÀY
 

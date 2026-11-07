@@ -4,6 +4,38 @@ import { useEffect, useRef, useState } from 'react';
 import { parsePartialJson } from '@/lib/partial-json';
 import { formatClauseRefs } from '@/lib/iso';
 import type { Checklist, ChecklistGroup } from '@/lib/types';
+import {
+  MIN_FUNCTIONS_LENGTH, questionsFor, type ChecklistAnswers,
+} from '@/lib/checklist-questions';
+
+/**
+ * Câu trả lời được nhớ trên trình duyệt, riêng cho từng đơn vị của từng đợt —
+ * một đánh giá viên phụ trách nhiều đơn vị thì mỗi đơn vị giữ bộ trả lời riêng.
+ * Không lưu lên máy chủ. Trình duyệt chặn bộ nhớ thì form vẫn chạy, chỉ là
+ * không nhớ.
+ */
+const storageKey = (auditId: string, unitId: string) => `checklist-answers:${auditId}:${unitId}`;
+
+function loadAnswers(key: string): ChecklistAnswers {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as ChecklistAnswers) : {};
+  } catch {
+    return {};
+  }
+}
+
+function storeAnswers(key: string, answers: ChecklistAnswers) {
+  try {
+    if (Object.values(answers).some((v) => v?.trim())) {
+      window.localStorage.setItem(key, JSON.stringify(answers));
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    /* bộ nhớ trình duyệt bị chặn — bỏ qua */
+  }
+}
 
 /** Dàn ý máy chủ gửi trước khi model viết chữ đầu tiên. Xem route sinh checklist. */
 export type ChecklistMeta = {
@@ -109,12 +141,21 @@ export function ChecklistBuilder({
   auditId,
   unitId,
   unitName,
+  standards,
+  asLeader = false,
 }: {
   auditId: string;
   unitId: string;
   unitName: string;
+  /** Tiêu chuẩn của đợt — quyết định câu hỏi môi trường / an toàn có hiện không. */
+  standards: string[];
+  /** Gọi từ tab của trưởng đoàn: API chạy với quyền trưởng đoàn. */
+  asLeader?: boolean;
 }) {
-  const [description, setDescription] = useState('');
+  const questions = questionsFor(standards);
+  const key = storageKey(auditId, unitId);
+  const [answers, setAnswers] = useState<ChecklistAnswers>({});
+  const [answersLoaded, setAnswersLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   /** Model đã viết xong hẳn. Trước mốc này chỉ cho sửa chữ, chưa cho thêm/xoá dòng. */
   const [finished, setFinished] = useState(false);
@@ -139,6 +180,18 @@ export function ChecklistBuilder({
   const total = groups?.reduce((n, g) => n + g.items.length, 0) ?? 0;
   const hasRows = total > 0 || Boolean(inFlight);
 
+  // Đọc lại câu trả lời đã nhớ sau khi trang dựng xong (máy chủ không có localStorage).
+  useEffect(() => {
+    setAnswers(loadAnswers(key));
+    setAnswersLoaded(true);
+  }, [key]);
+
+  useEffect(() => {
+    if (answersLoaded) storeAnswers(key, answers);
+  }, [key, answers, answersLoaded]);
+
+  const query = asLeader ? '?vai=truong-doan' : '';
+
   /**
    * Chặn đóng tab khi có checklist chưa tải về.
    *
@@ -155,8 +208,8 @@ export function ChecklistBuilder({
   async function handleGenerate() {
     setError(null);
     setWarnings([]);
-    if (description.trim().length < 30) {
-      return setError('Cần ít nhất 30 ký tự mô tả chức năng, nhiệm vụ của đơn vị.');
+    if ((answers.functions ?? '').trim().length < MIN_FUNCTIONS_LENGTH) {
+      return setError('Nhập chức năng, nhiệm vụ chính của đơn vị (câu 1) trước khi soạn.');
     }
 
     setLoading(true);
@@ -175,10 +228,14 @@ export function ChecklistBuilder({
     setTimeout(() => startRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
 
     try {
-      const res = await fetch(`/api/dot/${auditId}/don-vi/${unitId}/checklist`, {
+      // Chỉ gửi câu trả lời của những câu hỏi áp dụng cho đợt này.
+      const body = Object.fromEntries(
+        questions.map((q) => [q.key, answers[q.key]?.trim() ?? '']).filter(([, v]) => v),
+      );
+      const res = await fetch(`/api/dot/${auditId}/don-vi/${unitId}/checklist${query}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description }),
+        body: JSON.stringify({ answers: body }),
         signal: controller.signal,
       });
 
@@ -284,7 +341,7 @@ export function ChecklistBuilder({
     setDownloading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/dot/${auditId}/don-vi/${unitId}/checklist/xuat-word`, {
+      const res = await fetch(`/api/dot/${auditId}/don-vi/${unitId}/checklist/xuat-word${query}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -351,28 +408,52 @@ export function ChecklistBuilder({
 
   return (
     <div className="space-y-6">
-      {/* Bước 1 — mô tả đơn vị. Mờ đi trong lúc chờ để mắt dồn xuống phần kết quả. */}
+      {/* Bước 1 — thông tin đơn vị. Mờ đi trong lúc chờ để mắt dồn xuống phần kết quả. */}
       <div
-        className={`card space-y-4 p-6 sm:p-7 transition-opacity ${loading ? 'pointer-events-none opacity-50' : ''}`}
+        className={`card space-y-5 p-6 sm:p-7 transition-opacity ${loading ? 'pointer-events-none opacity-50' : ''}`}
       >
         <div>
-          <h2 className="text-lg font-semibold">Chức năng, nhiệm vụ của {unitName}</h2>
+          <h2 className="text-lg font-semibold">Thông tin về {unitName}</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Hãy mô tả {unitName}: chức năng nhiệm vụ, các quá trình chính, nhân sự, cơ sở
-            vật chất và thiết bị. Thông tin càng cụ thể thì danh mục đề xuất càng sát với
-            thực tế.
+            Trả lời các câu hỏi dưới đây. Thông tin càng cụ thể thì checklist càng sát với thực
+            tế. Chỉ câu 1 bắt buộc, các câu khác bỏ trống được.
           </p>
         </div>
 
-        <textarea
-          className="input min-h-[220px] font-normal leading-relaxed"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          disabled={loading}
-        />
+        <ol className="space-y-4">
+          {questions.map((q, i) => (
+            <li key={q.key}>
+              <label className="label" htmlFor={`cq-${unitId}-${q.key}`}>
+                {i + 1}. {q.label}
+                {'required' in q && q.required && <span className="ml-0.5 text-red-600">*</span>}
+              </label>
+              <textarea
+                id={`cq-${unitId}-${q.key}`}
+                rows={q.key === 'functions' || q.key === 'processes' ? 3 : 2}
+                className="input font-normal leading-relaxed"
+                value={answers[q.key] ?? ''}
+                onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
+                disabled={loading}
+              />
+            </li>
+          ))}
+        </ol>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-slate-400">{description.trim().length} ký tự</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
+          <span className="text-xs text-slate-400">
+            Câu trả lời được nhớ trên trình duyệt này, riêng cho từng đơn vị.
+            {Object.values(answers).some((v) => v?.trim()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`Xoá hết câu trả lời đã nhập cho ${unitName}?`)) setAnswers({});
+                }}
+                className="ml-2 text-slate-500 underline hover:text-red-600"
+              >
+                Xoá câu trả lời
+              </button>
+            )}
+          </span>
           <button className="btn-primary" onClick={handleGenerate} disabled={loading}>
             {loading ? 'Đang soạn…' : hasRows ? 'Soạn lại' : 'Soạn danh mục công việc'}
           </button>
@@ -400,7 +481,7 @@ export function ChecklistBuilder({
             <p className="text-sm leading-relaxed text-slate-700">{summary}</p>
             {finished && (
               <p className="mt-2 text-xs text-slate-500">
-                Hiểu sai chỗ nào thì bổ sung vào phần mô tả ở trên rồi bấm “Soạn lại”.
+                Hiểu sai chỗ nào thì bổ sung vào các câu trả lời ở trên rồi bấm “Soạn lại”.
               </p>
             )}
           </div>
@@ -636,7 +717,7 @@ function Progress({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="flex items-center gap-2.5 text-sm font-medium text-slate-800">
             <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
-            {readingUnit ? 'AI đang đọc mô tả đơn vị' : 'AI đang soạn danh mục công việc'}
+            {readingUnit ? 'AI đang đọc thông tin đơn vị' : 'AI đang soạn danh mục công việc'}
           </p>
           <div className="flex items-center gap-3 text-xs text-slate-500">
             {meta && (
@@ -696,7 +777,7 @@ function Progress({
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
           <p className="text-xs text-slate-400">
             {elapsed >= 30
-              ? 'Lâu hơn thường lệ — mô tả dài thì mất thêm thời gian. Cứ để yên, đừng bấm lại.'
+              ? 'Lâu hơn thường lệ — thông tin dài thì mất thêm thời gian. Cứ để yên, đừng bấm lại.'
               : 'Dòng đầu tiên thường hiện ra sau khoảng 5–10 giây.'}
           </p>
           <button className="btn-ghost !py-1.5 !text-xs" onClick={onCancel}>

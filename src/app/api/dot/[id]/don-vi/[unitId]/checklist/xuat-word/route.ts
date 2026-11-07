@@ -6,6 +6,7 @@ import { audits, auditUnits } from '@/lib/schema';
 import { checklistExportSchema } from '@/lib/types';
 import { resolveActor } from '@/lib/actor';
 import { memberOwnsUnit } from '@/lib/member-auth';
+import { checklistAuditorName } from '@/lib/checklist-auditor';
 import { buildChecklistDoc, checklistFileName } from '@/lib/checklist-docx';
 
 export const runtime = 'nodejs';
@@ -33,19 +34,21 @@ export async function POST(req: Request, { params }: Ctx) {
     );
   }
 
-  const actor = await resolveActor(id);
+  const preferLeader = new URL(req.url).searchParams.get('vai') === 'truong-doan';
+  const actor = await resolveActor(id, { preferLeader });
   if (!actor) return NextResponse.json({ error: 'Chưa đăng nhập.' }, { status: 401 });
 
   if (actor.kind === 'member' && !(await memberOwnsUnit(id, actor.id, unitId))) {
     return NextResponse.json({ error: 'Không tìm thấy đơn vị.' }, { status: 404 });
   }
 
-  const [[audit], [unit]] = await Promise.all([
+  const [[audit], [unit], auditorName] = await Promise.all([
     db.select().from(audits).where(eq(audits.id, id)),
     db
       .select()
       .from(auditUnits)
       .where(and(eq(auditUnits.id, unitId), eq(auditUnits.auditId, id))),
+    checklistAuditorName(actor, id, unitId),
   ]);
   if (!audit || !unit) {
     return NextResponse.json({ error: 'Không tìm thấy đơn vị.' }, { status: 404 });
@@ -56,7 +59,7 @@ export async function POST(req: Request, { params }: Ctx) {
     auditTitle: audit.title,
     unitName: unit.name,
     standards: audit.standards,
-    auditorName: actor.name,
+    auditorName,
     groups: parsed.data.groups,
   });
 

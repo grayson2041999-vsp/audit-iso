@@ -32,10 +32,22 @@ export type Actor = {
  * ghi nhận tại hiện trường. Trưởng đoàn được chấp nhận để còn thử nghiệm và
  * xử lý giúp khi cần, nhưng CHỈ trong đợt của chính mình (`getOwnedAudit`).
  *
+ * `preferLeader`: thử trưởng đoàn trước. Dùng cho các trang của trưởng đoàn —
+ * trưởng đoàn tự thêm mình vào đoàn và đã nhập mã trên cùng trình duyệt thì vẫn
+ * phải được làm việc với quyền trưởng đoàn, không bị coi là đánh giá viên.
+ *
  * Cố tình không phân biệt "không đăng nhập" với "đăng nhập nhưng không có
  * quyền vào đợt này" — cùng trả `null`, để không lộ sự tồn tại của đợt.
  */
-export async function resolveActor(auditId: string): Promise<Actor | null> {
+export async function resolveActor(
+  auditId: string,
+  opts: { preferLeader?: boolean } = {},
+): Promise<Actor | null> {
+  if (opts.preferLeader) {
+    const asLeader = await leaderActor(auditId);
+    if (asLeader) return asLeader;
+  }
+
   const session = await getMember(auditId);
   if (session) {
     return {
@@ -48,6 +60,10 @@ export async function resolveActor(auditId: string): Promise<Actor | null> {
     };
   }
 
+  return leaderActor(auditId);
+}
+
+async function leaderActor(auditId: string): Promise<Actor | null> {
   const leader = await getLeader();
   if (!leader) return null;
 

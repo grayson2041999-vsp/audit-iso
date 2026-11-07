@@ -7,6 +7,7 @@ import { generateChecklistStream, isAiConfigured } from '@/lib/ai';
 import { AI_HOURLY_LIMIT, checkAiQuota, recordAiUsage } from '@/lib/ai-quota';
 import { resolveActor } from '@/lib/actor';
 import { memberOwnsUnit } from '@/lib/member-auth';
+import { checklistAuditorName } from '@/lib/checklist-auditor';
 import { STANDARD_SHORT, sortStandards } from '@/lib/iso';
 import { checklistSize, groupsFor } from '@/lib/checklist-prompt';
 import { toMinutes } from '@/lib/plan';
@@ -33,6 +34,9 @@ type Ctx = { params: Promise<{ id: string; unitId: string }> };
  * liệu nào được đọc ra. Trả 404 chứ không 403 — không xác nhận đơn vị có tồn
  * tại hay không cho người không được giao.
  *
+ * `?vai=truong-doan`: gọi từ tab Checklist đánh giá của trưởng đoàn — chạy với
+ * quyền trưởng đoàn, soạn được cho mọi đơn vị của đợt.
+ *
  * KHÔNG GHI GÌ VÀO CƠ SỞ DỮ LIỆU. Checklist chỉ sống trong màn hình của đánh
  * giá viên cho tới khi họ tải file Word.
  */
@@ -53,7 +57,8 @@ export async function POST(req: Request, { params }: Ctx) {
   }
 
   /* --- Cửa 2: anh là ai --- */
-  const actor = await resolveActor(id);
+  const preferLeader = new URL(req.url).searchParams.get('vai') === 'truong-doan';
+  const actor = await resolveActor(id, { preferLeader });
   if (!actor) {
     return NextResponse.json(
       { error: 'Chưa đăng nhập vào đợt đánh giá. Vui lòng mở lại link đợt và nhập mã.' },
@@ -87,7 +92,10 @@ export async function POST(req: Request, { params }: Ctx) {
   }
 
   const audit = await loadAudit(id);
-  const sessionMinutes = await unitSessionMinutes(id, unitId);
+  const [sessionMinutes, auditorName] = await Promise.all([
+    unitSessionMinutes(id, unitId),
+    checklistAuditorName(actor, id, unitId),
+  ]);
 
   const standards = sortStandards(audit.standards);
 
@@ -119,13 +127,13 @@ export async function POST(req: Request, { params }: Ctx) {
         for await (const event of generateChecklistStream({
           unitName: unit.name,
           unitNote: unit.note,
-          description: parsed.data.description,
+          answers: parsed.data.answers,
           standards,
           organization: audit.organization,
           objectives: audit.objectives,
           criteria: audit.criteria,
           sessionMinutes,
-          auditorName: actor.name,
+          auditorName,
         })) {
           // Chỉ tính lượt khi AI thực sự trả về kết quả — xem `/api/standardize`.
           if (event.type === 'done') {
