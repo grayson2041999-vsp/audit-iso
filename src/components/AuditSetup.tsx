@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AuditMember, AuditUnit } from '@/lib/schema';
 import { buildShortNames, sameUnitName } from '@/lib/utils';
-import { autoAssign } from '@/lib/assign';
 
 type Props = {
   auditId: string;
@@ -211,6 +210,8 @@ export function AuditSetup({
         {!locked && (
           <>
             <AddMemberRow
+              listId={`home-units-${auditId}`}
+              unitNames={units.map((u) => u.name)}
               busy={busy}
               onAdd={(fullName, homeUnit) =>
                 call(`/api/audits/${auditId}/members`, {
@@ -279,19 +280,6 @@ export function AuditSetup({
       <section className="card p-6 sm:p-7">
         <h2 className="mb-4 text-lg font-semibold">3. Phân công</h2>
 
-        {units.length > 0 && members.length > 0 && !locked && (
-          <AutoAssignRow
-            units={units.map((u) => ({ id: u.id, name: u.name }))}
-            members={members.map((m) => ({
-              id: m.id,
-              fullName: m.fullName,
-              homeUnit: m.homeUnit,
-            }))}
-            hasExisting={linkSet.size > 0}
-            onApply={(pairs) => setLinkSet(new Set(pairs))}
-          />
-        )}
-
         {units.length === 0 || members.length === 0 ? (
           <p className="text-sm text-slate-400">
             Cần khai báo xong đơn vị và đánh giá viên ở hai bước trên.
@@ -321,22 +309,29 @@ export function AuditSetup({
                     </td>
                     {members.map((m) => {
                       const on = linkSet.has(`${m.id}:${u.id}`);
+                      // Người của chính đơn vị thì không được tick. Ô đã tick từ trước
+                      // vẫn bỏ tick được, để gỡ phân công cũ còn sót.
                       const selfAudit = sameUnitName(m.homeUnit, u.name);
                       return (
-                        <td key={m.id} className="px-3 py-2 text-center">
+                        <td
+                          key={m.id}
+                          className="px-3 py-2 text-center"
+                          // Ô bị khoá thì chú thích phải gắn ở ô bảng: trình duyệt không hiện chú thích của ô tick đã khoá.
+                          title={selfAudit ? `${m.fullName} thuộc ${u.name}, không thể tự đánh giá đơn vị mình` : undefined}
+                        >
                           <input
                             type="checkbox"
                             checked={on}
-                            disabled={busy || locked}
+                            disabled={busy || locked || (selfAudit && !on)}
                             title={
                               selfAudit
-                                ? `${m.fullName} đang công tác tại ${u.name}, không nên tự đánh giá đơn vị mình`
+                                ? `${m.fullName} thuộc ${u.name}, không thể tự đánh giá đơn vị mình`
                                 : m.fullName
                             }
                             onChange={(e) => toggleLink(m.id, u.id, e.target.checked)}
                             className={`h-4 w-4 accent-brand-600 ${
-                              selfAudit && on ? 'rounded ring-2 ring-amber-400' : ''
-                            }`}
+                              selfAudit && on ? 'rounded ring-2 ring-red-400' : ''
+                            } ${selfAudit && !on ? 'cursor-not-allowed opacity-30' : ''}`}
                           />
                         </td>
                       );
@@ -442,9 +437,16 @@ function AddRow({
   );
 }
 
+/**
+ * Thêm đánh giá viên. Ô đơn vị công tác vừa gõ tự do được, vừa chọn được từ
+ * danh sách đơn vị của đợt — chọn (hoặc gõ trùng tên) một đơn vị trong đợt thì
+ * người này không được phân công đánh giá đơn vị đó.
+ */
 function AddMemberRow({
-  busy, onAdd,
+  listId, unitNames, busy, onAdd,
 }: {
+  listId: string;
+  unitNames: string[];
   busy: boolean;
   onAdd: (fullName: string, homeUnit: string) => Promise<boolean>;
 }) {
@@ -472,86 +474,18 @@ function AddMemberRow({
         className="input flex-1"
         value={home}
         onChange={(e) => setHome(e.target.value)}
-        placeholder="Đơn vị công tác (không bắt buộc)"
+        placeholder="Đơn vị công tác: chọn hoặc nhập (không bắt buộc)"
+        list={listId}
       />
+      <datalist id={listId}>
+        {unitNames.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <button type="submit" disabled={busy || !name.trim()} className="btn-ghost shrink-0">
         Thêm
       </button>
     </form>
-  );
-}
-
-/**
- * Phân công tự động — chia đều đơn vị cho cả đoàn.
- *
- * Kết quả chỉ điền vào ma trận bên dưới để xem trước; phải bấm Lưu phân công
- * thì mới có hiệu lực. Trưởng đoàn sửa lại ô nào cũng được trước khi lưu.
- */
-function AutoAssignRow({
-  units, members, hasExisting, onApply,
-}: {
-  units: { id: string; name: string }[];
-  members: { id: string; fullName: string; homeUnit: string | null }[];
-  hasExisting: boolean;
-  onApply: (pairs: string[]) => void;
-}) {
-  const [perUnit, setPerUnit] = useState(1);
-  const [note, setNote] = useState<{ text: string; warn: string | null } | null>(null);
-
-  function run() {
-    if (
-      hasExisting &&
-      !confirm('Phân công tự động sẽ thay thế toàn bộ các ô đang tick. Tiếp tục?')
-    ) {
-      return;
-    }
-
-    const r = autoAssign({ units, members, auditorsPerUnit: perUnit });
-    onApply(r.pairs);
-
-    const spread =
-      r.minLoad === r.maxLoad ? `mỗi người ${r.maxLoad} đơn vị` : `mỗi người ${r.minLoad}–${r.maxLoad} đơn vị`;
-
-    setNote({
-      text: `Đã chia ${units.length} đơn vị cho ${members.length} đánh giá viên — ${spread}. Xem lại ma trận bên dưới rồi bấm Lưu phân công.`,
-      warn:
-        r.selfAudited.length > 0
-          ? `Không đủ người độc lập cho: ${r.selfAudited.join(', ')}. ` +
-            'Những đơn vị này đang có người của chính đơn vị đó — nên đổi tay nếu được.'
-          : null,
-    });
-  }
-
-  return (
-    <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <button type="button" onClick={run} className="btn-ghost bg-white">
-          Phân công tự động
-        </button>
-        <label className="flex items-center gap-2 text-slate-600">
-          Mỗi đơn vị
-          <input
-            type="number"
-            min={1}
-            max={Math.max(1, members.length)}
-            value={perUnit}
-            onChange={(e) => setPerUnit(Math.max(1, Number(e.target.value) || 1))}
-            className="w-16 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-          />
-          đánh giá viên
-        </label>
-        <span className="text-xs text-slate-500">
-          Chia đều tải, tránh xếp người vào chính đơn vị họ đang công tác.
-        </span>
-      </div>
-
-      {note && (
-        <div className="mt-2 space-y-1">
-          <p className="text-xs text-slate-600">{note.text}</p>
-          {note.warn && <p className="text-xs text-amber-700">{note.warn}</p>}
-        </div>
-      )}
-    </div>
   );
 }
 

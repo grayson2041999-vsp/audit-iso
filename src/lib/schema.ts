@@ -191,7 +191,7 @@ export const auditMembers = pgTable(
       .references(() => audits.id, { onDelete: 'cascade' })
       .notNull(),
     fullName: text('full_name').notNull(),
-    /** Đơn vị công tác — dùng để cảnh báo khi phân công vào chính đơn vị mình. */
+    /** Đơn vị công tác — trùng tên một đơn vị trong đợt thì không được phân công đánh giá đơn vị đó. */
     homeUnit: text('home_unit'),
     /** Mã 6 số, chỉ có sau khi trưởng đoàn bấm "Sinh mã & mở đợt". */
     accessCode: text('access_code'),

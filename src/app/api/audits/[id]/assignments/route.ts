@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { assignments, auditMembers, auditUnits } from '@/lib/schema';
 import { getOwnedAudit } from '@/lib/audit-access';
+import { sameUnitName } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 
@@ -39,8 +40,14 @@ export async function PUT(req: Request, { params }: Ctx) {
 
   try {
     const [units, members, current] = await Promise.all([
-      db.select({ id: auditUnits.id }).from(auditUnits).where(eq(auditUnits.auditId, id)),
-      db.select({ id: auditMembers.id }).from(auditMembers).where(eq(auditMembers.auditId, id)),
+      db
+        .select({ id: auditUnits.id, name: auditUnits.name })
+        .from(auditUnits)
+        .where(eq(auditUnits.auditId, id)),
+      db
+        .select({ id: auditMembers.id, fullName: auditMembers.fullName, homeUnit: auditMembers.homeUnit })
+        .from(auditMembers)
+        .where(eq(auditMembers.auditId, id)),
       db.select().from(assignments).where(eq(assignments.auditId, id)),
     ]);
 
@@ -53,6 +60,27 @@ export async function PUT(req: Request, { params }: Ctx) {
         .filter((p) => unitIds.has(p.unitId) && memberIds.has(p.memberId))
         .map((p) => `${p.memberId}:${p.unitId}`),
     );
+
+    // Không ai được đánh giá chính đơn vị mình (theo ô đơn vị công tác).
+    const unitById = new Map(units.map((u) => [u.id, u]));
+    const memberById = new Map(members.map((m) => [m.id, m]));
+    const selfAudits = [...wanted].flatMap((k) => {
+      const [memberId, unitId] = k.split(':');
+      const m = memberById.get(memberId)!;
+      const u = unitById.get(unitId)!;
+      return sameUnitName(m.homeUnit, u.name) ? [`${m.fullName} (${u.name})`] : [];
+    });
+    if (selfAudits.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            `Không thể phân công đánh giá viên đánh giá chính đơn vị mình: ${selfAudits.join(', ')}. ` +
+            'Bỏ tick các ô này rồi lưu lại.',
+        },
+        { status: 400 },
+      );
+    }
+
     const existing = new Map(current.map((a) => [`${a.memberId}:${a.unitId}`, a.id]));
 
     const toAdd = [...wanted].filter((k) => !existing.has(k));
