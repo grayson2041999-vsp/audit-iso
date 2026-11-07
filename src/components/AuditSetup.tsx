@@ -22,6 +22,9 @@ export function AuditSetup({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Đánh giá viên đang mở form sửa. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const unitListId = `home-units-${auditId}`;
 
   /**
    * Ma trận phân công giữ hoàn toàn ở phía trình duyệt cho tới khi bấm Lưu:
@@ -209,11 +212,12 @@ export function AuditSetup({
 
         {!locked && (
           <>
-            <AddMemberRow
-              listId={`home-units-${auditId}`}
-              unitNames={units.map((u) => u.name)}
+            <MemberForm
+              listId={unitListId}
               busy={busy}
-              onAdd={(fullName, homeUnit) =>
+              submitLabel="Thêm"
+              resetOnSuccess
+              onSubmit={(fullName, homeUnit) =>
                 call(`/api/audits/${auditId}/members`, {
                   method: 'POST',
                   body: JSON.stringify({ fullName, homeUnit }),
@@ -238,11 +242,40 @@ export function AuditSetup({
           </>
         )}
 
+        {/* Gợi ý cho ô đơn vị công tác, dùng chung cho form thêm và form sửa. */}
+        <datalist id={unitListId}>
+          {units.map((u) => (
+            <option key={u.id} value={u.name} />
+          ))}
+        </datalist>
+
         {members.length === 0 ? (
           <p className="mt-4 text-sm text-slate-400">Chưa có đánh giá viên nào.</p>
         ) : (
           <ul className="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {members.map((m) => (
+            {members.map((m) =>
+              editingId === m.id ? (
+                <li key={m.id} className="bg-slate-50 px-3 py-3">
+                  <MemberForm
+                    listId={unitListId}
+                    busy={busy}
+                    initialName={m.fullName}
+                    initialHome={m.homeUnit ?? ''}
+                    // Tên trưởng đoàn lấy theo tài khoản đăng nhập, nên không sửa ở đây.
+                    nameLocked={m.isLeader === '1' || m.fullName === leaderName}
+                    submitLabel="Lưu"
+                    onCancel={() => setEditingId(null)}
+                    onSubmit={async (fullName, homeUnit) => {
+                      const ok = await call(`/api/audits/${auditId}/members/${m.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ fullName, homeUnit }),
+                      });
+                      if (ok) setEditingId(null);
+                      return ok;
+                    }}
+                  />
+                </li>
+              ) : (
               <li key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
                 <span className="font-medium">{m.fullName}</span>
                 {m.homeUnit && <span className="text-xs text-slate-500">{m.homeUnit}</span>}
@@ -259,19 +292,29 @@ export function AuditSetup({
                   )}
                 </span>
                 {!locked && (
-                  <button
-                    onClick={() =>
-                      confirm(`Xoá đánh giá viên "${m.fullName}"?`) &&
-                      call(`/api/audits/${auditId}/members/${m.id}`, { method: 'DELETE' })
-                    }
-                    disabled={busy}
-                    className="text-xs text-red-600 hover:underline"
-                  >
-                    Xoá
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setEditingId(m.id)}
+                      disabled={busy}
+                      className="text-xs text-brand-700 hover:underline"
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() =>
+                        confirm(`Xoá đánh giá viên "${m.fullName}"?`) &&
+                        call(`/api/audits/${auditId}/members/${m.id}`, { method: 'DELETE' })
+                      }
+                      disabled={busy}
+                      className="text-xs text-red-600 hover:underline"
+                    >
+                      Xoá
+                    </button>
+                  </>
                 )}
               </li>
-            ))}
+              ),
+            )}
           </ul>
         )}
       </section>
@@ -438,26 +481,33 @@ function AddRow({
 }
 
 /**
- * Thêm đánh giá viên. Ô đơn vị công tác vừa gõ tự do được, vừa chọn được từ
- * danh sách đơn vị của đợt — chọn (hoặc gõ trùng tên) một đơn vị trong đợt thì
- * người này không được phân công đánh giá đơn vị đó.
+ * Form thông tin đánh giá viên, dùng cho cả thêm mới lẫn sửa. Ô đơn vị công tác
+ * vừa gõ tự do được, vừa chọn được từ danh sách đơn vị của đợt (`listId`) —
+ * chọn (hoặc gõ trùng tên) một đơn vị trong đợt thì người này không được phân
+ * công đánh giá đơn vị đó.
  */
-function AddMemberRow({
-  listId, unitNames, busy, onAdd,
+function MemberForm({
+  listId, busy, initialName = '', initialHome = '', nameLocked = false,
+  submitLabel, resetOnSuccess = false, onSubmit, onCancel,
 }: {
   listId: string;
-  unitNames: string[];
   busy: boolean;
-  onAdd: (fullName: string, homeUnit: string) => Promise<boolean>;
+  initialName?: string;
+  initialHome?: string;
+  nameLocked?: boolean;
+  submitLabel: string;
+  resetOnSuccess?: boolean;
+  onSubmit: (fullName: string, homeUnit: string) => Promise<boolean>;
+  onCancel?: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [home, setHome] = useState('');
+  const [name, setName] = useState(initialName);
+  const [home, setHome] = useState(initialHome);
   return (
     <form
       onSubmit={async (e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        if (await onAdd(name.trim(), home.trim())) {
+        if ((await onSubmit(name.trim(), home.trim())) && resetOnSuccess) {
           setName('');
           setHome('');
         }
@@ -465,10 +515,12 @@ function AddMemberRow({
       className="flex flex-wrap gap-2"
     >
       <input
-        className="input flex-1"
+        className="input flex-1 disabled:bg-slate-100 disabled:text-slate-500"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Họ tên đánh giá viên"
+        disabled={nameLocked}
+        title={nameLocked ? 'Tên trưởng đoàn lấy theo tài khoản đăng nhập' : undefined}
       />
       <input
         className="input flex-1"
@@ -477,14 +529,14 @@ function AddMemberRow({
         placeholder="Đơn vị công tác: chọn hoặc nhập (không bắt buộc)"
         list={listId}
       />
-      <datalist id={listId}>
-        {unitNames.map((n) => (
-          <option key={n} value={n} />
-        ))}
-      </datalist>
       <button type="submit" disabled={busy || !name.trim()} className="btn-ghost shrink-0">
-        Thêm
+        {submitLabel}
       </button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} disabled={busy} className="shrink-0 text-sm text-slate-500 hover:underline">
+          Huỷ
+        </button>
+      )}
     </form>
   );
 }
