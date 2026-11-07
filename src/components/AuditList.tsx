@@ -105,7 +105,10 @@ export function AuditList({ rows }: { rows: Row[] }) {
                 <li key={a.id} className="card group transition-colors hover:border-hairline">
                   <Link href={`/quan-ly/dot/${a.id}`} className="block p-7">
                     {/* Launch Status Label: chữ trần 12px/600, không nền, không viền. */}
-                    <p className={`text-xs font-semibold ${st.cls}`}>{st.label}</p>
+                    <p className={`flex items-center gap-1 text-xs font-semibold ${st.cls}`}>
+                      {a.status === 'CLOSED' && <LockIcon />}
+                      {st.label}
+                    </p>
                     <p className="mt-3 text-sm text-slate-500">{a.organization}</p>
                     <h2 className="mt-0.5 font-display text-xl font-semibold text-ink">{a.title}</h2>
                     <p className="mt-3 text-sm text-slate-500">
@@ -128,5 +131,25 @@ export function AuditList({ rows }: { rows: Row[] }) {
         </>
       )}
     </div>
+  );
+}
+
+/** Biểu tượng ổ khoá của bộ Lucide (giấy phép ISC), chép thẳng SVG để không phải cài thêm thư viện. */
+function LockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      focusable="false"
+    >
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
   );
 }
