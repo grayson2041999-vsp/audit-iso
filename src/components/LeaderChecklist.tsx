@@ -76,9 +76,6 @@ export function LeaderChecklist({
                 <span className={`block truncate text-sm ${on ? 'font-semibold text-brand-800' : 'font-medium text-ink'}`}>
                   {u.name}
                 </span>
-                <span className="mt-0.5 block truncate text-[11px] text-slate-500">
-                  {u.auditors.length > 0 ? u.auditors.join(', ') : 'Chưa phân công'}
-                </span>
               </button>
             );
           })}
