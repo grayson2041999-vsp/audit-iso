@@ -10,12 +10,8 @@ import type { StandardCode } from './iso';
 export const CHECKLIST_QUESTIONS = [
   {
     key: 'functions',
-    label: 'Chức năng, nhiệm vụ chính của đơn vị là gì?',
+    label: 'Chức năng, nhiệm vụ và các công việc chính của đơn vị?',
     required: true,
-  },
-  {
-    key: 'processes',
-    label: 'Các quá trình / công việc chính đơn vị thực hiện hằng ngày?',
   },
   {
     key: 'personnel',
@@ -56,6 +52,12 @@ export type ChecklistAnswers = Partial<Record<ChecklistQuestionKey, string>>;
 
 /** Số ký tự tối thiểu của câu bắt buộc — đủ để AI biết đơn vị làm gì. */
 export const MIN_FUNCTIONS_LENGTH = 15;
+
+/**
+ * Số ký tự tối đa mỗi câu trả lời. Giữ phần nhập gọn, tránh dán nguyên cả
+ * quy trình vào làm AI đọc lâu và tốn hơn. Form hiện bộ đếm theo số này.
+ */
+export const MAX_ANSWER_LENGTH = 1000;
 
 /** Các câu hỏi áp dụng cho đợt có những tiêu chuẩn này. */
 export function questionsFor(standards: readonly string[]) {

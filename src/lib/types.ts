@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MIN_FUNCTIONS_LENGTH } from './checklist-questions';
+import { MAX_ANSWER_LENGTH, MIN_FUNCTIONS_LENGTH } from './checklist-questions';
 
 export const severitySchema = z.enum(['MAJOR', 'MINOR', 'OBS', 'OFI', 'CONF']);
 export const standardCodeSchema = z.enum(['ISO9001', 'ISO14001', 'ISO45001']);
@@ -158,16 +158,16 @@ export type ChecklistGroup = z.infer<typeof checklistGroupSchema>;
 export type Checklist = z.infer<typeof checklistSchema>;
 
 /** Câu trả lời cho bộ câu hỏi ở `checklist-questions.ts`. Chỉ câu chức năng, nhiệm vụ là bắt buộc. */
-const answerText = z.string().trim().max(3000, 'Mỗi câu trả lời tối đa 3000 ký tự').optional();
+const tooLong = `Mỗi câu trả lời tối đa ${MAX_ANSWER_LENGTH} ký tự`;
+const answerText = z.string().trim().max(MAX_ANSWER_LENGTH, tooLong).optional();
 
 export const checklistRequestSchema = z.object({
   answers: z.object({
     functions: z
       .string()
       .trim()
-      .min(MIN_FUNCTIONS_LENGTH, 'Nhập chức năng, nhiệm vụ chính của đơn vị (ít nhất vài từ)')
-      .max(3000, 'Mỗi câu trả lời tối đa 3000 ký tự'),
-    processes: answerText,
+      .min(MIN_FUNCTIONS_LENGTH, 'Nhập chức năng, nhiệm vụ và công việc chính của đơn vị (ít nhất vài từ)')
+      .max(MAX_ANSWER_LENGTH, tooLong),
     personnel: answerText,
     facilities: answerText,
     environment: answerText,

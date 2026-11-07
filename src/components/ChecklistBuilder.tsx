@@ -5,7 +5,7 @@ import { parsePartialJson } from '@/lib/partial-json';
 import { formatClauseRefs } from '@/lib/iso';
 import type { Checklist, ChecklistGroup } from '@/lib/types';
 import {
-  MIN_FUNCTIONS_LENGTH, questionsFor, type ChecklistAnswers,
+  MAX_ANSWER_LENGTH, MIN_FUNCTIONS_LENGTH, questionsFor, type ChecklistAnswers,
 } from '@/lib/checklist-questions';
 
 /**
@@ -19,7 +19,13 @@ const storageKey = (auditId: string, unitId: string) => `checklist-answers:${aud
 function loadAnswers(key: string): ChecklistAnswers {
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as ChecklistAnswers) : {};
+    if (!raw) return {};
+    const { processes, ...rest } = JSON.parse(raw) as ChecklistAnswers & { processes?: string };
+    // Câu "quá trình / công việc chính" đã gộp vào câu 1 — nối câu trả lời cũ vào để không mất.
+    if (processes?.trim()) {
+      rest.functions = [rest.functions?.trim(), processes.trim()].filter(Boolean).join('\n');
+    }
+    return rest;
   } catch {
     return {};
   }
@@ -209,7 +215,11 @@ export function ChecklistBuilder({
     setError(null);
     setWarnings([]);
     if ((answers.functions ?? '').trim().length < MIN_FUNCTIONS_LENGTH) {
-      return setError('Nhập chức năng, nhiệm vụ chính của đơn vị (câu 1) trước khi soạn.');
+      return setError('Nhập chức năng, nhiệm vụ và công việc chính của đơn vị (câu 1) trước khi soạn.');
+    }
+    const tooLong = questions.findIndex((q) => (answers[q.key] ?? '').trim().length > MAX_ANSWER_LENGTH);
+    if (tooLong >= 0) {
+      return setError(`Câu ${tooLong + 1} dài quá ${MAX_ANSWER_LENGTH} ký tự — rút gọn bớt rồi soạn lại.`);
     }
 
     setLoading(true);
@@ -420,22 +430,36 @@ export function ChecklistBuilder({
         </div>
 
         <ol className="space-y-4">
-          {questions.map((q, i) => (
-            <li key={q.key}>
-              <label className="label" htmlFor={`cq-${unitId}-${q.key}`}>
-                {i + 1}. {q.label}
-                {'required' in q && q.required && <span className="ml-0.5 text-red-600">*</span>}
-              </label>
-              <textarea
-                id={`cq-${unitId}-${q.key}`}
-                rows={q.key === 'functions' || q.key === 'processes' ? 3 : 2}
-                className="input font-normal leading-relaxed"
-                value={answers[q.key] ?? ''}
-                onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
-                disabled={loading}
-              />
-            </li>
-          ))}
+          {questions.map((q, i) => {
+            const length = (answers[q.key] ?? '').length;
+            return (
+              <li key={q.key}>
+                <label className="label" htmlFor={`cq-${unitId}-${q.key}`}>
+                  {i + 1}. {q.label}
+                  {'required' in q && q.required && <span className="ml-0.5 text-red-600">*</span>}
+                </label>
+                <textarea
+                  id={`cq-${unitId}-${q.key}`}
+                  rows={q.key === 'functions' ? 4 : 2}
+                  maxLength={MAX_ANSWER_LENGTH}
+                  className="input font-normal leading-relaxed"
+                  value={answers[q.key] ?? ''}
+                  onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
+                  disabled={loading}
+                />
+                {/* Chỉ hiện bộ đếm khi đã gõ, để form trống trông gọn. Cam khi gần chạm giới hạn. */}
+                {length > 0 && (
+                  <p
+                    className={`mt-1 text-right text-xs tabular-nums ${
+                      length >= MAX_ANSWER_LENGTH * 0.9 ? 'text-amber-600' : 'text-slate-400'
+                    }`}
+                  >
+                    {length}/{MAX_ANSWER_LENGTH}
+                  </p>
+                )}
+              </li>
+            );
+          })}
         </ol>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
@@ -776,7 +800,7 @@ function Progress({
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
           <p className="text-xs text-slate-400">
             {elapsed >= 30
-              ? 'Lâu hơn thường lệ — thông tin dài thì mất thêm thời gian. Cứ để yên, đừng bấm lại.'
+              ? 'AI đang phân tích, bạn vui lòng chờ một xíu nha!'
               : 'Dòng đầu tiên thường hiện ra sau khoảng 5–10 giây.'}
           </p>
           <button className="btn-ghost !py-1.5 !text-xs" onClick={onCancel}>

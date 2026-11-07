@@ -93,8 +93,7 @@ export function AnalysisProgress({
 
       {slow && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Lâu hơn thường lệ. Ghi nhận dài hoặc nhiều ảnh sẽ mất thêm thời gian — cứ để yên, đừng
-          bấm lại.
+          AI đang phân tích, bạn vui lòng chờ một xíu nha!
         </p>
       )}
     </div>

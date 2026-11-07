@@ -26,6 +26,14 @@ const MAX_IMAGES = 6;
 const MAX_TOKENS = 16384;
 
 /**
+ * Trần riêng cho checklist: đầu ra dài hơn finding nhiều lần (tới vài chục
+ * dòng, mỗi dòng kèm điều khoản), 16384 có thể chạm khi thời lượng đánh giá
+ * dài. Tiền tính theo lượng model thực viết, nên trần cao không làm checklist
+ * ngắn tốn thêm. Sonnet 5.5 cho tối đa 128K token đầu ra.
+ */
+const CHECKLIST_MAX_TOKENS = 32768;
+
+/**
  * KHÔNG ÉP GỌI CÔNG CỤ BẰNG `tool_choice: { type: 'tool' }`.
  *
  * Claude Sonnet 5.5 (cùng Opus 5.5, Fable 5.1, Mythos 5.1) trả lỗi 400
@@ -650,7 +658,7 @@ export async function* generateChecklistStream(
 
   const stream = anthropic.messages.stream({
     model: MODEL,
-    max_tokens: MAX_TOKENS,
+    max_tokens: CHECKLIST_MAX_TOKENS,
     system: CHECKLIST_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: buildChecklistPrompt(input) }],
     tools: [CHECKLIST_TOOL],
