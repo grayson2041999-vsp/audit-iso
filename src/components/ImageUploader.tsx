@@ -35,7 +35,7 @@ export function ImageUploader({
       /**
        * NÉN TRƯỚC, XIN GIẤY PHÉP SAU — thứ tự này bắt buộc, không đảo được.
        *
-       * Giấy phép upload giờ ký kèm số byte chính xác (xem `lib/r2.ts`), nên
+       * Giấy phép upload ký kèm số byte chính xác (xem `lib/r2.ts`), nên
        * con số khai với máy chủ phải là con số của file CUỐI CÙNG sẽ gửi đi.
        * Nén sau khi ký là lệch byte và R2 trả 403 với thông báo tối nghĩa.
        */

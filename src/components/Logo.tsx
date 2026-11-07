@@ -1,5 +1,5 @@
 /**
- * Logo app — phương án B: chữ "I" của "ISO" là tháp khoan trong biểu trưng
+ * Logo app: chữ "I" của "ISO" là tháp khoan trong biểu trưng
  * Vietsovpetro, bên dưới là hai dải sóng đỏ – xanh lấy từ lá cờ của biểu trưng.
  *
  * Vẽ bằng SVG nội tuyến chứ không dùng ảnh: nét luôn sắc ở mọi cỡ màn hình,

@@ -68,21 +68,7 @@ export const auditStatusEnum = pgEnum('audit_status', [
   'PLANNED', 'IN_PROGRESS', 'REPORTING', 'CLOSED',
 ]);
 
-/**
- * Vòng đời gói khắc phục của một đơn vị. HAI mốc duyệt, không phải một:
- *
- *   PLAN_DRAFT         đơn vị đang soạn kế hoạch
- *   PLAN_SUBMITTED     đã trình kế hoạch, chờ trưởng đoàn duyệt
- *   PLAN_REJECTED      trả lại, đơn vị sửa rồi trình lại
- *   PLAN_APPROVED      kế hoạch được duyệt — đơn vị đi làm
- *   EVIDENCE_SUBMITTED đã nộp bằng chứng hoàn thành, chờ xác nhận
- *   EVIDENCE_REJECTED  bằng chứng chưa đạt, làm lại
- *   CLOSED             trưởng đoàn xác nhận hiệu lực, đóng
- *
- * Mốc 2 tồn tại vì ISO 9001 §10.2.1 e) đòi "xem xét hiệu lực của mọi hành động
- * khắc phục ĐÃ THỰC HIỆN" — duyệt kế hoạch mới là đồng ý cách làm, chưa phải
- * xác nhận nó có tác dụng.
- */
+/** KHÔNG DÙNG NỮA — trạng thái của luồng cũ đơn vị nộp hồ sơ qua app. Thay bằng `capa_actions`. */
 export const capaStatusEnum = pgEnum('capa_status', [
   'PLAN_DRAFT',
   'PLAN_SUBMITTED',
@@ -129,7 +115,7 @@ export const audits = pgTable('audits', {
   location: text('location'),                    // Địa điểm
   approverTitle: text('approver_title'),         // Chức danh người phê duyệt (khối ký)
   approverName: text('approver_name'),           // Họ tên người phê duyệt, không bắt buộc
-  /** Giờ hiển thị của buổi sáng / buổi chiều. Chỉ dùng để in ra chương trình. */
+  /** Giờ mặc định của đợt — chỉ dùng để suy ra khoảng giờ cho đợt cũ chưa có `audit_days`. */
   amStart: text('am_start').default('08:00').notNull(),
   amEnd: text('am_end').default('11:30').notNull(),
   pmStart: text('pm_start').default('13:30').notNull(),
@@ -137,16 +123,7 @@ export const audits = pgTable('audits', {
   /** Thời lượng hai cuộc họp cố định, dùng khi sinh lịch tự động. */
   openingMinutes: integer('opening_minutes').default(30).notNull(),
   closingMinutes: integer('closing_minutes').default(90).notNull(),
-  /**
-   * Khung giờ riêng của từng ngày, đánh chỉ số theo THỨ TỰ NGÀY trong đợt —
-   * phần tử 0 là ngày 1. Cùng cách đánh với việc dời ngày đợt, nên đổi khoảng
-   * ngày thì khung giờ đi theo mà không phải ánh xạ lại ngày dương lịch.
-   *
-   * Ngày nào không có phần tử tương ứng thì dùng bốn cột am_start… ở trên.
-   *
-   * KHÔNG DÙNG NỮA từ migration 014 — thay bằng `auditDays`. Chỉ còn được đọc
-   * để suy ra ngày cho đợt cũ chưa chuyển.
-   */
+  /** KHÔNG DÙNG NỮA — thay bằng `auditDays`. Chỉ còn đọc để suy ra ngày cho đợt cũ. */
   dayHours: jsonb('day_hours')
     .$type<{ amStart: string; amEnd: string; pmStart: string; pmEnd: string }[]>()
     .default([])
@@ -173,14 +150,9 @@ export const audits = pgTable('audits', {
    */
   findingSeq: integer('finding_seq').default(0).notNull(),
 
-  /**
-   * Đã gửi báo cáo cho các đơn vị được đánh giá chưa. NULL = chưa.
-   *
-   * Cố tình KHÔNG thêm giá trị vào `audit_status`: cùng cách nghĩ với phần còn
-   * lại của app — trạng thái là hệ quả của hành động, không phải một nút riêng.
-   */
+  /** KHÔNG DÙNG NỮA — đã bỏ việc gửi báo cáo cho đơn vị qua app. */
   issuedAt: timestamp('issued_at', { withTimezone: true }),
-  /** Số bản báo cáo đã phát hành. 0 = chưa lần nào. */
+  /** KHÔNG DÙNG NỮA — đã bỏ việc gửi báo cáo cho đơn vị qua app. */
   reportVersion: integer('report_version').default(0).notNull(),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -200,13 +172,7 @@ export const auditUnits = pgTable(
       .notNull(),
     name: text('name').notNull(),
     note: text('note'),
-    /**
-     * Mã 8 số để đơn vị vào xem báo cáo và nộp hồ sơ khắc phục. Chỉ có sau khi
-     * trưởng đoàn bấm "Gửi báo cáo cho đơn vị".
-     *
-     * Lưu dạng đọc được, giống mã 6 số của đánh giá viên — trưởng đoàn phải tra
-     * lại được cho đơn vị quên mã.
-     */
+    /** KHÔNG DÙNG NỮA — đã bỏ việc gửi báo cáo cho đơn vị qua app. */
     accessCode: text('access_code'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -262,7 +228,7 @@ export const assignments = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
-/* audit_sessions — lịch đánh giá, mỗi dòng là MỘT BUỔI                 */
+/* audit_sessions — lịch đánh giá, mỗi dòng là một phiên                */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -306,7 +272,7 @@ export const findings = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     auditId: uuid('audit_id').references(() => audits.id, { onDelete: 'cascade' }),
-    /** Đơn vị được đánh giá — thay cho ô gõ tay trước đây. */
+    /** Đơn vị được đánh giá. */
     unitId: uuid('unit_id').references(() => auditUnits.id, { onDelete: 'set null' }),
     /** Đánh giá viên ghi nhận. */
     memberId: uuid('member_id').references(() => auditMembers.id, { onDelete: 'set null' }),
@@ -426,10 +392,9 @@ export const aiUsage = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
-/* report_releases — mỗi lần phát hành báo cáo cho đơn vị              */
+/* report_releases — KHÔNG DÙNG NỮA                                    */
 /* ------------------------------------------------------------------ */
 
-/** Một finding như nó được nhìn thấy tại thời điểm phát hành. */
 export type ReleasedFinding = {
   id: string;
   code: string | null;
@@ -447,14 +412,8 @@ export type ReleasedFinding = {
 };
 
 /**
- * ĐƠN VỊ ĐỌC ẢNH CHỤP, KHÔNG ĐỌC DỮ LIỆU SỐNG — điểm mấu chốt của thiết kế.
- *
- * Trưởng đoàn có mở đợt ra sửa gì thì bên đơn vị vẫn thấy đúng bản đã gửi, cho
- * tới khi bấm phát hành bản mới kèm lý do. Nhờ vậy vừa không khoá chết báo cáo
- * (còn sửa được lỗi chính tả, rút một finding sai), vừa không ai sửa lén được
- * thứ đã gửi đi — đúng tinh thần ISO 9001 §7.5.3 về kiểm soát thông tin dạng
- * văn bản, và chặt hơn kiểu khoá chết vì khoá chết chỉ đẩy người ta ra ngoài
- * hệ thống.
+ * KHÔNG DÙNG NỮA — bảng của luồng cũ gửi báo cáo / đơn vị nộp hồ sơ khắc phục
+ * qua app. Bảng còn trong database; lệnh xoá ở cuối migration 015.
  */
 export const reportReleases = pgTable(
   'report_releases',
@@ -464,7 +423,6 @@ export const reportReleases = pgTable(
       .references(() => audits.id, { onDelete: 'cascade' })
       .notNull(),
     version: integer('version').notNull(),
-    /** Bắt buộc từ bản 2 trở đi — kiểm ở tầng ứng dụng, bản 1 không cần. */
     reason: text('reason'),
     releasedBy: text('released_by'),
     snapshot: jsonb('snapshot').$type<ReleasedFinding[]>().notNull(),
@@ -474,15 +432,12 @@ export const reportReleases = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
-/* corrective_reports — một gói khắc phục cho một đơn vị               */
+/* corrective_reports — KHÔNG DÙNG NỮA                                 */
 /* ------------------------------------------------------------------ */
 
 /**
- * Đơn vị nộp CẢ GÓI một lần, không nộp lẻ từng finding.
- *
- * Đổi lại, trưởng đoàn vẫn chấm được TỪNG FINDING qua cột `verdict` ở
- * `corrective_items` — trả lại cả gói nhưng đơn vị biết chính xác mục nào chưa
- * đạt, không phải làm lại từ đầu.
+ * KHÔNG DÙNG NỮA — bảng của luồng cũ gửi báo cáo / đơn vị nộp hồ sơ khắc phục
+ * qua app. Bảng còn trong database; lệnh xoá ở cuối migration 015.
  */
 export const correctiveReports = pgTable(
   'corrective_reports',
@@ -496,15 +451,9 @@ export const correctiveReports = pgTable(
       .notNull(),
     status: capaStatusEnum('status').default('PLAN_DRAFT').notNull(),
 
-    /**
-     * Lãnh đạo phòng đứng tên chịu trách nhiệm. Mã 8 số dùng chung cả đơn vị
-     * nên đây là chỗ DUY NHẤT ghi được ai đứng ra cam kết — mà ISO 9001
-     * §10.2.2 lại yêu cầu lưu hồ sơ hành động đã thực hiện.
-     */
     responsibleName: text('responsible_name'),
     responsibleTitle: text('responsible_title'),
 
-    /** Lần nộp thứ mấy; tăng mỗi khi trưởng đoàn trả lại. */
     round: integer('round').default(1).notNull(),
 
     planSubmittedAt: timestamp('plan_submitted_at', { withTimezone: true }),
@@ -512,7 +461,6 @@ export const correctiveReports = pgTable(
     evidenceSubmittedAt: timestamp('evidence_submitted_at', { withTimezone: true }),
     closedAt: timestamp('closed_at', { withTimezone: true }),
 
-    /** Ghi chú lần duyệt gần nhất — lý do trả lại, hoặc nhận xét khi duyệt. */
     reviewNote: text('review_note'),
 
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -522,7 +470,7 @@ export const correctiveReports = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
-/* corrective_items — mỗi sự không phù hợp một dòng                    */
+/* corrective_items — KHÔNG DÙNG NỮA                                   */
 /* ------------------------------------------------------------------ */
 
 export type CapaAttachment = {
@@ -533,9 +481,8 @@ export type CapaAttachment = {
 };
 
 /**
- * KHÔNG DÙNG NỮA (thay bằng `capa_actions`). Giữ định nghĩa để bảng cũ còn đọc được.
- * OBS / OFI / CONF không bắt buộc khắc phục; bắt đơn vị làm hồ sơ CAPA cho một
- * cơ hội cải tiến là cách nhanh nhất khiến họ ghét cả công cụ lẫn việc đánh giá.
+ * KHÔNG DÙNG NỮA — bảng của luồng cũ gửi báo cáo / đơn vị nộp hồ sơ khắc phục
+ * qua app. Bảng còn trong database; lệnh xoá ở cuối migration 015.
  */
 export const correctiveItems = pgTable(
   'corrective_items',
@@ -547,24 +494,16 @@ export const correctiveItems = pgTable(
     findingId: uuid('finding_id')
       .references(() => findings.id, { onDelete: 'cascade' })
       .notNull(),
-    /**
-     * Phát hành bản mới có thể làm một finding thôi không còn là NC (bị hạ mức
-     * hoặc rút). KHÔNG xoá dòng — đơn vị đã gõ nội dung vào đó — mà tắt đi, để
-     * lịch sử còn nguyên và bật lại được nếu bản sau đảo ngược quyết định.
-     */
     isActive: boolean('is_active').default(true).notNull(),
 
-    /* --- Mốc 1: kế hoạch --- */
     immediateAction: text('immediate_action'),
     rootCause: text('root_cause'),
     actionPlan: text('action_plan'),
     targetDate: timestamp('target_date', { withTimezone: true }),
 
-    /* --- Mốc 2: bằng chứng đã thực hiện --- */
     completionNote: text('completion_note'),
     attachments: jsonb('attachments').$type<CapaAttachment[]>().default([]).notNull(),
 
-    /** Trưởng đoàn chấm từng mục: null chưa chấm · 'OK' đạt · 'NG' chưa đạt. */
     verdict: text('verdict').$type<'OK' | 'NG' | null>(),
     leaderNote: text('leader_note'),
 
@@ -575,12 +514,12 @@ export const correctiveItems = pgTable(
 );
 
 /* ------------------------------------------------------------------ */
-/* corrective_events — nhật ký nộp / duyệt / trả lại                   */
+/* corrective_events — KHÔNG DÙNG NỮA                                  */
 /* ------------------------------------------------------------------ */
 
 /**
- * Mỗi lần nộp hoặc duyệt ghi một dòng kèm ảnh chụp toàn bộ gói. Bản bị trả lại
- * KHÔNG bị ghi đè, nên sau này đọc lại được vì sao đơn vị phải làm tới lần ba.
+ * KHÔNG DÙNG NỮA — bảng của luồng cũ gửi báo cáo / đơn vị nộp hồ sơ khắc phục
+ * qua app. Bảng còn trong database; lệnh xoá ở cuối migration 015.
  */
 export const correctiveEvents = pgTable(
   'corrective_events',
@@ -590,9 +529,7 @@ export const correctiveEvents = pgTable(
       .references(() => correctiveReports.id, { onDelete: 'cascade' })
       .notNull(),
     round: integer('round').notNull(),
-    /** 'plan' | 'evidence' */
     phase: text('phase').notNull(),
-    /** 'submit' | 'approve' | 'reject' */
     action: text('action').notNull(),
     actor: text('actor'),
     note: text('note'),
@@ -639,7 +576,7 @@ export const capaActions = pgTable(
       .notNull(),
     /** Nội dung công việc cần thực hiện. */
     content: text('content').notNull(),
-    /** Người / bộ phận phụ trách phía đơn vị. */
+    /** KHÔNG DÙNG NỮA — đã bỏ khỏi giao diện. */
     owner: text('owner'),
     dueDate: date('due_date', { mode: 'string' }),
     status: capaActionStatusEnum('status').default('TODO').notNull(),
@@ -660,11 +597,7 @@ export const capaActions = pgTable(
 /* audit_events — nhật ký hành động cấp đợt                            */
 /* ------------------------------------------------------------------ */
 
-/**
- * Chỗ ghi những việc phải truy được về sau: khoá đợt, mở lại sau khi đã phát
- * hành, phát hành bản mới. Mở khoá một đợt ĐÃ GỬI cho đơn vị là hành động nhạy
- * cảm nhất trong app — bắt buộc kèm lý do và phải để lại dấu.
- */
+/** Nhật ký hành động cấp đợt: khoá và mở lại đợt. */
 export const auditEvents = pgTable(
   'audit_events',
   {

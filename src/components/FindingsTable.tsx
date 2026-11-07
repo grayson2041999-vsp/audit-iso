@@ -47,12 +47,8 @@ type Filters = { unit: string; member: string; severity: string; status: string 
 /**
  * Bảng tổng hợp + bộ lọc, lọc HOÀN TOÀN trong trình duyệt.
  *
- * Trước đây bộ lọc ghi vào URL và mỗi lần đổi là dựng lại cả trang từ máy chủ —
- * sáu truy vấn xuống Neon, và Next.js không hiện khung xương khi chỉ đổi tham số
- * nên màn hình đứng im như treo.
- *
  * Toàn bộ finding của đợt vốn ĐÃ được tải về để tính bốn ô thống kê, nên lọc tại
- * chỗ không tốn thêm byte nào — thậm chí bỏ được hẳn một truy vấn so với trước.
+ * chỗ không tốn thêm byte nào.
  *
  * URL vẫn được cập nhật bằng `history.replaceState` để giữ được việc gửi link đã
  * lọc và để nút Xuất Excel mang đúng bộ lọc, nhưng KHÔNG kích hoạt điều hướng.
@@ -161,11 +157,8 @@ export function FindingsTable({
       )}
 
       {/**
-       * BỐN CỘT, KHÔNG PHẢI CHÍN.
-       *
-       * Bản trước có chín cột, mà bảy trong số đó chỉ chứa vài chữ — chúng chia
-       * nhau gần hết bề ngang và ép cột Mô tả xuống còn một dải hẹp, khiến mỗi
-       * hàng cao mười mấy dòng. Gộp những mẩu ngắn lại theo NHÓM Ý NGHĨA:
+       * BỐN CỘT. Các mẩu thông tin ngắn gộp theo NHÓM Ý NGHĨA để cột Nội dung
+       * được rộng và hàng không bị cao quá:
        *
        *   1. Định danh & phân loại  — mã, mức độ, trạng thái
        *   2. Ai & ở đâu             — đơn vị, đánh giá viên, nơi phát hiện
@@ -173,8 +166,8 @@ export function FindingsTable({
        *   4. Thời hạn               — đứng riêng vì đây là cột người ta lướt mắt
        *                               tìm màu đỏ/vàng, gộp vào là mất tác dụng
        *
-       * Điều khoản chuyển xuống dưới phát biểu và gom theo tiêu chuẩn
-       * ("ISO 45001:2018 — 6.1.1, 6.1.2.1, 6.1.2.2") thay vì mỗi mã một dòng.
+       * Điều khoản nằm dưới phát biểu, gom theo tiêu chuẩn
+       * ("ISO 45001:2018 — 6.1.1, 6.1.2.1, 6.1.2.2").
        */}
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[900px] border-collapse text-sm [&_td]:border-b [&_td]:border-slate-200 [&_th]:border-b [&_th]:border-slate-300 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6 [&_td]:border-r [&_th]:border-r [&_td:last-child]:border-r-0 [&_th:last-child]:border-r-0">

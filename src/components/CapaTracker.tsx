@@ -45,11 +45,11 @@ const SEVERITY_ORDER = ['MAJOR', 'MINOR', 'OBS', 'OFI'];
 /**
  * Theo dõi khắc phục.
  *
- * Ba tầng, từ tổng quát tới chi tiết:
- *  1. Tổng quan — % hoàn thành chung, số mục trễ hạn và sắp đến hạn.
- *  2. Theo đơn vị — mỗi đơn vị bao nhiêu mục, đạt bao nhiêu %. Bấm để lọc.
- *  3. Danh sách mục — lọc theo đơn vị, phân loại, trạng thái, thời hạn; bấm
- *     một dòng để xem finding gốc và sửa chi tiết.
+ *  1. Dải tổng quan — % hoàn thành chung, số mục theo trạng thái, trễ hạn và
+ *     sắp đến hạn. Bấm vào một con số để lọc theo nó.
+ *  2. Cột đơn vị bên trái — tiến độ từng đơn vị, đồng thời là bộ lọc đơn vị.
+ *  3. Danh sách mục — lọc thêm theo phân loại, trạng thái, thời hạn; bấm một
+ *     dòng để xem finding gốc và sửa chi tiết.
  *
  * Mỗi thay đổi lưu ngay xuống máy chủ — đây là sổ theo dõi, không phải bản nháp.
  */

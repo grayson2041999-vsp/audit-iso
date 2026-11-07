@@ -5,11 +5,6 @@ import { getOwnedAudit } from './audit-access';
 /**
  * "Anh là ai?" — lớp xác thực dùng chung cho các route tiêu tài nguyên trả tiền.
  *
- * Ban đầu hàm này nằm trong `ai-quota.ts` vì chỉ `/api/standardize` cần. Nay
- * `/api/uploads/presign` cũng phải hỏi cùng câu đó, nên tách ra đứng riêng —
- * để route upload không phải import từ một file tên là "ai-quota", đọc vào
- * tưởng nhầm là có gọi AI.
- *
  * Hai loại người dùng của app không chung một kiểu phiên:
  *   · Đánh giá viên — cookie `am_<auditId>`, đặt RIÊNG theo từng đợt
  *   · Trưởng đoàn   — cookie `audit_session`, một cái cho mọi đợt

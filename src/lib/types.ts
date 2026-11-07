@@ -11,7 +11,7 @@ export const clauseRefSchema = z.object({
 });
 
 /**
- * Kết quả AI trả về sau khi chuẩn hoá finding — "Gói B".
+ * Kết quả AI trả về sau khi chuẩn hoá finding.
  *
  * Các trường đã chủ động lược bỏ và lý do:
  *  - process, area        : trùng với ô auditor tự nhập trong form, không được dùng ở đâu.
@@ -47,7 +47,7 @@ export const standardizeRequestSchema = z.object({
    *
    * Cookie của đánh giá viên đặt riêng theo từng đợt (`am_<auditId>`), nên máy
    * chủ phải biết đợt nào mới tra được đúng cookie. Thiếu trường này thì route
-   * không có cách nào biết người gọi là ai. Xem `lib/ai-quota.ts`.
+   * không có cách nào biết người gọi là ai. Xem `lib/actor.ts`.
    *
    * (`createFindingSchema` bên dưới ghi đè thành không bắt buộc, vì ở đó đợt
    * đã nằm trong đường dẫn `/api/dot/[id]/findings` rồi.)
@@ -168,7 +168,7 @@ export const checklistRequestSchema = z.object({
  * Client gửi lên các dòng ĐÃ SỬA chứ không phải bản model trả về, vì đánh giá
  * viên được phép sửa chữ, xoá dòng và thêm dòng tự viết ở màn hình xem trước.
  * Máy chủ không giữ bản nào để đối chiếu — checklist không lưu vào cơ sở dữ
- * liệu, xem `docs/concept-checklist.md` mục 8.
+ * liệu.
  */
 export const checklistExportSchema = z.object({
   groups: z.array(checklistGroupSchema).min(1, 'Checklist rỗng'),

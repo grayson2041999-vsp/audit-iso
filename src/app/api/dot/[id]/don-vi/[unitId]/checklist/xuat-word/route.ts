@@ -18,7 +18,7 @@ type Ctx = { params: Promise<{ id: string; unitId: string }> };
  *
  * Nhận qua POST chứ không phải GET vì máy chủ không giữ checklist ở đâu cả —
  * bản đúng là bản đang nằm trong màn hình của đánh giá viên, kể cả những dòng
- * họ vừa sửa chữ hoặc tự viết thêm. Xem `docs/concept-checklist.md` mục 8.
+ * họ vừa sửa chữ hoặc tự viết thêm.
  *
  * Không có cửa hạn mức AI ở đây: route này không gọi AI, chỉ sắp chữ.
  */

@@ -63,9 +63,8 @@ function readToken(token: string): string | null {
 /**
  * Đánh giá viên đang đăng nhập vào đợt này, kèm đợt. Không ném lỗi.
  *
- * MỘT truy vấn JOIN, không phải hai lần nối tiếp. Trước đây hàm này lấy thành
- * viên xong mới lấy đợt — hai request HTTPS xuống Neon xếp hàng chờ nhau, trong
- * khi cả hai bảng đều tra theo khoá chính và ghép được trong một câu.
+ * MỘT truy vấn JOIN, không phải hai lần nối tiếp — mỗi truy vấn là một request
+ * HTTPS xuống Neon, hai lần nối tiếp là hai lần chờ.
  *
  * ĐƯỢC BỌC BẰNG `cache()` CỦA REACT — phạm vi chỉ MỘT request. Mọi trang và
  * mọi route phía đánh giá viên đều mở đầu bằng `getMember(id)`, và các trang

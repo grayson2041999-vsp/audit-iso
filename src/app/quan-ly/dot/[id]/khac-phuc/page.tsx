@@ -17,7 +17,7 @@ const dayVN = (d: Date | null) =>
 
 /**
  * Theo dõi khắc phục — sổ theo dõi do trưởng đoàn tự nhập. Đoàn và đơn vị trao
- * đổi ở ngoài app; trang này chỉ ghi lại việc gì, ai làm, hạn nào, tới đâu.
+ * đổi ở ngoài app; trang này chỉ ghi lại việc gì, hạn nào, tới đâu.
  */
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

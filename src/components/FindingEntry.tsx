@@ -121,7 +121,7 @@ export function FindingEntry({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           // Máy chủ cần `auditId` để tra cookie của đúng đợt rồi mới biết người
-          // gọi là ai — không phải để ghi dữ liệu. Xem `lib/ai-quota.ts`.
+          // gọi là ai — không phải để ghi dữ liệu. Xem `lib/actor.ts`.
           auditId,
           rawText, standards, area,
           auditee: unitName,

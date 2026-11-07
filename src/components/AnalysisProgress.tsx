@@ -8,11 +8,7 @@ import type { StandardizedFinding } from '@/lib/types';
 /**
  * Màn hình chờ trong lúc AI chuẩn hoá.
  *
- * Trước đây chỗ này tích dần các bước theo MỐC THỜI GIAN ƯỚC LƯỢNG — trình tự
- * thì đúng nhưng thời điểm chuyển bước là đoán, nên phải kèm một dòng ghi chú
- * thú nhận điều đó.
- *
- * Giờ nội dung chảy về thật, nên bỏ hết phần đoán: hiện đúng những gì model đã
+ * Không đoán tiến độ theo thời gian: hiện đúng những gì model đã
  * viết xong, theo đúng thứ tự nó viết. Mức độ và tiêu đề ra trước, phát biểu
  * chảy dần từng chữ. Khung xương chỉ còn dùng cho khoảng lặng một hai giây đầu
  * lúc chưa có mẩu nào về.

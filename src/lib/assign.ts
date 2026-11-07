@@ -3,8 +3,8 @@ import { sameUnitName } from './utils';
 /**
  * Tự phân công đánh giá viên cho các đơn vị.
  *
- * Đây là GỢI Ý, không phải quyết định: kết quả đổ thẳng vào ma trận ở bước
- * Chuẩn bị để trưởng đoàn xem, sửa tay rồi mới bấm Lưu. Không ghi thẳng vào
+ * Đây là GỢI Ý, không phải quyết định: kết quả đổ thẳng vào ma trận ở tab
+ * Thiết lập đợt đánh giá để trưởng đoàn xem, sửa tay rồi mới bấm Lưu. Không ghi thẳng vào
  * database — người chịu trách nhiệm về tính độc lập của đoàn là trưởng đoàn,
  * không phải thuật toán.
  *
@@ -16,8 +16,7 @@ import { sameUnitName } from './utils';
  *
  *  2. CÂN BẰNG TẢI — luôn chọn người đang giữ ít đơn vị nhất. Cách tham lam này
  *     cho chênh lệch tối đa 1 đơn vị giữa người nhiều nhất và người ít nhất,
- *     tức là bằng mức tối ưu. Cân bằng tải không chỉ để công bằng: người bận
- *     nhất chính là đường găng quyết định độ dài cả đợt (xem plan.ts).
+ *     tức là bằng mức tối ưu.
  *
  *  3. XOAY CẶP — khi mỗi đơn vị cần từ 2 người trở lên, ưu tiên người ít đi
  *     cùng với những người đã chọn cho đơn vị này nhất. Tránh việc hai người

@@ -19,7 +19,7 @@ const PHOTO_CONCURRENCY = 6;
  * Tải ảnh của các finding để chèn vào file (tối đa MAX_PHOTOS mỗi finding).
  *
  * Ảnh nào tải lỗi thì bỏ qua — thiếu một tấm ảnh không được làm hỏng cả file
- * xuất. R2 chưa cấu hình thì xuất file không ảnh như trước.
+ * xuất. R2 chưa cấu hình thì xuất file không có ảnh.
  */
 async function loadPhotos(findingIds: string[]) {
   const photos = new Map<string, Buffer[]>();

@@ -10,11 +10,11 @@ export const runtime = 'nodejs';
 
 /**
  * Cấp "giấy phép tạm" để trình duyệt PUT thẳng ảnh lên R2, không đi qua server
- * (nhờ vậy server không phải gánh băng thông ảnh — thiết kế này giữ nguyên).
+ * (nhờ vậy server không phải gánh băng thông ảnh).
  *
- * TRƯỚC ĐÂY QUẦY PHÁT GIẤY PHÉP KHÔNG HỎI AI LÀ AI: chỉ kiểm tra R2 đã cấu hình
- * chưa rồi ký. Ai biết địa chỉ route cũng xin được quyền ghi vào bucket, tức là
- * bucket thành kho lưu trữ miễn phí cho người lạ.
+ * PHẢI HỎI NGƯỜI GỌI LÀ AI trước khi ký: không thì ai biết địa chỉ route cũng
+ * xin được quyền ghi vào bucket, biến bucket thành kho lưu trữ miễn phí cho
+ * người lạ.
  *
  * Nguyên tắc phải nhớ khi sửa file này:
  *
@@ -38,9 +38,8 @@ const bodySchema = z.object({
         fileName: z.string().min(1),
         contentType: z.string(),
         /**
-         * Số byte THẬT của file sắp gửi. Trước đây đây chỉ là con số tham khảo
-         * (khai gì cũng được, không ai đối chiếu); giờ nó đi thẳng vào chữ ký
-         * nên khai sai là R2 từ chối lúc PUT.
+         * Số byte THẬT của file sắp gửi. Con số này đi thẳng vào chữ ký nên
+         * khai sai là R2 từ chối lúc PUT.
          */
         size: z.number().int().positive(),
       }),

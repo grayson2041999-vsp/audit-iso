@@ -22,7 +22,7 @@ export function TopNav({ leaderName }: { leaderName: string | null }) {
   }
 
   return (
-    // Global nav theo DESIGN.md: cao 44px, nền trắng mờ kính, viền 1px Control Gray.
+    // Thanh điều hướng: cao 44px, nền trắng mờ kính, viền 1px Control Gray.
     <header className="sticky top-0 z-30 border-b border-control bg-white/80 backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex h-11 max-w-7xl items-center gap-6 px-4 sm:px-6">
         <Link

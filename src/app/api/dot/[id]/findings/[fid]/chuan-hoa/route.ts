@@ -19,9 +19,9 @@ type Ctx = { params: Promise<{ id: string; fid: string }> };
  * Toàn bộ việc gọi AI và ghi kết quả làm ở phía máy chủ trong một lượt, để
  * trình duyệt không phải tự điều phối hai lời gọi rồi lỡ mất kết quả giữa chừng.
  *
- * Route này vốn đã hỏi danh tính (khác `/api/standardize` trước đây), nhưng vẫn
- * phải chia CHUNG hạn mức giờ với nó — nếu không, chặn cửa trước mà để ngỏ cửa
- * sau: bấm "chuẩn hoá lại" liên tục cũng tốn đúng chừng ấy tiền API.
+ * Route này chia CHUNG hạn mức giờ với `/api/standardize` — nếu không, chặn cửa
+ * trước mà để ngỏ cửa sau: bấm "chuẩn hoá lại" liên tục cũng tốn đúng chừng ấy
+ * tiền API.
  */
 export async function POST(_req: Request, { params }: Ctx) {
   const { id, fid } = await params;

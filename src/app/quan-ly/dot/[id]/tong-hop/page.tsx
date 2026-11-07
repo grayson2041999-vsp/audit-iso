@@ -31,7 +31,7 @@ export default async function Page({
   /**
    * Ba truy vấn, và finding lấy MỘT lần duy nhất cho cả thống kê lẫn bảng.
    * Việc lọc làm ở trình duyệt (xem FindingsTable) nên đổi bộ lọc không chạm
-   * tới máy chủ — trước đây mỗi lần lọc là sáu truy vấn xuống Neon.
+   * tới máy chủ.
    */
   const [units, members, all] = await Promise.all([
     db.select().from(auditUnits).where(eq(auditUnits.auditId, id)).orderBy(asc(auditUnits.name)),

@@ -28,8 +28,7 @@ export const maxDuration = 120;
  * BỐN CỬA PHẢI QUA TRƯỚC KHI ĐỘNG TỚI TIỀN API — đúng theo thứ tự này:
  *
  *   1. Dữ liệu gửi lên có hợp lệ không   → 400
- *   2. Người gọi là ai                   → 401   (trước đây KHÔNG có cửa này:
- *                                                 ai biết URL cũng gọi được)
+ *   2. Người gọi là ai                   → 401
  *   3. Đợt còn mở không                  → 409
  *   4. Còn lượt trong giờ này không      → 429
  *

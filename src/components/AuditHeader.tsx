@@ -19,10 +19,10 @@ type Audit = {
 };
 
 /**
- * Khối tiêu đề đợt đánh giá, dùng chung cho trang trưởng đoàn và trang công khai.
+ * Khối tiêu đề đợt đánh giá, dùng chung cho trang trưởng đoàn và trang của
+ * đánh giá viên.
  *
- * Mỗi thông tin một dòng có nhãn riêng thay vì nối bằng dấu chấm giữa — chuỗi
- * "ngày · trưởng đoàn · ba tiêu chuẩn" trước đây dài quá một dòng và không phân
+ * Mỗi thông tin một dòng có nhãn riêng thay vì nối bằng dấu chấm giữa, để phân
  * biệt được đâu là nhãn đâu là giá trị.
  *
  * Tiêu chuẩn hiển thị bằng thẻ màu vì đó là thứ auditor cần nhận ra trước nhất

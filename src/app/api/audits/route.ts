@@ -66,7 +66,7 @@ export async function POST(req: Request) {
         leadAuditor: d.leadAuditor,
         startDate: new Date(d.startDate),
         endDate: new Date(d.endDate),
-        // Đang chuẩn bị — đợt chỉ mở khi sinh mã cho đánh giá viên (đợt 2)
+        // Đang chuẩn bị — đợt chỉ mở khi sinh mã cho đánh giá viên
         status: 'PLANNED',
       })
       .returning();

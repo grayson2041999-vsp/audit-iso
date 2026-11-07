@@ -99,7 +99,7 @@ export const SEVERITY_STYLE: Record<string, string> = {
 };
 
 /**
- * Ô thống kê theo DESIGN.md: thẻ trắng trên nền Mist, màu chỉ nằm ở chữ/số —
+ * Ô thống kê: thẻ trắng trên nền Mist, màu chỉ nằm ở chữ/số —
  * mảng màu lớn bị bỏ để màu sắc làm dấu chấm câu, không làm nền.
  *
  * (Ghi chú cũ) Cùng hệ màu với SEVERITY_STYLE nhưng nhạt hơn một bậc, dùng cho các ô thống kê.

@@ -79,7 +79,7 @@ function splitStream(p: Partial<Checklist> | null): { groups: ChecklistGroup[]; 
  * Ghép bản mới từ luồng vào bản đang hiển thị, GIỮ NGUYÊN những dòng người dùng
  * đã sửa tay.
  *
- * Cần thiết vì bảng giờ sửa được ngay trong lúc model vẫn đang viết: không có
+ * Cần thiết vì bảng sửa được ngay trong lúc model vẫn đang viết: không có
  * lớp này thì mỗi mẩu JSON về là một lần đè lên chữ người ta vừa gõ.
  *
  * Chỉ bảo vệ `task` — phần chữ. `clauses` luôn lấy bản mới nhất từ luồng, vì
@@ -103,8 +103,7 @@ function mergeGroups(
  * Màn hình soạn checklist đánh giá cho một đơn vị.
  *
  * Không có bước lưu. Checklist không tồn tại ở đâu ngoài state của trang này
- * cho tới khi bấm tải — xem `docs/concept-checklist.md` mục 8. Đó là lý do có
- * cảnh báo `beforeunload` bên dưới.
+ * cho tới khi bấm tải. Đó là lý do có cảnh báo `beforeunload` bên dưới.
  */
 export function ChecklistBuilder({
   auditId,

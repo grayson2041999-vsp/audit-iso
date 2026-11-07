@@ -13,7 +13,7 @@
  * (chưa làm, cần thêm cột trong `finding_images`).
  *
  * ⚠️ THỨ TỰ BẮT BUỘC: nén xong rồi mới gọi `/api/uploads/presign`. Giấy phép
- * giờ ký kèm số byte chính xác, nên đổi file sau khi ký là R2 trả 403.
+ * ký kèm số byte chính xác, nên đổi file sau khi ký là R2 trả 403.
  */
 
 /** Đặt `false` để tắt hẳn việc nén, giữ nguyên ảnh gốc kèm EXIF. */

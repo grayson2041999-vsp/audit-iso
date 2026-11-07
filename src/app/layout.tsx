@@ -8,7 +8,7 @@ import { getLeader } from '@/lib/auth';
  * Font được tải về máy chủ lúc build và phục vụ từ cùng tên miền — người dùng
  * mở trang không phải gọi sang Google, nên nhanh hơn và không lộ dữ liệu truy cập.
  *
- * Theo DESIGN.md: chữ chính là SF Pro (có sẵn trên Mac/iPhone, xem fontFamily
+ * Chữ chính là SF Pro (có sẵn trên Mac/iPhone, xem fontFamily
  * trong tailwind.config.ts). Inter là bản thay thế cho Windows/Android — có bộ
  * dấu tiếng Việt đầy đủ và cùng tinh thần chữ gọn, tracking âm.
  */

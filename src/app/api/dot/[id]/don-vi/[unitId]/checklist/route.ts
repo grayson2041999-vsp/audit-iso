@@ -34,8 +34,7 @@ type Ctx = { params: Promise<{ id: string; unitId: string }> };
  * tại hay không cho người không được giao.
  *
  * KHÔNG GHI GÌ VÀO CƠ SỞ DỮ LIỆU. Checklist chỉ sống trong màn hình của đánh
- * giá viên cho tới khi họ tải file Word. Xem `docs/concept-checklist.md` mục 8
- * về đánh đổi này.
+ * giá viên cho tới khi họ tải file Word.
  */
 export async function POST(req: Request, { params }: Ctx) {
   const { id, unitId } = await params;

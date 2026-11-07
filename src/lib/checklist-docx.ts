@@ -10,7 +10,7 @@ import type { ChecklistGroup } from '@/lib/types';
  *
  * Tách khỏi route vì hai lý do. Một, dựng được tài liệu mà không cần cơ sở dữ
  * liệu hay phiên đăng nhập, nên soi lại bố cục cột và chiều cao dòng chỉ mất
- * một lệnh chạy thử. Hai, route giờ chỉ còn làm đúng việc của nó: kiểm quyền,
+ * một lệnh chạy thử. Hai, route chỉ làm đúng việc của nó: kiểm quyền,
  * đọc dữ liệu, đóng gói phản hồi.
  */
 
@@ -28,7 +28,7 @@ const FONT = 'Times New Roman';
 
 /**
  * BỀ RỘNG CỘT TÍNH BẰNG TWIP, KHÔNG TÍNH BẰNG PHẦN TRĂM — và đi kèm
- * `layout: FIXED`. Đây là chỗ đã làm sai một lần nên ghi lại cho rõ.
+ * `layout: FIXED`.
  *
  * Đặt bề rộng theo phần trăm thì Word vẫn tự co giãn cột theo nội dung: cột
  * STT chỉ chứa một hai chữ số mà phình ra bằng một phần tư trang, còn cột

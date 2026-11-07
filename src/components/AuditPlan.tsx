@@ -42,13 +42,13 @@ const isPinned = (s: PlanSession) => s.kind === 'OPENING' || s.kind === 'CLOSING
  * Lập chương trình đánh giá.
  *
  * Hai phần, đọc từ trên xuống như chính file Word:
- *  1. Ngày thực hiện — mỗi ngày một khoảng giờ Từ – Đến, không chia buổi.
+ *  1. Ngày thực hiện — mỗi ngày một hoặc nhiều khoảng giờ làm việc.
  *  2. Lịch từng ngày — bảng các phiên theo giờ. Đánh giá viên không nhập tay:
  *     phiên đơn vị lấy theo phân công, phiên họp thì cả đoàn.
  *
  * Họp khai mạc luôn ở đầu ngày đầu, họp kết thúc luôn ở cuối ngày cuối — app tự
  * ghim, kể cả khi thêm, đổi, xoá ngày. Mọi thay đổi giữ ở trình duyệt cho tới
- * khi bấm Lưu, và chỉ lưu được khi lịch đạt đủ các điều kiện kiểm tra.
+ * khi bấm Lưu. Lỗi bắt buộc (tô đỏ) chặn lưu; trùng giờ (tô vàng) chỉ cảnh báo.
  */
 export function AuditPlan({
   auditId, initialDays, units, members, assignments, initialInfo, initialSessions, locked,
@@ -659,7 +659,7 @@ function CheckItem({
 }
 
 /**
- * Một ngày thực hiện: khoảng giờ Từ – Đến và các thao tác đổi / xoá ngày.
+ * Một ngày thực hiện: các khoảng giờ làm việc và các thao tác đổi / xoá ngày.
  * Đổi và xoá mở một dòng xác nhận ngay bên dưới thay vì hộp thoại.
  */
 function DayRow({
@@ -799,11 +799,7 @@ function DayRow({
   );
 }
 
-/**
- * Các khoảng giờ của một ngày: mỗi khoảng "Từ … đến …", bỏ được khoảng thừa,
- * thêm được khoảng mới. Khoảng mới bắt đầu sau khoảng cuối một tiếng, dài ba
- * tiếng — đúng kiểu nghỉ trưa rồi làm buổi chiều.
- */
+/** Các khoảng giờ của một ngày: sửa, bỏ, thêm khoảng. */
 function RangesEditor({
   ranges, locked, onChange,
 }: {

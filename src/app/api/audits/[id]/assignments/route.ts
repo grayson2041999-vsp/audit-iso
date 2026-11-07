@@ -18,8 +18,7 @@ const putSchema = z.object({
 /**
  * Lưu toàn bộ ma trận phân công trong MỘT lượt.
  *
- * Trước đây mỗi ô tick là một yêu cầu riêng kèm dựng lại cả trang — tick 44 ô
- * là 44 lần chờ. Giờ trưởng đoàn tick thoải mái rồi bấm Lưu một lần.
+ * Trưởng đoàn tick thoải mái trên màn hình rồi bấm Lưu một lần.
  *
  * Chỉ ghi phần CHÊNH LỆCH thay vì xoá sạch rồi chèn lại: nếu lệnh chèn hỏng
  * giữa chừng thì phân công cũ vẫn còn nguyên chứ không mất trắng.

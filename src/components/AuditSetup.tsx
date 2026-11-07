@@ -25,9 +25,8 @@ export function AuditSetup({
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Ma trận phân công giữ hoàn toàn ở phía trình duyệt cho tới khi bấm Lưu.
-   * Trước đây mỗi ô tick là một yêu cầu mạng kèm dựng lại cả trang — bấm phát
-   * nào chờ phát đó. Giờ tick tức thì, chỉ tốn một lượt gửi khi lưu.
+   * Ma trận phân công giữ hoàn toàn ở phía trình duyệt cho tới khi bấm Lưu:
+   * tick tức thì, chỉ tốn một lượt gửi khi lưu.
    */
   const [linkSet, setLinkSet] = useState<Set<string>>(() => new Set(links));
   const savedKey = links.slice().sort().join('|');

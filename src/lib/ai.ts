@@ -18,7 +18,7 @@ const MAX_IMAGES = 6;
  * Đây chỉ là TRẦN — tiền API tính theo số token thực sinh ra, không tính theo
  * trần. Để chật không tiết kiệm được gì, mà lại gây hỏng.
  *
- * Trước đây đặt 8192 và đã gây lỗi thật: model chạm trần giữa chừng, JSON của
+ * ĐỪNG HẠ XUỐNG — 8192 là quá thấp: model chạm trần giữa chừng thì JSON của
  * tool bị cắt cụt, những trường sinh sau cùng biến mất, Zod báo
  * "statement: Required" và auditor mất trắng kết quả đã chờ cả chục giây.
  * Ghi nhận có ảnh kèm ca phân loại khó (MAJOR hay MINOR) là lúc dễ chạm nhất.
@@ -288,10 +288,8 @@ const FINDING_TOOL: Anthropic.Tool = {
      *
      * Model bám theo danh sách này (và theo mục "ĐẦU RA" trong SYSTEM_PROMPT)
      * để quyết định viết trường nào trước, chứ không chỉ nhìn thứ tự khai báo
-     * `properties`. Bản cũ để `statement` ở cuối danh sách này trong khi
-     * `properties` đặt nó thứ tư — hai chỗ nói hai đằng, và trên thực tế model
-     * nghe theo chỗ này. Hậu quả: trường quan trọng nhất của cả finding nằm ở
-     * mép vực, cứ bị cắt là nó đi đầu tiên.
+     * `properties`. Hai chỗ lệch nhau thì model nghe theo chỗ này — đẩy
+     * `statement` xuống cuối là nó bị cắt đầu tiên khi chạm trần token.
      *
      * Sửa gì ở `properties` thì sửa luôn ở đây và ở mục "ĐẦU RA" của
      * SYSTEM_PROMPT — ba chỗ phải cùng một thứ tự.

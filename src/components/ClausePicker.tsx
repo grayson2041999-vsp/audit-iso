@@ -14,12 +14,8 @@ const ALL_STANDARDS = Object.keys(STANDARD_SHORT) as StandardCode[];
 /**
  * Sửa danh sách điều khoản viện dẫn của một finding.
  *
- * VÌ SAO CẦN CÓ. Trước đây điều khoản là thứ DUY NHẤT trong finding mà không ai
- * sửa được sau khi lưu — auditor không, trưởng đoàn cũng không. AI chọn gì thì
- * nằm nguyên đó cho tới lúc in ra báo cáo.
- *
- * Đó là chỗ hở nguy hiểm nhất, vì danh mục điều khoản chỉ chặn được loại sai
- * "mã không tồn tại". Loại sai còn lại — mã có thật nhưng viện dẫn sai chỗ, ví
+ * VÌ SAO CẦN CÓ. Danh mục điều khoản chỉ chặn được loại sai "mã không tồn
+ * tại". Loại sai còn lại — mã có thật nhưng viện dẫn sai chỗ, ví
  * dụ lấy 7.5.3 Kiểm soát thông tin dạng văn bản cho một vấn đề mà bản chất là
  * 9.1.3 Phân tích và đánh giá — thì không phép kiểm tra tự động nào bắt được.
  * Nó cần con người đọc và phán xét, nên con người phải sửa được.

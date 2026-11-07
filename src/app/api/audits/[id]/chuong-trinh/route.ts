@@ -70,9 +70,8 @@ const schema = z.object({
 });
 
 /**
- * Lưu cả chương trình trong MỘT lượt: thông tin kế hoạch, đại diện đơn vị, và
- * toàn bộ lịch. Cùng cách làm với ma trận phân công — trưởng đoàn sắp thoải mái
- * rồi mới bấm Lưu, không có lượt mạng nào giữa chừng.
+ * Lưu cả chương trình trong MỘT lượt: thông tin chương trình, ngày thực hiện
+ * và toàn bộ lịch. Trưởng đoàn sắp xếp xong trên màn hình rồi mới bấm Lưu.
  */
 export async function PUT(req: Request, { params }: Ctx) {
   const { id } = await params;
@@ -139,7 +138,7 @@ export async function PUT(req: Request, { params }: Ctx) {
         ...(days
           ? {
               auditDays: days.map((x) => ({ date: x.date, ranges: sortRanges(x.ranges) })),
-              // Giữ hai cột cũ khớp theo — danh sách đợt, báo cáo, Excel vẫn đọc chúng.
+              // Giữ hai cột cũ khớp theo — danh sách đợt, đầu trang, file Excel vẫn đọc chúng.
               startDate: new Date(days[0].date),
               endDate: new Date(days[days.length - 1].date),
             }
