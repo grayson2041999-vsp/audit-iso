@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { formatDateOnly } from '@/lib/utils';
+import { formatDayList } from '@/lib/plan';
 import { STANDARD_SHORT, type StandardCode } from '@/lib/iso';
 
 type Row = {
@@ -10,8 +10,8 @@ type Row = {
   organization: string;
   title: string;
   leadAuditor: string | null;
-  startDate: string | null;
-  endDate: string | null;
+  /** Ngày thực hiện, "YYYY-MM-DD", đã sắp xếp. */
+  days: string[];
   status: string;
   standards: string[];
 };
@@ -109,7 +109,7 @@ export function AuditList({ rows }: { rows: Row[] }) {
                     <p className="mt-3 text-sm text-slate-500">{a.organization}</p>
                     <h2 className="mt-0.5 font-display text-xl font-semibold text-ink">{a.title}</h2>
                     <p className="mt-3 text-sm text-slate-500">
-                      {formatDateOnly(a.startDate)} → {formatDateOnly(a.endDate)}
+                      {a.days.length > 0 ? formatDayList(a.days) : '—'}
                     </p>
                     <p className="mt-0.5 text-sm text-slate-500">
                       Trưởng đoàn: {a.leadAuditor ?? '—'}

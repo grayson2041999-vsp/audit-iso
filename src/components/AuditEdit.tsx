@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { STANDARD_LABELS, type StandardCode } from '@/lib/iso';
 import { formatDayList } from '@/lib/plan';
+import { DayPicker } from '@/components/DayPicker';
 
 const STANDARDS = Object.keys(STANDARD_LABELS) as StandardCode[];
 
@@ -14,23 +14,23 @@ type Values = {
   scope: string;
   standards: StandardCode[];
   leadAuditor: string;
+  /** Ngày thực hiện, "YYYY-MM-DD", đã sắp xếp. */
+  days: string[];
 };
 
 /**
- * Sửa thông tin gốc của đợt.
- *
- * Ngày thực hiện chỉ HIỆN ở đây, sửa ở tab Chương trình: thêm, đổi, xoá ngày
- * đều kéo theo các phiên nằm trên ngày đó, nên phải làm cùng chỗ với lịch.
+ * Sửa thông tin gốc của đợt, gồm cả ngày thực hiện. Khoảng giờ từng ngày và
+ * lịch chi tiết chỉnh ở tab Chương trình.
  *
  * Mặc định đóng lại: đây là màn hình để xem, không phải để sửa.
  */
 export function AuditEdit({
-  auditId, initial, days,
+  auditId, initial, sessionCounts,
 }: {
   auditId: string;
   initial: Values;
-  /** Ngày thực hiện hiện tại ("YYYY-MM-DD"), chỉ để hiển thị. */
-  days: string[];
+  /** Số phiên trong lịch (không tính hai cuộc họp) theo từng ngày — để hỏi lại trước khi bỏ ngày. */
+  sessionCounts: Record<string, number>;
 }) {
   const router = useRouter();
 
@@ -48,6 +48,17 @@ export function AuditEdit({
   async function save() {
     setError(null);
     if (v.standards.length === 0) return setError('Chọn ít nhất một tiêu chuẩn.');
+    if (v.days.length === 0) return setError('Chọn ít nhất một ngày thực hiện.');
+
+    const dropped = initial.days.filter((x) => !v.days.includes(x) && (sessionCounts[x] ?? 0) > 0);
+    if (dropped.length > 0) {
+      const n = dropped.reduce((sum, x) => sum + sessionCounts[x], 0);
+      const ok = confirm(
+        `${dropped.length > 1 ? 'Các ngày' : 'Ngày'} ${formatDayList(dropped)} đang có ${n} phiên trong lịch. ` +
+          `Bỏ ${dropped.length > 1 ? 'các ngày này' : 'ngày này'} thì ${n} phiên đó bị xoá khỏi lịch.\n\nTiếp tục?`,
+      );
+      if (!ok) return;
+    }
 
     setBusy(true);
     try {
@@ -95,17 +106,7 @@ export function AuditEdit({
 
       <div>
         <label className="label">Ngày thực hiện</label>
-        <p className="text-sm">
-          <span className="font-medium">{days.length > 0 ? formatDayList(days) : '—'}</span>
-          {days.length > 0 && <span className="ml-2 text-slate-500">({days.length} ngày)</span>}
-        </p>
-        <p className="mt-1 text-xs text-slate-500">
-          Thêm, đổi hoặc xoá ngày ở tab{' '}
-          <Link href={`/quan-ly/dot/${auditId}/chuong-trinh`} className="text-brand-700 hover:underline">
-            Chương trình
-          </Link>
-          .
-        </p>
+        <DayPicker value={v.days} onChange={(days) => set('days', days)} />
       </div>
 
       <div>

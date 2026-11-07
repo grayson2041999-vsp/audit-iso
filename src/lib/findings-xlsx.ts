@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import sharp from 'sharp';
 import { SEVERITY_LABELS } from './iso';
+import { formatDayList } from './plan';
 
 /**
  * Dựng file Excel "Tổng hợp finding".
@@ -31,9 +32,9 @@ export type XlsxInput = {
   audit: {
     title: string;
     organization: string;
-    startDate: Date | null;
-    endDate: Date | null;
     leadAuditor: string | null;
+    /** Ngày thực hiện, "YYYY-MM-DD", đã sắp xếp. */
+    days: string[];
   };
   rows: XlsxFinding[];
   units: { id: string; name: string }[];
@@ -176,7 +177,7 @@ export async function buildFindingsWorkbook(input: XlsxInput) {
   ws.mergeCells(`A2:${LAST_COL}2`);
   ws.getCell('A2').value =
     `Tổ chức được đánh giá: ${audit.organization}   ·   ` +
-    `Thời gian: ${d(audit.startDate)} – ${d(audit.endDate)}   ·   ` +
+    `Thời gian: ${formatDayList(audit.days)}   ·   ` +
     `Trưởng đoàn: ${audit.leadAuditor ?? ''}`;
   ws.getCell('A2').font = { size: 10, color: { argb: 'FF666666' } };
 

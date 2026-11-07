@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { audits } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
+import { DEFAULT_RANGES } from '@/lib/plan';
 
 export const runtime = 'nodejs';
 
@@ -25,20 +26,18 @@ export async function GET() {
   }
 }
 
-const createSchema = z
-  .object({
-    organization: z.string().trim().min(1, 'Nhập tên tổ chức được đánh giá'),
-    title: z.string().trim().min(1, 'Nhập tên đợt đánh giá'),
-    scope: z.string().optional(),
-    standards: z.array(z.string()).min(1, 'Chọn ít nhất một tiêu chuẩn'),
-    leadAuditor: z.string().trim().min(1, 'Nhập tên trưởng đoàn'),
-    startDate: z.string().min(1, 'Chọn ngày bắt đầu'),
-    endDate: z.string().min(1, 'Chọn ngày kết thúc'),
-  })
-  .refine((d) => d.endDate >= d.startDate, {
-    message: 'Ngày kết thúc phải sau hoặc bằng ngày bắt đầu',
-    path: ['endDate'],
-  });
+const createSchema = z.object({
+  organization: z.string().trim().min(1, 'Nhập tên tổ chức được đánh giá'),
+  title: z.string().trim().min(1, 'Nhập tên đợt đánh giá'),
+  scope: z.string().optional(),
+  standards: z.array(z.string()).min(1, 'Chọn ít nhất một tiêu chuẩn'),
+  leadAuditor: z.string().trim().min(1, 'Nhập tên trưởng đoàn'),
+  /** Ngày thực hiện, không cần liền nhau. Giờ làm việc lấy mặc định, chỉnh ở tab Chương trình. */
+  days: z
+    .array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày không hợp lệ'))
+    .min(1, 'Chọn ít nhất một ngày thực hiện')
+    .max(60, 'Tối đa 60 ngày thực hiện'),
+});
 
 export async function POST(req: Request) {
   const leader = await getLeader();
@@ -53,6 +52,7 @@ export async function POST(req: Request) {
   }
 
   const d = parsed.data;
+  const days = [...new Set(d.days)].sort();
 
   try {
     const [row] = await db
@@ -64,8 +64,10 @@ export async function POST(req: Request) {
         scope: d.scope || null,
         standards: d.standards,
         leadAuditor: d.leadAuditor,
-        startDate: new Date(d.startDate),
-        endDate: new Date(d.endDate),
+        auditDays: days.map((date) => ({ date, ranges: DEFAULT_RANGES.map((r) => ({ ...r })) })),
+        // Hai cột ngày đầu / ngày cuối luôn khớp theo danh sách ngày.
+        startDate: new Date(days[0]),
+        endDate: new Date(days[days.length - 1]),
         // Đang chuẩn bị — đợt chỉ mở khi sinh mã cho đánh giá viên
         status: 'PLANNED',
       })

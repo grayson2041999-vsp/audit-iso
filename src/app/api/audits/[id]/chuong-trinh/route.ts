@@ -27,8 +27,8 @@ const schema = z.object({
   openingMinutes: z.number().int().min(15).max(480).optional(),
   closingMinutes: z.number().int().min(15).max(480).optional(),
   /**
-   * Ngày thực hiện: danh sách ngày cụ thể, không cần liền nhau, mỗi ngày một
-   * hoặc nhiều khoảng giờ làm việc. Gửi kèm thì thay cả danh sách.
+   * Khoảng giờ làm việc của từng ngày. Bộ ngày phải đúng như đã lưu — thêm bớt
+   * ngày làm ở tab Thiết lập đợt đánh giá, không làm ở đây.
    */
   days: z
     .array(
@@ -101,6 +101,18 @@ export async function PUT(req: Request, { params }: Ctx) {
         { status: 400 },
       );
     }
+    // Trang Chương trình mở từ trước khi đổi ngày ở Thiết lập thì không được ghi đè.
+    const saved = resolveAuditDays(owned.audit).map((x) => x.date).join();
+    if (days.map((x) => x.date).join() !== saved) {
+      return NextResponse.json(
+        {
+          error:
+            'Ngày thực hiện vừa được đổi ở tab Thiết lập đợt đánh giá. ' +
+            'Tải lại trang rồi chỉnh và lưu lại.',
+        },
+        { status: 409 },
+      );
+    }
   }
   if (d.sessions) {
     const allowed = new Set(
@@ -138,7 +150,7 @@ export async function PUT(req: Request, { params }: Ctx) {
         ...(days
           ? {
               auditDays: days.map((x) => ({ date: x.date, ranges: sortRanges(x.ranges) })),
-              // Giữ hai cột cũ khớp theo — danh sách đợt, đầu trang, file Excel vẫn đọc chúng.
+              // Hai cột ngày đầu / ngày cuối luôn khớp theo danh sách ngày.
               startDate: new Date(days[0].date),
               endDate: new Date(days[days.length - 1].date),
             }

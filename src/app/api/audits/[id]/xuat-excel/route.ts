@@ -6,6 +6,7 @@ import { getOwnedAudit } from '@/lib/audit-access';
 import { attachmentHeader } from '@/lib/download-name';
 import { getObjectBytes, isR2Configured } from '@/lib/r2';
 import { buildFindingsWorkbook, MAX_PHOTOS } from '@/lib/findings-xlsx';
+import { resolveAuditDays } from '@/lib/plan';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -91,7 +92,10 @@ export async function GET(req: Request, { params }: Ctx) {
 
   const { photos, photoCounts } = await loadPhotos(rows.map((f) => f.id));
 
-  const wb = await buildFindingsWorkbook({ audit, rows, units, members, photos, photoCounts });
+  const wb = await buildFindingsWorkbook({
+    audit: { ...audit, days: resolveAuditDays(audit).map((x) => x.date) },
+    rows, units, members, photos, photoCounts,
+  });
 
   /* ---------------- Trả file ---------------- */
 

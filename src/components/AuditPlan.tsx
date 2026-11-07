@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { WordIcon } from './FileIcons';
 import {
-  DEFAULT_RANGES, KIND_LABELS, dayEnd, dayStart, formatRanges, rangesProblem, sortRanges,
-  formatDayLong, formatDayShort, pinMeetings, sortSessions, toDayString, toHHMM,
+  KIND_LABELS, dayEnd, dayStart, formatRanges, rangesProblem, sortRanges,
+  formatDayLong, formatDayShort, pinMeetings, sortSessions, toHHMM,
   toMinutes, validatePlan,
   type AuditDay, type PlanSession, type SessionKind, type TimeRange,
 } from '@/lib/plan';
@@ -26,9 +26,6 @@ type PlanInfo = {
 
 const sortDays = (list: AuditDay[]) => [...list].sort((a, b) => a.date.localeCompare(b.date));
 
-/** "YYYY-MM-DD" hợp lệ và năm nằm trong khoảng hợp lý — chặn ô ngày đang gõ dở. */
-const isValidDay = (v: string) => /^(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(v);
-
 const newId = () => `tam-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 const meetingLength = (list: PlanSession[], kind: SessionKind, fallback: number) => {
@@ -42,12 +39,13 @@ const isPinned = (s: PlanSession) => s.kind === 'OPENING' || s.kind === 'CLOSING
  * Lập chương trình đánh giá.
  *
  * Hai phần, đọc từ trên xuống như chính file Word:
- *  1. Ngày thực hiện — mỗi ngày một hoặc nhiều khoảng giờ làm việc.
+ *  1. Giờ làm việc từng ngày — mỗi ngày một hoặc nhiều khoảng giờ. Danh sách
+ *     ngày chọn ở tab Thiết lập đợt đánh giá, ở đây không thêm bớt được.
  *  2. Lịch từng ngày — bảng các phiên theo giờ. Đánh giá viên không nhập tay:
  *     phiên đơn vị lấy theo phân công, phiên họp thì cả đoàn.
  *
  * Họp khai mạc luôn ở đầu ngày đầu, họp kết thúc luôn ở cuối ngày cuối — app tự
- * ghim, kể cả khi thêm, đổi, xoá ngày. Mọi thay đổi giữ ở trình duyệt cho tới
+ * ghim, kể cả khi sửa giờ của ngày. Mọi thay đổi giữ ở trình duyệt cho tới
  * khi bấm Lưu. Lỗi bắt buộc (tô đỏ) chặn lưu; trùng giờ (tô vàng) chỉ cảnh báo.
  */
 export function AuditPlan({
@@ -196,73 +194,9 @@ export function AuditPlan({
     setTick((t) => t + 1);
   }
 
-  /* ---------------- Ngày thực hiện ---------------- */
+  /* ---------------- Giờ làm việc từng ngày ---------------- */
 
   const dates = planDays.map((d) => d.date);
-
-  /** Gợi ý cho ô thêm ngày: ngày làm việc kế tiếp sau ngày cuối, chưa có trong danh sách. */
-  function suggestNextDay(): string {
-    const lastDate = dates[dates.length - 1];
-    const [y, m, d] = (lastDate ?? toDayString(new Date())).split('-').map(Number);
-    const cur = new Date(y, m - 1, d);
-    for (let k = 0; k < 30; k++) {
-      cur.setDate(cur.getDate() + 1);
-      const s = toDayString(cur);
-      if (cur.getDay() !== 0 && cur.getDay() !== 6 && !dates.includes(s)) return s;
-    }
-    return toDayString(cur);
-  }
-
-  function addDay(date: string): boolean {
-    if (!isValidDay(date)) {
-      setError('Ngày không hợp lệ.');
-      return false;
-    }
-    if (dates.includes(date)) {
-      setError(`${formatDayLong(date)} đã có trong danh sách ngày thực hiện.`);
-      return false;
-    }
-    // Giờ lấy theo ngày liền trước nó — thường giống nhau.
-    const before = planDays.filter((d) => d.date < date).pop() ?? planDays[0];
-    apply(sessions, [
-      ...planDays,
-      { date, ranges: (before?.ranges ?? DEFAULT_RANGES).map((r) => ({ ...r })) },
-    ]);
-    return true;
-  }
-
-  /** Đổi ngày dương lịch — mọi phiên trên ngày đó đi theo, giữ nguyên giờ. */
-  function moveDay(from: string, to: string): boolean {
-    if (from === to) return true;
-    if (!isValidDay(to)) {
-      setError('Ngày không hợp lệ.');
-      return false;
-    }
-    if (dates.includes(to)) {
-      setError(`${formatDayLong(to)} đã có trong danh sách. Xoá ngày đó trước, hoặc chọn ngày khác.`);
-      return false;
-    }
-    apply(
-      sessions.map((s) => (s.day === from ? { ...s, day: to } : s)),
-      planDays.map((d) => (d.date === from ? { ...d, date: to } : d)),
-    );
-    return true;
-  }
-
-  /**
-   * Xoá một ngày. Phiên trên ngày đó không mất ngầm: chuyển nguyên giờ sang
-   * ngày khác, hoặc bỏ khỏi lịch. Hai cuộc họp thì không bao giờ bị bỏ — chúng
-   * được ghim lại vào ngày đầu / ngày cuối mới.
-   */
-  function removeDay(date: string, sessionsTo: string | null) {
-    if (planDays.length <= 1) return;
-    apply(
-      sessionsTo
-        ? sessions.map((s) => (s.day === date ? { ...s, day: sessionsTo } : s))
-        : sessions.filter((s) => s.day !== date || isPinned(s)),
-      planDays.filter((d) => d.date !== date),
-    );
-  }
 
   function setDayRanges(date: string, ranges: TimeRange[]) {
     apply(sessions, planDays.map((d) => (d.date === date ? { ...d, ranges } : d)));
@@ -462,13 +396,13 @@ export function AuditPlan({
         </div>
       </section>
 
-      {/* ============ Ngày thực hiện ============ */}
+      {/* ============ Giờ làm việc từng ngày ============ */}
       <section className="card space-y-4 p-6 sm:p-7">
         <div>
-          <h2 className="text-lg font-semibold">Ngày thực hiện</h2>
+          <h2 className="text-lg font-semibold">Giờ làm việc từng ngày</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Các ngày không cần liền nhau. Mỗi ngày có một hoặc nhiều khoảng giờ làm việc, ví dụ
-            08:00–11:00 và 14:00–17:00; ngày khai mạc có thể chỉ 08:00–09:00.
+            Mỗi ngày có một hoặc nhiều khoảng giờ làm việc, ví dụ 08:00–11:00 và 14:00–17:00. Thêm
+            hoặc bỏ ngày ở tab Thiết lập đợt đánh giá.
           </p>
         </div>
 
@@ -478,20 +412,14 @@ export function AuditPlan({
               key={d.date}
               index={i}
               day={d}
-              otherDays={dates.filter((x) => x !== d.date)}
               count={(sessionsByDay.get(d.date) ?? []).filter((s) => !isPinned(s)).length}
               locked={locked}
-              canRemove={planDays.length > 1}
               showApplyAll={i === 0 && planDays.length > 1}
               onRanges={(ranges) => setDayRanges(d.date, ranges)}
               onApplyAll={applyRangesToAll}
-              onMove={(to) => moveDay(d.date, to)}
-              onRemove={(to) => removeDay(d.date, to)}
             />
           ))}
         </div>
-
-        {!locked && <AddDayRow suggest={suggestNextDay} onAdd={addDay} />}
 
         {brokenDays.length > 0 && (
           <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
@@ -555,7 +483,7 @@ export function AuditPlan({
         {[...sessionsByDay.keys()].some((k) => !dates.includes(k)) && (
           <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
             Có phiên nằm ở ngày không còn trong danh sách ngày thực hiện. Bấm “Làm trống lịch” hoặc
-            thêm lại ngày đó.
+            thêm lại ngày đó ở tab Thiết lập đợt đánh giá.
           </p>
         )}
 
@@ -643,137 +571,32 @@ function CheckItem({
  * Đổi và xoá mở một dòng xác nhận ngay bên dưới thay vì hộp thoại.
  */
 function DayRow({
-  index, day, otherDays, count, locked, canRemove, showApplyAll,
-  onRanges, onApplyAll, onMove, onRemove,
+  index, day, count, locked, showApplyAll, onRanges, onApplyAll,
 }: {
   index: number;
   day: AuditDay;
-  /** Các ngày còn lại — đích để chuyển phiên khi xoá ngày này. */
-  otherDays: string[];
   /** Số phiên (không tính hai cuộc họp cố định) đang nằm trên ngày này. */
   count: number;
   locked: boolean;
-  canRemove: boolean;
   showApplyAll: boolean;
   onRanges: (ranges: TimeRange[]) => void;
   onApplyAll: () => void;
-  onMove: (to: string) => boolean;
-  /** `to` = ngày nhận các phiên; null = bỏ các phiên khỏi lịch. */
-  onRemove: (to: string | null) => void;
 }) {
-  const [mode, setMode] = useState<'view' | 'move' | 'remove'>('view');
-  const [draft, setDraft] = useState(day.date);
-  const [target, setTarget] = useState('');
-
   return (
-    <div className="space-y-2 py-3 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-        <span className="w-56 shrink-0">
-          <strong className="text-slate-700">Ngày {index + 1}</strong>
-          <span className="ml-1.5 text-slate-500">{formatDayLong(day.date)}</span>
-        </span>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 text-sm first:pt-0 last:pb-0">
+      <span className="w-56 shrink-0">
+        <strong className="text-slate-700">Ngày {index + 1}</strong>
+        <span className="ml-1.5 text-slate-500">{formatDayLong(day.date)}</span>
+      </span>
 
-        <RangesEditor ranges={day.ranges} locked={locked} onChange={onRanges} />
+      <RangesEditor ranges={day.ranges} locked={locked} onChange={onRanges} />
 
-        <span className="text-xs text-slate-400">{count > 0 ? `${count} phiên` : ''}</span>
+      <span className="text-xs text-slate-400">{count > 0 ? `${count} phiên` : ''}</span>
 
-        {!locked && mode === 'view' && (
-          <span className="ml-auto flex items-center gap-3 text-xs">
-            {showApplyAll && (
-              <button onClick={onApplyAll} className="text-brand-700 hover:underline">
-                Áp dụng giờ cho mọi ngày
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setDraft(day.date);
-                setMode('move');
-              }}
-              className="text-brand-700 hover:underline"
-            >
-              Đổi ngày
-            </button>
-            {canRemove && (
-              <button
-                onClick={() => {
-                  if (count === 0) {
-                    onRemove(null);
-                    return;
-                  }
-                  setTarget('');
-                  setMode('remove');
-                }}
-                className="text-red-600 hover:underline"
-              >
-                Xoá ngày
-              </button>
-            )}
-          </span>
-        )}
-      </div>
-
-      {mode === 'move' && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm">
-          <span className="text-slate-600">Chuyển sang ngày</span>
-          <input
-            type="date"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-          />
-          <button
-            onClick={() => {
-              if (onMove(draft)) setMode('view');
-            }}
-            disabled={!isValidDay(draft) || draft === day.date}
-            className="btn-primary !px-3 !py-1 text-sm"
-          >
-            Đổi
-          </button>
-          <button onClick={() => setMode('view')} className="btn-ghost !px-3 !py-1 text-sm">
-            Huỷ
-          </button>
-          {count > 0 && (
-            <span className="w-full text-xs text-slate-500">
-              {count} phiên trên ngày này đi theo, giữ nguyên giờ.
-            </span>
-          )}
-        </div>
-      )}
-
-      {mode === 'remove' && (
-        <div className="space-y-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-          <p>
-            Ngày này đang có <strong>{count} phiên</strong>. Các phiên đó sẽ:
-          </p>
-          <select
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            className="w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm text-slate-700"
-          >
-            <option value="">Bỏ khỏi lịch, xếp lại sau</option>
-            {otherDays.map((x) => (
-              <option key={x} value={x}>
-                Chuyển sang {formatDayLong(x)}, giữ nguyên giờ
-              </option>
-            ))}
-          </select>
-          <p className="text-xs">Họp khai mạc / kết thúc (nếu có) tự chuyển sang ngày đầu / ngày cuối mới.</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                onRemove(target || null);
-                setMode('view');
-              }}
-              className="rounded-lg bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700"
-            >
-              Xoá ngày
-            </button>
-            <button onClick={() => setMode('view')} className="btn-ghost !px-3 !py-1 text-sm">
-              Huỷ
-            </button>
-          </div>
-        </div>
+      {!locked && showApplyAll && (
+        <button onClick={onApplyAll} className="ml-auto text-xs text-brand-700 hover:underline">
+          Áp dụng giờ cho mọi ngày
+        </button>
       )}
     </div>
   );
@@ -839,56 +662,6 @@ function RangesEditor({
         </button>
       )}
     </span>
-  );
-}
-
-/** Thêm một ngày bất kỳ — không cần liền với các ngày đã có. */
-function AddDayRow({
-  suggest, onAdd,
-}: {
-  /** Gọi lúc mở ô để lấy ngày gợi ý mới nhất. */
-  suggest: () => string;
-  onAdd: (date: string) => boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState('');
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => {
-          setDraft(suggest());
-          setOpen(true);
-        }}
-        className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-left text-sm text-slate-500 hover:border-brand-400 hover:text-brand-700"
-      >
-        + Thêm ngày thực hiện
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-brand-300 px-3 py-2 text-sm">
-      <span className="text-slate-600">Thêm ngày</span>
-      <input
-        type="date"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-      />
-      <button
-        onClick={() => {
-          if (onAdd(draft)) setOpen(false);
-        }}
-        disabled={!isValidDay(draft)}
-        className="btn-primary !px-3 !py-1 text-sm"
-      >
-        Thêm
-      </button>
-      <button onClick={() => setOpen(false)} className="btn-ghost !px-3 !py-1 text-sm">
-        Huỷ
-      </button>
-    </div>
   );
 }
 

@@ -3,10 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { STANDARD_LABELS, type StandardCode } from '@/lib/iso';
+import { DayPicker } from '@/components/DayPicker';
 
 const STANDARDS = Object.keys(STANDARD_LABELS) as StandardCode[];
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 /** Nhớ tên tổ chức của đợt gần nhất — trưởng đoàn thường đánh giá lại cùng một nơi. */
 const ORG_KEY = 'to-chuc-gan-nhat';
@@ -19,8 +18,8 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
   const [scope, setScope] = useState('');
   const [standards, setStandards] = useState<StandardCode[]>(['ISO9001']);
   const [leadAuditor, setLeadAuditor] = useState(leaderName);
-  const [startDate, setStartDate] = useState(today());
-  const [endDate, setEndDate] = useState(today());
+  /** Ngày thực hiện, chọn từng ngày — không cần liền nhau. */
+  const [days, setDays] = useState<string[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,20 +35,11 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
     }
   }, []);
 
-  const dateInvalid = Boolean(startDate && endDate && endDate < startDate);
-
-  const days =
-    startDate && endDate && !dateInvalid
-      ? Math.round(
-          (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000,
-        ) + 1
-      : 0;
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (standards.length === 0) return setError('Chọn ít nhất một tiêu chuẩn.');
-    if (dateInvalid) return setError('Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.');
+    if (days.length === 0) return setError('Chọn ít nhất một ngày thực hiện.');
 
     setBusy(true);
     try {
@@ -57,7 +47,7 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          organization, title, scope, standards, leadAuditor, startDate, endDate,
+          organization, title, scope, standards, leadAuditor, days,
         }),
       });
       const data = await res.json();
@@ -100,44 +90,8 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
       </div>
 
       <div>
-        <label className="label">Thời gian đánh giá *</label>
-        <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <span className="mb-1 block text-xs text-slate-500">Từ ngày</span>
-            <input
-              type="date"
-              className="input"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                if (endDate && e.target.value > endDate) setEndDate(e.target.value);
-              }}
-              required
-            />
-          </div>
-          <span className="mt-5 text-slate-400">→</span>
-          <div>
-            <span className="mb-1 block text-xs text-slate-500">Đến ngày</span>
-            <input
-              type="date"
-              className="input"
-              value={endDate}
-              min={startDate || undefined}
-              onChange={(e) => setEndDate(e.target.value)}
-              required
-            />
-          </div>
-          {days > 0 && (
-            <span className="mt-5 text-sm text-slate-500">
-              {days} ngày
-            </span>
-          )}
-        </div>
-        {dateInvalid && (
-          <p className="mt-1.5 text-sm text-red-600">
-            Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.
-          </p>
-        )}
+        <label className="label">Ngày thực hiện *</label>
+        <DayPicker value={days} onChange={setDays} />
       </div>
 
       <div>
@@ -188,7 +142,7 @@ export function AuditForm({ leaderName }: { leaderName: string }) {
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="flex gap-2">
-        <button type="submit" disabled={busy || dateInvalid} className="btn-primary">
+        <button type="submit" disabled={busy} className="btn-primary">
           {busy ? 'Đang tạo…' : 'Tạo đợt đánh giá'}
         </button>
         <button type="button" onClick={() => router.back()} className="btn-ghost">

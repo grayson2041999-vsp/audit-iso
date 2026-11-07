@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { audits } from '@/lib/schema';
 import { getLeader } from '@/lib/auth';
 import { AuditList } from '@/components/AuditList';
+import { resolveAuditDays } from '@/lib/plan';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Quản lý đợt đánh giá' };
@@ -59,8 +60,7 @@ export default async function Page() {
             organization: a.organization,
             title: a.title,
             leadAuditor: a.leadAuditor,
-            startDate: a.startDate ? a.startDate.toISOString() : null,
-            endDate: a.endDate ? a.endDate.toISOString() : null,
+            days: resolveAuditDays(a).map((d) => d.date),
             status: a.status,
             standards: a.standards,
           }))}
