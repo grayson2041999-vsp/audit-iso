@@ -111,8 +111,8 @@ export async function PUT(req: Request, { params }: Ctx) {
       return NextResponse.json(
         {
           error:
-            `Lịch còn phiên ở ${outside.sort().map(formatDayLong).join(', ')} — ` +
-            'ngày này không có trong danh sách ngày thực hiện.',
+            `Lịch còn phiên ở ${outside.sort().map(formatDayLong).join(', ')}. ` +
+            'Ngày này không có trong danh sách ngày thực hiện.',
         },
         { status: 400 },
       );

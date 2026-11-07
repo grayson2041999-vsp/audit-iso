@@ -28,7 +28,7 @@ export function TopNav({ leaderName }: { leaderName: string | null }) {
         <Link
           href={leaderName ? '/quan-ly' : '/'}
           className="flex items-center gap-3 text-ink"
-          aria-label="Đánh giá nội bộ ISO — trang chủ"
+          aria-label="Về trang chủ"
         >
           <LogoWordmark className="h-[30px] w-auto" />
           <span className="hidden h-[18px] w-px bg-hairline sm:block" />

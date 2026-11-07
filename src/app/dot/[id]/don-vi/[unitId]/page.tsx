@@ -84,7 +84,7 @@ export default async function Page({
                   <SeverityBadge value={f.severity} />
                   {f.status === 'DRAFT' ? (
                     <span className="chip bg-amber-100 text-amber-800 ring-transparent">
-                      Bản nháp — chưa nộp
+                      Chưa nộp
                     </span>
                   ) : (
                     <span className="chip bg-emerald-100 text-emerald-800 ring-transparent">

@@ -69,7 +69,7 @@ export default async function Page({
             <SeverityBadge value={row.severity} />
             {isDraft ? (
               <span className="chip bg-amber-100 text-amber-800 ring-transparent">
-                {standardized ? 'Bản nháp — chưa nộp' : 'Bản nháp — chưa chuẩn hoá'}
+                {standardized ? 'Chưa nộp' : 'Chưa chuẩn hoá'}
               </span>
             ) : (
               <span className="chip bg-emerald-100 text-emerald-800 ring-transparent">

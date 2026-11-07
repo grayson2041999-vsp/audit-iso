@@ -23,7 +23,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   } catch (e) {
     console.error('[units:DELETE]', e);
     return NextResponse.json(
-      { error: 'Không xoá được — có thể đơn vị này đã có finding.' },
+      { error: 'Không xoá được. Có thể đơn vị này đã có finding.' },
       { status: 500 },
     );
   }

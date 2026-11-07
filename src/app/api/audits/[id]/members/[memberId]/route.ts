@@ -24,7 +24,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   } catch (e) {
     console.error('[members:DELETE]', e);
     return NextResponse.json(
-      { error: 'Không xoá được — có thể đánh giá viên này đã ghi nhận finding.' },
+      { error: 'Không xoá được. Có thể đánh giá viên này đã ghi nhận finding.' },
       { status: 500 },
     );
   }

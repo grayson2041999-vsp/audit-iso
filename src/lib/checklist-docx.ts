@@ -318,15 +318,3 @@ function noBorders() {
   const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
   return { top: none, bottom: none, left: none, right: none, insideHorizontal: none, insideVertical: none };
 }
-
-export function checklistFileName(unitName: string) {
-  const slug = unitName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .replace(/[^\w]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-  return `${slug || 'don-vi'}_checklist-danh-gia.docx`;
-}

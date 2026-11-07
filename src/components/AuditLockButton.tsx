@@ -16,7 +16,7 @@ export function AuditLockButton({ auditId, closed }: { auditId: string; closed: 
     const ok = closed
       ? confirm('Mở lại đợt đánh giá? Đánh giá viên sẽ ghi nhận và sửa được trở lại.')
       : confirm(
-          'Khoá đợt đánh giá?\n\nSau khi khoá, không ai ghi nhận hay sửa finding được nữa — kể cả bạn. ' +
+          'Khoá đợt đánh giá?\n\nSau khi khoá, không thể sửa finding thêm được nữa. ' +
             'Phần theo dõi khắc phục vẫn cập nhật bình thường. Vẫn mở lại được nếu cần.',
         );
     if (!ok) return;

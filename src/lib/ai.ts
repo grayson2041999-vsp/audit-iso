@@ -394,8 +394,8 @@ function finalize(toolInput: unknown, imageKeysCount: number, imagesLoaded: numb
         statement: '',
       });
       warnings.push(
-        'AI không trả về phần phát biểu finding. Các trường còn lại vẫn dùng được — ' +
-          'mời tự viết phát biểu ở ô bên dưới, hoặc bấm chuẩn hoá lại.',
+        'AI không trả về phần phát biểu finding. Các trường còn lại vẫn dùng được. ' +
+          'Bạn tự viết phát biểu ở ô bên dưới, hoặc bấm chuẩn hoá lại.',
       );
     }
   }
@@ -418,7 +418,7 @@ function finalize(toolInput: unknown, imageKeysCount: number, imagesLoaded: numb
   });
 
   if (validClauses.length === 0 && parsed.data.clauses.length > 0) {
-    warnings.push('Không có điều khoản viện dẫn nào hợp lệ — auditor cần kiểm tra lại thủ công.');
+    warnings.push('AI không đưa ra điều khoản hợp lệ, vui lòng tự chọn điều khoản.');
   }
   if (imageKeysCount > imagesLoaded) {
     warnings.push(
@@ -634,7 +634,7 @@ function finalizeChecklist(toolInput: unknown) {
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   if (total < 8) {
     warnings.push(
-      `Chỉ soạn được ${total} dòng — thường là do mô tả đơn vị còn sơ sài. Bổ sung các quá trình ` +
+      `Chỉ soạn được ${total} dòng, thường do thông tin đơn vị còn sơ sài. Bổ sung các quá trình ` +
         'chính, thiết bị và hồ sơ đơn vị đang dùng rồi sinh lại sẽ khá hơn nhiều.',
     );
   }

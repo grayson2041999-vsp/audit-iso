@@ -274,7 +274,7 @@ function clauseSummary(clauses: { standard: string; clause: string }[]): string[
   }
   return [...byStandard].map(([standard, list]) => {
     const sorted = [...list].sort(compareClause);
-    return `${standard} — ${sorted.join(', ')}`;
+    return `${standard}: ${sorted.join(', ')}`;
   });
 }
 

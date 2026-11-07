@@ -7,7 +7,8 @@ import { checklistExportSchema } from '@/lib/types';
 import { resolveActor } from '@/lib/actor';
 import { memberOwnsUnit } from '@/lib/member-auth';
 import { checklistAuditorName } from '@/lib/checklist-auditor';
-import { buildChecklistDoc, checklistFileName } from '@/lib/checklist-docx';
+import { buildChecklistDoc } from '@/lib/checklist-docx';
+import { attachmentHeaderNamed } from '@/lib/download-name';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -69,7 +70,7 @@ export async function POST(req: Request, { params }: Ctx) {
     headers: {
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': `attachment; filename="${checklistFileName(unit.name)}"`,
+      'Content-Disposition': attachmentHeaderNamed(`Check-list ${unit.name}`, 'docx'),
       'Cache-Control': 'no-store',
     },
   });

@@ -28,7 +28,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Đánh giá nội bộ ISO — Chuẩn hoá finding bằng AI',
+  title: 'Đánh giá nội bộ ISO',
   description:
     'Quản lý đợt đánh giá nội bộ và chuẩn hoá phát hiện theo ISO 9001 / 14001 / 45001',
   applicationName: 'Đánh giá ISO',

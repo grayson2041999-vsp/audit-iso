@@ -360,7 +360,7 @@ export function AuditPlan({
       return;
     }
     if (brokenDays.length > 0) {
-      setError(`Khoảng giờ không hợp lệ — ${brokenDays.join('; ')}.`);
+      setError(`Khoảng giờ không hợp lệ: ${brokenDays.join('; ')}.`);
       return;
     }
     if (!check.ok) {
@@ -515,7 +515,7 @@ export function AuditPlan({
 
         {brokenDays.length > 0 && (
           <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
-            Khoảng giờ không hợp lệ — {brokenDays.join('; ')}.
+            Khoảng giờ không hợp lệ: {brokenDays.join('; ')}.
           </p>
         )}
       </section>
@@ -525,7 +525,7 @@ export function AuditPlan({
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold">Lịch đánh giá</h2>
           {neverSaved && (
-            <span className="chip bg-slate-100 text-slate-600 ring-transparent">Bản tính sẵn — chưa lưu</span>
+            <span className="chip bg-slate-100 text-slate-600 ring-transparent">Chưa lưu</span>
           )}
           {!locked && (
             <span className="ml-auto flex flex-wrap items-center gap-1" data-history={tick}>
@@ -590,11 +590,11 @@ export function AuditPlan({
             </CheckItem>
             <CheckItem ok={orderOk}>
               Họp khai mạc là phiên đầu tiên, họp kết thúc là phiên cuối cùng
-              {!orderOk && check.orderProblems > 0 && ` — ${check.orderProblems} dòng đặt sai chỗ`}
+              {!orderOk && check.orderProblems > 0 && ` (${check.orderProblems} dòng đặt sai chỗ)`}
             </CheckItem>
             <CheckItem ok={timeOk}>
               Mọi phiên nằm trong khoảng giờ làm việc
-              {!timeOk && check.timeProblems > 0 && ` — ${check.timeProblems} dòng có lỗi`}
+              {!timeOk && check.timeProblems > 0 && ` (${check.timeProblems} dòng có lỗi)`}
             </CheckItem>
             <CheckItem ok={check.conflictRows === 0} warnOnly>
               {check.conflictRows === 0
@@ -625,9 +625,9 @@ export function AuditPlan({
               Còn thiếu: {missingFields.map((f) => f.label).join(', ')}
             </span>
           ) : !check.ok ? (
-            <span className="text-xs text-red-600">Lịch chưa đạt — xem mục Kiểm tra lịch</span>
+            <span className="text-xs text-red-600">Lịch chưa đạt, xem mục Kiểm tra lịch</span>
           ) : check.conflictRows > 0 ? (
-            <span className="text-xs text-amber-700">Còn {check.conflictRows} dòng trùng giờ — vẫn lưu được</span>
+            <span className="text-xs text-amber-700">Còn {check.conflictRows} dòng trùng giờ</span>
           ) : (
             <span className="text-xs text-slate-400">Lưu trước khi xuất file để lấy bản mới nhất</span>
           )}
@@ -771,7 +771,7 @@ function DayRow({
             onChange={(e) => setTarget(e.target.value)}
             className="w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm text-slate-700"
           >
-            <option value="">Bỏ khỏi lịch — xếp lại sau</option>
+            <option value="">Bỏ khỏi lịch, xếp lại sau</option>
             {otherDays.map((x) => (
               <option key={x} value={x}>
                 Chuyển sang {formatDayLong(x)}, giữ nguyên giờ

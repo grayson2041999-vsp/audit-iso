@@ -330,7 +330,7 @@ export function AuditSetup({
                             disabled={busy || locked}
                             title={
                               selfAudit
-                                ? `${m.fullName} đang công tác tại ${u.name} — không nên tự đánh giá đơn vị mình`
+                                ? `${m.fullName} đang công tác tại ${u.name}, không nên tự đánh giá đơn vị mình`
                                 : m.fullName
                             }
                             onChange={(e) => toggleLink(m.id, u.id, e.target.checked)}
@@ -393,8 +393,7 @@ export function AuditSetup({
 
         {dirty && (
           <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-            Bấm <strong>Lưu phân công</strong> ở bước 3 trước đã — phân công chưa lưu
-            thì đánh giá viên sẽ không thấy đơn vị nào.
+            Hãy bấm <strong>Lưu phân công</strong> ở bước 3.
           </p>
         )}
 

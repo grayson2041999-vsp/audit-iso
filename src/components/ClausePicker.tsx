@@ -105,7 +105,7 @@ export function ClausePicker({
                   <p className="mt-0.5 text-xs text-slate-600">{c.clauseTitle}</p>
                   {!known && (
                     <p className="mt-1 text-xs font-medium text-amber-800">
-                      Mã này không có trong danh mục — kiểm tra lại rồi chọn mã đúng bên dưới.
+                      Mã này không có trong danh mục. Vui lòng chọn mã đúng bên dưới.
                     </p>
                   )}
                 </div>
@@ -138,8 +138,7 @@ export function ClausePicker({
 
       {value.length > 1 && (
         <p className="text-xs text-slate-400">
-          Điều khoản ở vị trí đầu là điều khoản phù hợp nhất — đây là mã được dùng khi
-          tổng hợp báo cáo.
+          Điều khoản đầu tiên được dùng khi tổng hợp báo cáo.
         </p>
       )}
 

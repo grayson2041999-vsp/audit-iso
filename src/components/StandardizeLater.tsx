@@ -59,7 +59,7 @@ export function StandardizeLater({
       <button onClick={run} className="btn-primary">Chuẩn hoá bằng AI</button>
 
       <p className="mt-3 text-xs text-slate-400">
-        Chưa chuẩn hoá thì chưa nộp được — trưởng đoàn cần bản đã chuẩn hoá để đưa vào báo cáo.
+        Cần chuẩn hoá trước khi nộp.
       </p>
     </div>
   );

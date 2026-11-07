@@ -103,8 +103,8 @@ export function AuditEdit({
           Thêm, đổi hoặc xoá ngày ở tab{' '}
           <Link href={`/quan-ly/dot/${auditId}/chuong-trinh`} className="text-brand-700 hover:underline">
             Chương trình
-          </Link>{' '}
-          — các phiên trong lịch sẽ đi theo ngày.
+          </Link>
+          .
         </p>
       </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { parsePartialJson } from '@/lib/partial-json';
 import { formatClauseRefs } from '@/lib/iso';
+import { fileNameFromHeader } from '@/lib/download-name';
 import type { Checklist, ChecklistGroup } from '@/lib/types';
 import {
   MAX_ANSWER_LENGTH, MIN_FUNCTIONS_LENGTH, questionsFor, type ChecklistAnswers,
@@ -219,7 +220,7 @@ export function ChecklistBuilder({
     }
     const tooLong = questions.findIndex((q) => (answers[q.key] ?? '').trim().length > MAX_ANSWER_LENGTH);
     if (tooLong >= 0) {
-      return setError(`Câu ${tooLong + 1} dài quá ${MAX_ANSWER_LENGTH} ký tự — rút gọn bớt rồi soạn lại.`);
+      return setError(`Câu ${tooLong + 1} dài quá ${MAX_ANSWER_LENGTH} ký tự. Vui lòng rút gọn rồi soạn lại.`);
     }
 
     setLoading(true);
@@ -370,8 +371,7 @@ export function ChecklistBuilder({
       const a = document.createElement('a');
       a.href = url;
       a.download =
-        res.headers.get('Content-Disposition')?.match(/filename="(.+?)"/)?.[1] ??
-        'checklist-danh-gia.docx';
+        fileNameFromHeader(res.headers.get('Content-Disposition')) ?? `Check-list ${unitName}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -523,7 +523,7 @@ export function ChecklistBuilder({
             <p className="text-sm text-slate-600">
               <strong>{total}</strong> dòng công việc.{' '}
               {finished
-                ? 'Sửa chữ, xoá dòng hoặc thêm dòng tự viết trước khi tải — máy chủ không giữ bản nào, tải về là bản cuối.'
+                ? 'Bạn có thể sửa, xoá hoặc thêm dòng trước khi tải. Hệ thống không lưu checklist.'
                 : 'Sửa được ngay từ bây giờ, không phải đợi AI viết xong.'}
             </p>
             <button
@@ -535,13 +535,6 @@ export function ChecklistBuilder({
               {downloading ? 'Đang tạo file…' : 'Tải file Word'}
             </button>
           </div>
-        )}
-
-        {downloaded && (
-          <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            Đã tải file Word. Sửa tiếp thì tải lại — bản mới sẽ ghi đè bản cũ trong thư mục
-            tải xuống.
-          </p>
         )}
 
         {(groups ?? []).map((g, gi) => (
@@ -677,7 +670,7 @@ function CompactProgress({
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <p className="flex items-center gap-2 text-sm text-slate-600">
           <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
-          AI đang viết tiếp — bạn đọc và sửa được ngay
+          AI vẫn đang viết
         </p>
         <div className="flex items-center gap-3">
           <span className="text-xs tabular-nums text-slate-500">
@@ -761,7 +754,7 @@ function Progress({
             active={!readingUnit}
             label={
               meta
-                ? `Đối chiếu điều khoản áp dụng — ${meta.standards.join(' · ')}`
+                ? `Đối chiếu điều khoản ${meta.standards.join(' · ')}`
                 : 'Đối chiếu điều khoản áp dụng'
             }
           />

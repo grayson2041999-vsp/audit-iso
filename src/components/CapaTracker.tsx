@@ -651,11 +651,11 @@ type Draft = {
   note: string;
 };
 
-/** "ISO 9001 — 7.5.3, 8.5.1" — điều khoản gom theo tiêu chuẩn. */
+/** "ISO 9001: 7.5.3, 8.5.1" — điều khoản gom theo tiêu chuẩn. */
 function clauseLines(clauses: CapaFinding['clauses']) {
   const byStd = new Map<string, string[]>();
   for (const c of clauses) byStd.set(c.standard, [...(byStd.get(c.standard) ?? []), c.clause]);
-  return [...byStd].map(([std, list]) => `${STANDARD_SHORT[std as StandardCode] ?? std} — ${list.join(', ')}`);
+  return [...byStd].map(([std, list]) => `${STANDARD_SHORT[std as StandardCode] ?? std}: ${list.join(', ')}`);
 }
 
 /**
@@ -808,7 +808,7 @@ function CapaDrawer({
               )}
             </div>
             <p className="mt-1.5 text-xs text-slate-500">
-              Thời hạn riêng của mục này — sửa ở đây không đổi các mục khác. Hạn 30 ngày (Major) /
+              Sửa hạn ở đây chỉ áp dụng cho mục này. Hạn 30 ngày (Major) /
               60 ngày (Minor) chỉ là gợi ý lúc tạo.
             </p>
           </div>

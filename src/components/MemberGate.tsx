@@ -102,7 +102,7 @@ export function MemberGate({ auditId, members }: { auditId: string; members: Mem
       </form>
 
       <p className="mt-4 text-center text-xs text-slate-400">
-        Quên mã? Hỏi trưởng đoàn — mã luôn tra lại được.
+        Nếu bạn quên mã, hãy hỏi lại trưởng đoàn.
       </p>
     </div>
   );

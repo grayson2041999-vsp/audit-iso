@@ -464,7 +464,7 @@ export function validatePlan(input: {
       if (shared.length === 0 && !(isMeeting(x.kind) || isMeeting(y.kind))) continue;
 
       const who = shared.map((m) => nameById.get(m) ?? '?').join(', ');
-      const tail = who ? ` — ${who}` : '';
+      const tail = who ? ` (${who})` : '';
       warn(x.id, `Trùng giờ với ${label(y)} ${y.startTime}–${y.endTime}${tail}`);
       warn(y.id, `Trùng giờ với ${label(x)} ${x.startTime}–${x.endTime}${tail}`);
     }
