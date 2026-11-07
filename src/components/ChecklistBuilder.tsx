@@ -414,9 +414,8 @@ export function ChecklistBuilder({
       >
         <div>
           <h2 className="text-lg font-semibold">Thông tin về {unitName}</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Trả lời các câu hỏi dưới đây. Thông tin càng cụ thể thì checklist càng sát với thực
-            tế. Chỉ câu 1 bắt buộc, các câu khác bỏ trống được.
+          <p className="mt-1 text-sm italic text-slate-500">
+            Thông tin càng cụ thể thì checklist càng sát với thực tế.
           </p>
         </div>
 
