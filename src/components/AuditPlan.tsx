@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { WordIcon } from './FileIcons';
 import {
   DEFAULT_RANGES, KIND_LABELS, dayEnd, dayStart, formatRanges, rangesProblem, sortRanges,
-  formatDayLong, formatDayShort, generatePlan, pinMeetings, sortSessions, toDayString, toHHMM,
+  formatDayLong, formatDayShort, pinMeetings, sortSessions, toDayString, toHHMM,
   toMinutes, validatePlan,
   type AuditDay, type PlanSession, type SessionKind, type TimeRange,
 } from '@/lib/plan';
@@ -78,28 +78,17 @@ export function AuditPlan({
     return map;
   }, [assignments]);
 
-  const allMemberIds = useMemo(() => members.map((m) => m.id), [members]);
   const memberName = useMemo(() => new Map(members.map((m) => [m.id, m.fullName])), [members]);
 
   const neverSaved = initialSessions.length === 0;
 
   /**
-   * Chưa lưu lịch bao giờ thì tính sẵn ngay khi mở tab. Bản tính sẵn CHƯA vào
-   * database, chỉ ghi khi bấm Lưu. Dù là lịch cũ hay mới, hai cuộc họp luôn
-   * được ghim vào đúng chỗ ngay từ đầu.
+   * Chưa lưu lịch bao giờ thì các ngày để trống, trưởng đoàn tự thêm từng dòng.
+   * Dù là lịch cũ hay mới, hai cuộc họp luôn được ghim vào đúng chỗ ngay từ đầu.
    */
-  const [sessions, setSessions] = useState<PlanSession[]>(() => {
-    const days = sortDays(initialDays);
-    const base =
-      initialSessions.length > 0
-        ? initialSessions
-        : generatePlan({
-            days, units, unitMembers, allMemberIds,
-            openingMinutes: initialInfo.openingMinutes,
-            closingMinutes: initialInfo.closingMinutes,
-          }).sessions.map((x) => ({ ...x, id: newId() }));
-    return pinMeetings(base, days, initialInfo, newId);
-  });
+  const [sessions, setSessions] = useState<PlanSession[]>(() =>
+    pinMeetings(initialSessions, sortDays(initialDays), initialInfo, newId),
+  );
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -335,21 +324,12 @@ export function AuditPlan({
     ]);
   }
 
-  /** Dàn lại toàn bộ lịch từ ngày giờ và phân công. Hoàn tác được. */
-  function regenerate() {
-    const result = generatePlan({
-      days: planDays, units, unitMembers, allMemberIds,
-      openingMinutes: meetingLength(sessions, 'OPENING', info.openingMinutes),
-      closingMinutes: meetingLength(sessions, 'CLOSING', info.closingMinutes),
-    });
-    apply(result.sessions.map((x) => ({ ...x, id: newId() })));
-    if (result.unplacedUnitIds.length > 0) {
-      const names = units.filter((u) => result.unplacedUnitIds.includes(u.id)).map((u) => u.name);
-      setError(
-        `Không đủ thời gian để tự xếp: ${names.join(', ')}. Thêm ngày, nới giờ, ` +
-          'hoặc thêm dòng cho các đơn vị này.',
-      );
-    }
+  /**
+   * Xoá mọi dòng trong lịch, chỉ giữ hai cuộc họp (apply ghim lại chúng).
+   * Hoàn tác được.
+   */
+  function clearSchedule() {
+    apply(sessions.filter(isPinned));
   }
 
   /* ---------------- Lưu ---------------- */
@@ -545,8 +525,8 @@ export function AuditPlan({
               >
                 ↷ Làm lại
               </button>
-              <button onClick={regenerate} className="btn-ghost !px-3 !py-1 text-sm">
-                Tự xếp lại lịch
+              <button onClick={clearSchedule} className="btn-ghost !px-3 !py-1 text-sm">
+                Làm trống lịch
               </button>
             </span>
           )}
@@ -574,7 +554,7 @@ export function AuditPlan({
         {/* Phiên lạc ngày — chỉ xảy ra với dữ liệu cũ, nhưng không được giấu đi. */}
         {[...sessionsByDay.keys()].some((k) => !dates.includes(k)) && (
           <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
-            Có phiên nằm ở ngày không còn trong danh sách ngày thực hiện. Bấm “Tự xếp lại lịch” hoặc
+            Có phiên nằm ở ngày không còn trong danh sách ngày thực hiện. Bấm “Làm trống lịch” hoặc
             thêm lại ngày đó.
           </p>
         )}

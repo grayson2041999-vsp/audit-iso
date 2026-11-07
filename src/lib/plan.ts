@@ -24,12 +24,6 @@ export type PlanSession = {
   note: string | null;
 };
 
-/** Bước làm tròn mọi mốc giờ khi sinh lịch tự động. */
-export const STEP = 15;
-/** Thời lượng tối thiểu nên có cho một phiên đơn vị khi tự xếp. */
-const MIN_SESSION = 60;
-/** Trần một phiên tự xếp khi đã phân công — nửa ngày, để lịch không bị một đơn vị ôm trọn ngày. */
-const MAX_SESSION = 240;
 
 /* ------------------------------------------------------------------ */
 /* Giờ                                                                 */
@@ -46,11 +40,6 @@ export function toHHMM(minutes: number): string {
   const m = Math.max(0, Math.min(24 * 60 - 1, Math.round(minutes)));
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
-
-/** Làm tròn LÊN mốc 15 phút gần nhất. */
-const ceilStep = (m: number) => Math.ceil(m / STEP) * STEP;
-/** Làm tròn XUỐNG mốc 15 phút gần nhất. */
-const floorStep = (m: number) => Math.floor(m / STEP) * STEP;
 
 export function durationLabel(startTime: string, endTime: string) {
   const mins = toMinutes(endTime) - toMinutes(startTime);
@@ -487,178 +476,6 @@ export function validatePlan(input: {
     conflictRows: rowWarnings.size,
     ok: rowIssues.size === 0 && general.length === 0,
   };
-}
-
-/* ------------------------------------------------------------------ */
-/* Tự xếp lịch                                                         */
-/* ------------------------------------------------------------------ */
-
-type Window = { day: string; start: number; end: number };
-
-/** Chia N phần vào các khung theo tỉ lệ độ dài, dùng phương pháp phần dư lớn nhất. */
-function shareOut(total: number, weights: number[]): number[] {
-  const sum = weights.reduce((a, b) => a + b, 0);
-  if (sum === 0 || total === 0) return weights.map(() => 0);
-
-  const exact = weights.map((w) => (total * w) / sum);
-  const base = exact.map(Math.floor);
-  let left = total - base.reduce((a, b) => a + b, 0);
-
-  const order = exact
-    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
-    .sort((a, b) => b.frac - a.frac);
-
-  for (const { i } of order) {
-    if (left <= 0) break;
-    base[i] += 1;
-    left -= 1;
-  }
-  return base;
-}
-
-export type GenerateResult = {
-  sessions: Omit<PlanSession, 'id'>[];
-  /** Đơn vị không xếp được vào đâu — trưởng đoàn thêm tay. */
-  unplacedUnitIds: string[];
-};
-
-/**
- * Dàn lịch tự động trong các ngày đã chọn.
- *
- * Khai mạc ở đầu ngày đầu, kết thúc ở cuối ngày cuối, đơn vị lấp phần giữa:
- *  - Chưa phân công ai: cả đoàn đi cùng nhau, các đơn vị nối tiếp nhau và chia
- *    đều toàn bộ thời gian còn lại.
- *  - Đã phân công: các đơn vị khác người phụ trách chạy song song, người ôm
- *    nhiều đơn vị thì các phiên của họ nối tiếp nhau, không ai bị trùng giờ.
- */
-export function generatePlan(input: {
-  days: AuditDay[];
-  units: { id: string }[];
-  unitMembers: Map<string, string[]>;
-  allMemberIds: string[];
-  openingMinutes: number;
-  closingMinutes: number;
-}): GenerateResult {
-  const { days, units, unitMembers, allMemberIds, openingMinutes, closingMinutes } = input;
-  if (days.length === 0) return { sessions: [], unplacedUnitIds: units.map((u) => u.id) };
-
-  const first = days[0];
-  const last = days[days.length - 1];
-
-  const fr = first.ranges[0] ?? DEFAULT_RANGES[0];
-  const lr = last.ranges[last.ranges.length - 1] ?? DEFAULT_RANGES[1];
-  const opStart = toMinutes(fr.start);
-  const opEnd = Math.min(opStart + openingMinutes, toMinutes(fr.end));
-  const clEnd = toMinutes(lr.end);
-  const clStart = Math.max(clEnd - closingMinutes, toMinutes(lr.start));
-
-  const out: Omit<PlanSession, 'id'>[] = [
-    { day: first.date, startTime: toHHMM(opStart), endTime: toHHMM(opEnd), kind: 'OPENING', unitId: null, note: null },
-    { day: last.date, startTime: toHHMM(clStart), endTime: toHHMM(clEnd), kind: 'CLOSING', unitId: null, note: null },
-  ];
-
-  /* Khoảng trống để xếp đơn vị: mọi khoảng giờ của mọi ngày, trừ phần của hai cuộc họp. */
-  const windows: Window[] = [];
-  for (const d of days) {
-    d.ranges.forEach((r, ri) => {
-      let s = toMinutes(r.start);
-      let e = toMinutes(r.end);
-      if (d.date === first.date && ri === 0) s = Math.max(s, opEnd);
-      if (d.date === last.date && ri === d.ranges.length - 1) e = Math.min(e, clStart);
-      s = ceilStep(s);
-      e = floorStep(e);
-      if (e - s >= STEP) windows.push({ day: d.date, start: s, end: e });
-    });
-  }
-
-  const unplacedUnitIds: string[] = [];
-  if (windows.length === 0 || units.length === 0) {
-    return { sessions: sortSessions(out), unplacedUnitIds: units.map((u) => u.id) };
-  }
-
-  const load = new Map<string, number>();
-  for (const u of units) {
-    for (const m of unitMembers.get(u.id) ?? []) load.set(m, (load.get(m) ?? 0) + 1);
-  }
-
-  if (load.size === 0) {
-    /* --------- Cả đoàn đi cùng nhau: lấp kín từng khoảng theo thứ tự --------- */
-    const counts = shareOut(units.length, windows.map((w) => w.end - w.start));
-    let idx = 0;
-
-    windows.forEach((w, wi) => {
-      const n = counts[wi];
-      if (n <= 0) return;
-      const span = w.end - w.start;
-      const base = floorStep(span / n);
-      const extras = Math.floor((span - base * n) / STEP);
-
-      let t = w.start;
-      for (let k = 0; k < n && idx < units.length; k++, idx++) {
-        const dur = base + (k < extras ? STEP : 0);
-        if (dur <= 0) {
-          unplacedUnitIds.push(units[idx].id);
-          continue;
-        }
-        out.push({
-          day: w.day, startTime: toHHMM(t), endTime: toHHMM(Math.min(t + dur, w.end)),
-          kind: 'UNIT', unitId: units[idx].id, note: null,
-        });
-        t += dur;
-      }
-    });
-    for (; idx < units.length; idx++) unplacedUnitIds.push(units[idx].id);
-  } else {
-    /* --------- Đã phân công: xếp song song, tránh trùng người --------- */
-    const available = windows.reduce((n, w) => n + (w.end - w.start), 0);
-    const longest = windows.reduce((mx, w) => Math.max(mx, w.end - w.start), 0);
-    const busiest = Math.max(...load.values());
-    // Chia theo số vòng của người bận nhất, không dài hơn khoảng trống dài nhất và nửa ngày.
-    const per = Math.max(
-      Math.min(MIN_SESSION, longest),
-      Math.min(floorStep(available / busiest), longest, MAX_SESSION),
-    );
-
-    const placed: { day: string; start: number; end: number; members: string[] }[] = [];
-    const free = (day: string, a: number, b: number, ms: string[]) =>
-      !placed.some(
-        (x) => x.day === day && a < x.end && x.start < b && x.members.some((y) => ms.includes(y)),
-      );
-
-    // Đơn vị nhiều người phụ trách xếp trước — càng dễ đụng lịch thì càng phải chọn chỗ sớm.
-    const order = units
-      .map((u, i) => ({ u, i }))
-      .sort(
-        (a, b) =>
-          (unitMembers.get(b.u.id)?.length ?? 0) - (unitMembers.get(a.u.id)?.length ?? 0) || a.i - b.i,
-      );
-
-    for (const { u } of order) {
-      // Đơn vị chưa ai phụ trách thì cả đoàn đi — không được chồng lên ai.
-      const ms = unitMembers.get(u.id)?.length ? unitMembers.get(u.id)! : allMemberIds;
-
-      let done = false;
-      for (const w of windows) {
-        const dur = Math.min(per, w.end - w.start);
-        if (dur < Math.min(per, MIN_SESSION)) continue;
-
-        for (let t = w.start; t + dur <= w.end; t += STEP) {
-          if (!free(w.day, t, t + dur, ms)) continue;
-          placed.push({ day: w.day, start: t, end: t + dur, members: ms });
-          out.push({
-            day: w.day, startTime: toHHMM(t), endTime: toHHMM(t + dur),
-            kind: 'UNIT', unitId: u.id, note: null,
-          });
-          done = true;
-          break;
-        }
-        if (done) break;
-      }
-      if (!done) unplacedUnitIds.push(u.id);
-    }
-  }
-
-  return { sessions: sortSessions(out), unplacedUnitIds };
 }
 
 /* ------------------------------------------------------------------ */
